@@ -2384,11 +2384,26 @@ async function verificarPin() {
   }
 }
 
+let desbloqueando = false;   // trava contra desbloqueio duplo
+
 function desbloquear() {
+  if (desbloqueando) return;   // 👉 já está desbloqueando, ignora
+  desbloqueando = true;
+
   appBloqueado = false;
   momentoQueSaiu = null;
   document.getElementById("tela-bloqueio").style.display = "none";
   document.getElementById("bl-pin").value = "";
+
+  if (jaAberto) {
+    atualizarAoVoltar();
+  } else {
+    entrarNoApp();
+  }
+
+  // Libera a trava depois de um tempinho
+  setTimeout(function () { desbloqueando = false; }, 2000);
+}
   // Atualiza os dados ao desbloquear
   atualizarAoVoltar();
 }
