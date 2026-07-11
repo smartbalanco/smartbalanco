@@ -176,6 +176,127 @@
       display: flex; justify-content: space-between; margin-top: 12px; padding-top: 12px;
       border-top: 2px solid var(--borda); font-weight: 800; font-size: 14px; color: var(--azul);
     }
+
+    /* ---------- BOTÃO LIQUIDAR + LINHA COM MOV ---------- */
+    .linha-item { align-items: flex-start; }
+    .li-mov { font-size: 10px; color: #94a3b8; margin-top: 2px; letter-spacing: 0.3px; }
+    .li-dir { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .btn-liquidar {
+      background: var(--verde); color: #fff; border: none; border-radius: 7px;
+      padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    }
+    .btn-liquidar:active { background: #248456; }
+
+    /* ---------- MODAL ---------- */
+    .modal-fundo {
+      display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6);
+      z-index: 100; align-items: flex-end; justify-content: center;
+      padding: 0; backdrop-filter: blur(2px);
+    }
+    .modal-caixa {
+      background: #fff; width: 100%; max-width: 520px; max-height: 92vh;
+      border-radius: 18px 18px 0 0; overflow-y: auto;
+      animation: subir 0.25s ease-out;
+    }
+    @keyframes subir { from { transform: translateY(40px); opacity: 0.5; } to { transform: translateY(0); opacity: 1; } }
+    @media (min-width: 600px) {
+      .modal-fundo { align-items: center; padding: 20px; }
+      .modal-caixa { border-radius: 18px; }
+    }
+
+    .modal-topo {
+      background: var(--azul); color: #fff; padding: 18px 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 2;
+    }
+    .modal-topo .mt-titulo { font-size: 16px; font-weight: 700; }
+    .modal-topo .mt-mov {
+      background: rgba(255,255,255,0.18); border-radius: 20px;
+      padding: 4px 12px; font-size: 12px; font-weight: 700; margin-top: 4px; display: inline-block;
+    }
+    .modal-topo .fechar {
+      background: none; border: none; color: #fff; font-size: 26px; cursor: pointer;
+      line-height: 1; padding: 0 4px;
+    }
+
+    .modal-conteudo { padding: 20px; }
+    #modal-carregando { padding: 40px; text-align: center; color: var(--cinza-texto); font-size: 14px; }
+    #modal-erro {
+      display: none; margin: 20px; padding: 14px; background: #fef2f2; color: #b91c1c;
+      border: 1px solid #fecaca; border-radius: 8px; font-size: 13px;
+    }
+
+    /* Bloco leitura */
+    .rd-linha {
+      display: flex; justify-content: space-between; padding: 10px 0;
+      border-bottom: 1px solid #f1f3f4; font-size: 14px; gap: 12px;
+    }
+    .rd-linha:last-child { border-bottom: none; }
+    .rd-linha span { color: var(--cinza-texto); font-size: 12px; text-transform: uppercase; }
+    .rd-linha b { color: #1e293b; text-align: right; }
+    .rd-linha b.destaque { color: var(--vermelho); font-size: 16px; }
+
+    /* Campo de data */
+    .campo-bloco { margin-top: 18px; }
+    .campo-bloco label {
+      display: block; font-size: 12px; color: var(--cinza-texto);
+      text-transform: uppercase; font-weight: 700; margin-bottom: 6px;
+    }
+    .campo-bloco input, .campo-bloco select {
+      width: 100%; padding: 12px; border: 1px solid var(--borda); border-radius: 10px;
+      font-size: 15px; font-family: inherit; background: #fff; color: #1e293b;
+    }
+    .campo-bloco input:focus, .campo-bloco select:focus {
+      outline: none; border-color: var(--azul-claro);
+    }
+    .campo-data-destaque input { border: 2px solid var(--verde); font-weight: 600; }
+
+    /* Toggle editar */
+    .toggle-editar {
+      display: flex; align-items: center; gap: 10px; margin-top: 20px;
+      padding: 12px; background: var(--cinza-fundo); border-radius: 10px; cursor: pointer;
+    }
+    .toggle-editar input { width: 18px; height: 18px; cursor: pointer; }
+    .toggle-editar label { font-size: 14px; color: #334155; cursor: pointer; flex: 1; }
+
+    #area-edicao { display: none; margin-top: 6px; }
+
+    /* Botões do modal */
+    .modal-acoes { display: flex; gap: 10px; margin-top: 24px; }
+    .btn-modal {
+      flex: 1; padding: 14px; border: none; border-radius: 10px;
+      font-size: 15px; font-weight: 700; cursor: pointer;
+    }
+    .btn-modal.cancelar { background: var(--cinza-fundo); color: var(--cinza-texto); }
+    .btn-modal.confirmar { background: var(--verde); color: #fff; }
+    .btn-modal.confirmar:disabled { background: #94a3b8; }
+    .btn-modal.voltar { background: var(--cinza-fundo); color: var(--cinza-texto); }
+
+    /* Confirmação */
+    #modal-confirmacao { display: none; padding: 20px; }
+    .conf-aviso {
+      background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
+      padding: 14px; margin-bottom: 18px; font-size: 14px; color: #92400e; text-align: center;
+    }
+    .conf-linha {
+      display: flex; justify-content: space-between; padding: 9px 0;
+      border-bottom: 1px solid #f1f3f4; font-size: 14px; gap: 12px;
+    }
+    .conf-linha span { color: var(--cinza-texto); font-size: 12px; text-transform: uppercase; }
+    .conf-linha b { color: #1e293b; text-align: right; }
+    .conf-linha b.verde { color: var(--verde); }
+    .conf-linha.alterado { background: #f0fdf4; margin: 0 -8px; padding: 9px 8px; border-radius: 6px; }
+    .conf-linha.alterado b { color: var(--verde); }
+    .conf-nota { font-size: 12px; color: #94a3b8; font-style: italic; padding: 10px 0; text-align: center; }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
+      background: #1e293b; color: #fff; padding: 14px 20px; border-radius: 12px;
+      font-size: 14px; z-index: 200; max-width: 90%; text-align: center;
+      transition: transform 0.3s ease-out; box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    }
+    #toast.visivel { transform: translateX(-50%) translateY(0); }
   </style>
 </head>
 <body>
@@ -272,6 +393,96 @@
 
     </div>
   </div>
+
+
+  <!-- ============ MODAL DE LIQUIDAÇÃO ============ -->
+  <div class="modal-fundo" id="modal-liquidar">
+    <div class="modal-caixa">
+
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Liquidar despesa</div>
+          <div class="mt-mov" id="modal-nummov">MOV-</div>
+        </div>
+        <button class="fechar" onclick="fecharModal()">&times;</button>
+      </div>
+
+      <div id="modal-carregando">Carregando lançamento...</div>
+      <div id="modal-erro"></div>
+
+      <!-- CORPO -->
+      <div id="modal-corpo" class="modal-conteudo" style="display:none;">
+
+        <!-- Leitura -->
+        <div id="area-leitura">
+          <div class="rd-linha"><span>Descrição</span><b id="rd-descricao"></b></div>
+          <div class="rd-linha"><span>Valor</span><b class="destaque" id="rd-valor"></b></div>
+          <div class="rd-linha"><span>Vencimento</span><b id="rd-vencimento"></b></div>
+          <div class="rd-linha"><span>Parcela</span><b id="rd-parcela"></b></div>
+          <div class="rd-linha"><span>Método</span><b id="rd-metodo"></b></div>
+          <div class="rd-linha"><span>Categoria</span><b id="rd-categoria"></b></div>
+        </div>
+
+        <!-- Data de pagamento -->
+        <div class="campo-bloco campo-data-destaque">
+          <label for="in-datapgto">📅 Data do pagamento</label>
+          <input type="date" id="in-datapgto" />
+        </div>
+
+        <!-- Toggle editar -->
+        <div class="toggle-editar" onclick="document.getElementById('chk-editar').click()">
+          <input type="checkbox" id="chk-editar" onclick="event.stopPropagation(); alternarEdicao();" />
+          <label for="chk-editar" onclick="event.stopPropagation();">✏️ Editar informações antes de liquidar</label>
+        </div>
+
+        <!-- Edição -->
+        <div id="area-edicao">
+          <div class="campo-bloco">
+            <label for="ed-descricao">Descrição</label>
+            <input type="text" id="ed-descricao" />
+          </div>
+          <div class="campo-bloco">
+            <label for="ed-valor">Valor a pagar (R$)</label>
+            <input type="number" id="ed-valor" step="0.01" inputmode="decimal" />
+          </div>
+          <div class="campo-bloco">
+            <label for="ed-vencimento">Vencimento</label>
+            <input type="date" id="ed-vencimento" />
+          </div>
+          <div class="campo-bloco">
+            <label for="ed-metodo">Método de pagamento</label>
+            <select id="ed-metodo"></select>
+          </div>
+          <div class="campo-bloco">
+            <label for="ed-categoria">Categoria</label>
+            <select id="ed-categoria"></select>
+          </div>
+        </div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharModal()">Cancelar</button>
+          <button class="btn-modal confirmar" onclick="pedirConfirmacao()">Continuar</button>
+        </div>
+      </div>
+
+      <!-- CONFIRMAÇÃO -->
+      <div id="modal-confirmacao">
+        <div class="conf-aviso">
+          ⚠️ <b>Confirma a liquidação?</b><br>
+          Isso vai gravar na planilha e enviar o comprovante por e-mail.
+        </div>
+        <div id="conf-resumo"></div>
+        <div class="modal-acoes">
+          <button class="btn-modal voltar" onclick="voltarDaConfirmacao()">Voltar</button>
+          <button class="btn-modal confirmar" id="btn-confirmar-final" onclick="confirmarLiquidacao()">Sim, liquidar</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast"></div>
 
   <script src="app.js"></script>
 </body>

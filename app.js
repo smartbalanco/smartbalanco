@@ -12,6 +12,10 @@ let emailUsuarioAtual = null;
 let mesExibido = new Date().getMonth();
 let anoExibido = new Date().getFullYear();
 
+// Estado do modal de liquidação
+let lancamentoAtual = null;   // dados da linha sendo liquidada
+let listasValidas = null;     // categorias e métodos (carregado 1x)
+
 // ============================================================================
 // LOGIN
 // ============================================================================
@@ -165,8 +169,14 @@ function preencherDashboard(d) {
       const item = document.createElement("div");
       item.className = "linha-item";
       item.innerHTML =
-        '<span class="li-esq"><b class="li-data">' + c.data + '</b> ' + escaparHtml(c.descricao) + '</span>' +
-        '<span class="li-valor vermelho">' + formatarMoeda(c.valor) + '</span>';
+        '<div class="li-esq">' +
+          '<div><b class="li-data">' + c.data + '</b> ' + escaparHtml(c.descricao) + '</div>' +
+          '<div class="li-mov">MOV-' + c.numMov + '</div>' +
+        '</div>' +
+        '<div class="li-dir">' +
+          '<span class="li-valor vermelho">' + formatarMoeda(c.valor) + '</span>' +
+          '<button class="btn-liquidar" onclick="abrirLiquidacao(' + c.numMov + ')">Liquidar</button>' +
+        '</div>';
       listaVencer.appendChild(item);
     });
   }
@@ -305,3 +315,237 @@ window.addEventListener("load", function () {
   mostrarTelaLogin();
   google.accounts.id.prompt();
 });
+
+// ============================================================================
+// ===================== MODAL DE LIQUIDAÇÃO ==================================
+// ============================================================================
+
+// Abre o modal e carrega os dados do lançamento
+async function abrirLiquidacao(numMov) {
+  const modal = document.getElementById("modal-liquidar");
+  modal.style.display = "flex";
+  document.getElementById("modal-corpo").style.display = "none";
+  document.getElementById("modal-carregando").style.display = "block";
+  document.getElementById("modal-erro").style.display = "none";
+  document.getElementById("modal-confirmacao").style.display = "none";
+
+  try {
+    // Carrega o lançamento
+    const r = await chamarServidor("buscarLancamento", { numMov: numMov });
+    if (!r.ok) {
+      mostrarErroModal(r.mensagem || "Não foi possível carregar o lançamento.");
+      return;
+    }
+    lancamentoAtual = r.lancamento;
+
+    // Carrega listas de categoria/método (só na primeira vez)
+    if (!listasValidas) {
+      try {
+        const rl = await chamarServidor("listasValidas");
+        if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
+      } catch (e) {
+        listasValidas = { categorias: [], metodos: [] };
+      }
+    }
+
+    preencherModal(lancamentoAtual);
+    document.getElementById("modal-carregando").style.display = "none";
+    document.getElementById("modal-corpo").style.display = "block";
+
+  } catch (e) {
+    mostrarErroModal("Erro de conexão. Tente novamente.");
+  }
+}
+
+function preencherModal(l) {
+  // Cabeçalho: Nº Mov em destaque
+  document.getElementById("modal-nummov").textContent = "MOV-" + l.numMov;
+
+  // Resumo (modo leitura)
+  document.getElementById("rd-descricao").textContent = l.descricao;
+  document.getElementById("rd-valor").textContent = formatarMoeda(l.valorParcela);
+  document.getElementById("rd-vencimento").textContent = formatarDataBr(l.vencimento);
+  document.getElementById("rd-metodo").textContent = l.metodo || "-";
+  document.getElementById("rd-categoria").textContent = l.categoria || "-";
+  const parcTxt = (l.totalParcelas && parseInt(l.totalParcelas) > 1)
+    ? l.numParcela + "/" + l.totalParcelas : "À vista";
+  document.getElementById("rd-parcela").textContent = parcTxt;
+
+  // Data de pagamento: por padrão, hoje
+  const hoje = new Date();
+  const hojeStr = hoje.getFullYear() + "-" +
+    ("0" + (hoje.getMonth() + 1)).slice(-2) + "-" +
+    ("0" + hoje.getDate()).slice(-2);
+  document.getElementById("in-datapgto").value = hojeStr;
+
+  // Campos de edição (escondidos por padrão)
+  document.getElementById("ed-descricao").value = l.descricao;
+  document.getElementById("ed-valor").value = l.valorParcela.toFixed(2);
+  document.getElementById("ed-vencimento").value = l.vencimento;
+
+  // Menus suspensos
+  montarSelect("ed-metodo", listasValidas ? listasValidas.metodos : [], l.metodo);
+  montarSelect("ed-categoria", listasValidas ? listasValidas.categorias : [], l.categoria);
+
+  // Reseta o toggle de edição
+  document.getElementById("chk-editar").checked = false;
+  document.getElementById("area-edicao").style.display = "none";
+}
+
+function montarSelect(id, lista, valorAtual) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = "";
+  let achou = false;
+
+  (lista || []).forEach(function (v) {
+    const opt = document.createElement("option");
+    opt.value = v;
+    opt.textContent = v;
+    if (v === valorAtual) { opt.selected = true; achou = true; }
+    sel.appendChild(opt);
+  });
+
+  // Se o valor atual não está na lista, adiciona como opção (para não perder o dado)
+  if (!achou && valorAtual) {
+    const opt = document.createElement("option");
+    opt.value = valorAtual;
+    opt.textContent = valorAtual + " (atual)";
+    opt.selected = true;
+    sel.insertBefore(opt, sel.firstChild);
+  }
+}
+
+function formatarDataBr(iso) {
+  if (!iso) return "-";
+  const p = iso.split("-");
+  if (p.length !== 3) return iso;
+  return p[2] + "/" + p[1] + "/" + p[0];
+}
+
+function alternarEdicao() {
+  const marcado = document.getElementById("chk-editar").checked;
+  document.getElementById("area-edicao").style.display = marcado ? "block" : "none";
+  document.getElementById("area-leitura").style.display = marcado ? "none" : "block";
+}
+
+function fecharModal() {
+  document.getElementById("modal-liquidar").style.display = "none";
+  lancamentoAtual = null;
+}
+
+function mostrarErroModal(msg) {
+  document.getElementById("modal-carregando").style.display = "none";
+  document.getElementById("modal-corpo").style.display = "none";
+  document.getElementById("modal-confirmacao").style.display = "none";
+  const el = document.getElementById("modal-erro");
+  el.textContent = msg;
+  el.style.display = "block";
+}
+
+// ---------- Etapa de confirmação ----------
+function pedirConfirmacao() {
+  const dataPgto = document.getElementById("in-datapgto").value;
+  if (!dataPgto) {
+    alert("Escolha a data de pagamento.");
+    return;
+  }
+
+  const editando = document.getElementById("chk-editar").checked;
+  const l = lancamentoAtual;
+
+  // Monta o resumo do que será gravado
+  let resumo = '<div class="conf-linha"><span>Nº Movimentação</span><b>MOV-' + l.numMov + '</b></div>';
+  resumo += '<div class="conf-linha"><span>Data de pagamento</span><b class="verde">' + formatarDataBr(dataPgto) + '</b></div>';
+
+  if (editando) {
+    const novaDesc = document.getElementById("ed-descricao").value;
+    const novoValor = document.getElementById("ed-valor").value;
+    const novoVenc = document.getElementById("ed-vencimento").value;
+    const novoMet = document.getElementById("ed-metodo").value;
+    const novaCat = document.getElementById("ed-categoria").value;
+
+    let mudou = false;
+    if (novaDesc !== l.descricao) {
+      resumo += '<div class="conf-linha alterado"><span>Descrição</span><b>' + escaparHtml(novaDesc) + '</b></div>';
+      mudou = true;
+    }
+    if (parseFloat(novoValor) !== l.valorParcela) {
+      resumo += '<div class="conf-linha alterado"><span>Valor</span><b>' + formatarMoeda(parseFloat(novoValor)) + '</b></div>';
+      mudou = true;
+    }
+    if (novoVenc !== l.vencimento) {
+      resumo += '<div class="conf-linha alterado"><span>Vencimento</span><b>' + formatarDataBr(novoVenc) + '</b></div>';
+      mudou = true;
+    }
+    if (novoMet !== l.metodo) {
+      resumo += '<div class="conf-linha alterado"><span>Método</span><b>' + escaparHtml(novoMet) + '</b></div>';
+      mudou = true;
+    }
+    if (novaCat !== l.categoria) {
+      resumo += '<div class="conf-linha alterado"><span>Categoria</span><b>' + escaparHtml(novaCat) + '</b></div>';
+      mudou = true;
+    }
+    if (!mudou) {
+      resumo += '<div class="conf-nota">Nenhum campo foi alterado.</div>';
+    }
+  } else {
+    resumo += '<div class="conf-linha"><span>Descrição</span><b>' + escaparHtml(l.descricao) + '</b></div>';
+    resumo += '<div class="conf-linha"><span>Valor</span><b>' + formatarMoeda(l.valorParcela) + '</b></div>';
+  }
+
+  document.getElementById("conf-resumo").innerHTML = resumo;
+  document.getElementById("modal-corpo").style.display = "none";
+  document.getElementById("modal-confirmacao").style.display = "block";
+}
+
+function voltarDaConfirmacao() {
+  document.getElementById("modal-confirmacao").style.display = "none";
+  document.getElementById("modal-corpo").style.display = "block";
+}
+
+// ---------- Grava de fato ----------
+async function confirmarLiquidacao() {
+  const btn = document.getElementById("btn-confirmar-final");
+  btn.disabled = true;
+  btn.textContent = "Liquidando...";
+
+  const l = lancamentoAtual;
+  const editando = document.getElementById("chk-editar").checked;
+
+  const params = {
+    numMov: l.numMov,
+    dataPagamento: document.getElementById("in-datapgto").value
+  };
+
+  if (editando) {
+    params.descricao = document.getElementById("ed-descricao").value;
+    params.valorParcela = document.getElementById("ed-valor").value;
+    params.vencimento = document.getElementById("ed-vencimento").value;
+    params.metodo = document.getElementById("ed-metodo").value;
+    params.categoria = document.getElementById("ed-categoria").value;
+  }
+
+  try {
+    const r = await chamarServidor("liquidar", params);
+    if (r.ok) {
+      fecharModal();
+      mostrarToast("✅ " + r.mensagem + " Comprovante enviado por e-mail.");
+      await recarregarDados();
+    } else {
+      mostrarErroModal(r.mensagem || "Não foi possível liquidar.");
+    }
+  } catch (e) {
+    mostrarErroModal("Erro de conexão ao liquidar. Nada foi alterado.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Sim, liquidar";
+  }
+}
+
+// ---------- Aviso flutuante ----------
+function mostrarToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("visivel");
+  setTimeout(function () { t.classList.remove("visivel"); }, 4500);
+}
