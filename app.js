@@ -187,6 +187,12 @@ async function entrarNoApp() {
       preencherDashboard(r);
       mostrarTelaInterna();
       mostrarAvisoAtualizando(null);
+
+      // Avisa sobre contas vencendo (só no mês corrente)
+      const hj = new Date();
+      if (mesExibido === hj.getMonth() && anoExibido === hj.getFullYear()) {
+        verificarContasEVNotificar(r);
+      }
     } else if (r.erro === "NAO_AUTORIZADO") {
       mostrarErroLogin(r.mensagem || "Acesso negado. Este e-mail não está autorizado.");
     } else if (!cache) {
@@ -239,6 +245,13 @@ async function recarregarDados() {
       salvarCache(mesExibido, anoExibido, r);
       preencherDashboard(r);
       mostrarAvisoAtualizando(null);
+
+      const hj = new Date();
+      if (mesExibido === hj.getMonth() && anoExibido === hj.getFullYear()) {
+        verificarContasEVNotificar(r);
+      } else {
+        esconderAvisoVencimento();
+      }
     } else {
       mostrarAvisoAtualizando("⚠️ Não foi possível atualizar.");
     }
@@ -2374,16 +2387,8 @@ function desbloquear() {
   momentoQueSaiu = null;
   document.getElementById("tela-bloqueio").style.display = "none";
   document.getElementById("bl-pin").value = "";
-
-  // 👉 CORRIGIDO: se o app ainda não foi carregado (desbloqueio na abertura),
-  // precisa entrar de fato. Se já estava aberto, só atualiza os dados.
-  const jaAberto = document.getElementById("tela-interna").style.display === "block";
-
-  if (jaAberto) {
-    atualizarAoVoltar();
-  } else {
-    entrarNoApp();
-  }
+  // Atualiza os dados ao desbloquear
+  atualizarAoVoltar();
 }
 
 // ============================================================================
@@ -2657,4 +2662,144 @@ function iconeCartao(metodo) {
 function formatarMoedaCurta(v) {
   if (v >= 1000) return (v / 1000).toFixed(1).replace(".", ",") + "k";
   return Math.round(v).toString();
+}
+
+// ============================================================================
+// ===================== NOTIFICAÇÕES =========================================
+// Avisa sobre contas vencendo quando o app é aberto.
+// (Um app web não consegue notificar com o app fechado sem infraestrutura de
+//  push; para isso, o alerta diário por e-mail cobre o caso.)
+// ============================================================================
+
+const CHAVE_ULTIMA_NOTIF = "sb_ultima_notif";
+
+// Pede permissão para notificar (só na primeira vez)
+async function pedirPermissaoNotificacao() {
+  if (!("Notification" in window)) return false;
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") return false;
+
+  try {
+    const p = await Notification.requestPermission();
+    return p === "granted";
+  } catch (e) {
+    return false;
+  }
+}
+
+// Verifica se já notificamos hoje (para não repetir a cada abertura)
+function jaNotificouHoje() {
+  try {
+    const hoje = new Date().toDateString();
+    return localStorage.getItem(CHAVE_ULTIMA_NOTIF) === hoje;
+  } catch (e) { return false; }
+}
+
+function marcarNotificadoHoje() {
+  try {
+    localStorage.setItem(CHAVE_ULTIMA_NOTIF, new Date().toDateString());
+  } catch (e) {}
+}
+
+// Checa as contas a vencer e notifica (chamado após carregar o dashboard)
+async function verificarContasEVNotificar(dadosDashboard) {
+  if (!dadosDashboard || !dadosDashboard.contasAVencer) return;
+
+  const contas = dadosDashboard.contasAVencer;
+  if (contas.length === 0) return;
+
+  // Só as que vencem nos próximos 3 dias
+  const hoje = new Date();
+  const urgentes = contas.filter(function (c) {
+    // c.data vem como "dd/MM"
+    const p = c.data.split("/");
+    if (p.length !== 2) return false;
+    const d = new Date(hoje.getFullYear(), parseInt(p[1]) - 1, parseInt(p[0]));
+    const dias = Math.round((d - hoje) / 86400000);
+    return dias >= 0 && dias <= 3;
+  });
+
+  if (urgentes.length === 0) return;
+
+  // Mostra o aviso dentro do app (sempre)
+  mostrarAvisoVencimento(urgentes);
+
+  // Notificação do sistema (uma vez por dia)
+  if (jaNotificouHoje()) return;
+
+  const permitido = await pedirPermissaoNotificacao();
+  if (!permitido) return;
+
+  let total = 0;
+  urgentes.forEach(function (c) { total += c.valor; });
+
+  const titulo = urgentes.length === 1
+    ? "⏰ 1 conta vencendo"
+    : "⏰ " + urgentes.length + " contas vencendo";
+
+  const corpo = urgentes.length === 1
+    ? urgentes[0].descricao + " · " + formatarMoeda(urgentes[0].valor) + " · vence " + urgentes[0].data
+    : "Total: " + formatarMoeda(total) + "\n" + urgentes.slice(0, 3).map(function (c) {
+        return "• " + c.data + " " + c.descricao;
+      }).join("\n");
+
+  try {
+    new Notification(titulo, {
+      body: corpo,
+      icon: "icon-192.png",
+      badge: "icon-192.png",
+      tag: "smartbalanco-vencimentos"
+    });
+    marcarNotificadoHoje();
+  } catch (e) {
+    // Alguns navegadores exigem service worker para notificar
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.showNotification(titulo, {
+          body: corpo,
+          icon: "icon-192.png",
+          badge: "icon-192.png",
+          tag: "smartbalanco-vencimentos"
+        });
+        marcarNotificadoHoje();
+      }
+    } catch (e2) {}
+  }
+}
+
+// Faixa de aviso dentro do app
+function mostrarAvisoVencimento(urgentes) {
+  const el = document.getElementById("aviso-vencimento");
+  if (!el) return;
+
+  let total = 0;
+  urgentes.forEach(function (c) { total += c.valor; });
+
+  const hojeCount = urgentes.filter(function (c) {
+    const h = new Date();
+    const p = c.data.split("/");
+    return parseInt(p[0]) === h.getDate() && parseInt(p[1]) === (h.getMonth() + 1);
+  }).length;
+
+  let txt;
+  if (hojeCount > 0) {
+    txt = "🔴 <b>" + hojeCount + (hojeCount === 1 ? " conta vence HOJE" : " contas vencem HOJE") + "</b>";
+    if (urgentes.length > hojeCount) {
+      txt += " · " + (urgentes.length - hojeCount) + " nos próximos dias";
+    }
+    el.className = "aviso-venc critico";
+  } else {
+    txt = "⏰ <b>" + urgentes.length + (urgentes.length === 1 ? " conta vence" : " contas vencem") +
+          " nos próximos 3 dias</b> · " + formatarMoeda(total);
+    el.className = "aviso-venc atencao";
+  }
+
+  el.innerHTML = txt;
+  el.style.display = "block";
+}
+
+function esconderAvisoVencimento() {
+  const el = document.getElementById("aviso-vencimento");
+  if (el) el.style.display = "none";
 }

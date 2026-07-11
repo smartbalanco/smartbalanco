@@ -867,6 +867,15 @@
       font-size: 14px; font-weight: 700; white-space: nowrap; flex-shrink: 0;
     }
 
+
+    /* Aviso de vencimento */
+    .aviso-venc {
+      display: none; border-radius: 10px; padding: 12px 14px;
+      font-size: 13px; text-align: center; margin-bottom: 12px; line-height: 1.5;
+    }
+    .aviso-venc.critico { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .aviso-venc.atencao { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
@@ -985,6 +994,7 @@
     <div class="conteudo" id="conteudo-dash">
 
       <div id="aviso-cache"></div>
+      <div id="aviso-vencimento" class="aviso-venc"></div>
 
       <!-- SALDO -->
       <div class="card">
