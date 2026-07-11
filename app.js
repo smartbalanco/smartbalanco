@@ -1540,6 +1540,12 @@ const RELATORIOS = {
     icone: "🧾",
     desc: "Todos os lançamentos do mês",
     periodo: "mes"
+  },
+  previsao: {
+    nome: "Previsão Orçamentária",
+    icone: "🧠",
+    desc: "Quanto você vai gastar no mês que vem",
+    periodo: "janela"
   }
 };
 
@@ -1653,6 +1659,22 @@ function abrirPeriodo(tipo) {
         '</select>' +
       '</div>';
 
+  } else if (r.periodo === "janela") {
+    corpo.innerHTML =
+      '<p style="font-size:13px; color:var(--cinza-texto); line-height:1.6; margin-bottom:16px;">' +
+        'Quanto maior a janela, mais dados o sistema usa para entender o padrão de cada categoria. ' +
+        'Janelas curtas reagem mais rápido a mudanças recentes.' +
+      '</p>' +
+      '<div class="campo-bloco">' +
+        '<label for="mp-meses">Analisar os últimos:</label>' +
+        '<select id="mp-meses">' +
+          '<option value="3">3 meses (mais reativo)</option>' +
+          '<option value="6" selected>6 meses (equilibrado)</option>' +
+          '<option value="12">12 meses (1 ano)</option>' +
+          '<option value="24">24 meses (2 anos)</option>' +
+        '</select>' +
+      '</div>';
+
   } else if (r.periodo === "doisMeses") {
     let mesB = mesAtual - 1, anoB = anoAtual;
     if (mesB < 0) { mesB = 11; anoB--; }
@@ -1717,7 +1739,7 @@ async function gerarRelatorioAgora() {
   } else if (r.periodo === "mes") {
     params.mes = document.getElementById("mp-mes").value;
     params.ano = document.getElementById("mp-ano").value;
-  } else if (r.periodo === "meses") {
+  } else if (r.periodo === "meses" || r.periodo === "janela") {
     params.meses = document.getElementById("mp-meses").value;
   } else if (r.periodo === "nenhum") {
     // sem parâmetros
@@ -1765,6 +1787,7 @@ function renderizarRelatorio(res, ehSalvo) {
   else if (res.tipo === "parcelamentos")  corpo = htmlParcelamentos(res);
   else if (res.tipo === "projecao")       corpo = htmlProjecao(res);
   else if (res.tipo === "extrato")        corpo = htmlExtrato(res);
+  else if (res.tipo === "previsao")       corpo = htmlPrevisao(res);
 
   const jaSalvo = ehSalvo || relatorioJaSalvo(res);
 
@@ -2155,6 +2178,20 @@ function relatorioParaTexto(r) {
     t += "Comprometimento: " + r.resumo.comprometimentoMedio.toFixed(1) + "%\n\n";
     r.meses.forEach(function (m) {
       t += m.nome + ": " + formatarMoeda(m.total) + "\n";
+    });
+
+  } else if (r.tipo === "previsao") {
+    t += "PREVISÃO PARA " + r.mesAlvo.toUpperCase() + "\n\n";
+    t += "Total previsto: " + formatarMoeda(r.resumo.totalPrevisto) + "\n";
+    t += "Faixa: " + formatarMoeda(r.resumo.totalMinimo) + " a " + formatarMoeda(r.resumo.totalMaximo) + "\n";
+    t += "Receita ref.: " + formatarMoeda(r.resumo.receitaReferencia) + "\n";
+    t += "Sobra prevista: " + formatarMoeda(r.resumo.sobraPrevista) + "\n";
+    t += "Comprometimento: " + r.resumo.comprometimento.toFixed(0) + "%\n\n";
+    t += "PRINCIPAIS CATEGORIAS\n";
+    r.previsoes.slice(0, 12).forEach(function (p) {
+      if (p.previsto > 0) {
+        t += "  " + p.categoria + ": " + formatarMoeda(p.previsto) + "\n";
+      }
     });
 
   } else if (r.tipo === "extrato") {
@@ -2839,4 +2876,176 @@ function mostrarAvisoVencimento(urgentes) {
 function esconderAvisoVencimento() {
   const el = document.getElementById("aviso-vencimento");
   if (el) el.style.display = "none";
+}
+
+// ============================================================================
+// HTML DA PREVISÃO ORÇAMENTÁRIA
+// ============================================================================
+
+const PERFIS_INFO = {
+  contratado: { icone: "🔒", cor: "#2563eb", nome: "Já contratado",
+                desc: "Valor já lançado na planilha. É certeza." },
+  fixo:       { icone: "📌", cor: "#2e9e6b", nome: "Fixo / recorrente",
+                desc: "Estável. Previsto pelo último valor (não pela média)." },
+  variavel:   { icone: "📊", cor: "#f97316", nome: "Recorrente variável",
+                desc: "Oscila. Previsto pela média ponderada, com faixa." },
+  sazonal:    { icone: "🗓️", cor: "#8e44ad", nome: "Sazonal",
+                desc: "Só cai em meses específicos." },
+  eventual:   { icone: "🎲", cor: "#94a3b8", nome: "Eventual",
+                desc: "Esporádico. Não é previsível — não entra no total." }
+};
+
+const CONFIANCA_INFO = {
+  maxima: { txt: "certeza", cor: "#2563eb" },
+  alta:   { txt: "alta",    cor: "#2e9e6b" },
+  media:  { txt: "média",   cor: "#f97316" },
+  baixa:  { txt: "baixa",   cor: "#94a3b8" }
+};
+
+function htmlPrevisao(r) {
+  const res = r.resumo;
+
+  // ---- Cartão principal: o número que importa ----
+  const comp = res.comprometimento;
+  let corComp, statusComp;
+  if (comp <= 70)       { corComp = "verde";    statusComp = "🟢 Confortável"; }
+  else if (comp <= 90)  { corComp = "laranja";  statusComp = "🟠 Apertado"; }
+  else                  { corComp = "vermelho"; statusComp = "🔴 Estourado"; }
+
+  const principal =
+    '<div class="card pv-principal">' +
+      '<div class="pv-label">Previsão de gastos para</div>' +
+      '<div class="pv-mes">' + escaparHtml(r.mesAlvo) + '</div>' +
+      '<div class="pv-valor">' + formatarMoeda(res.totalPrevisto) + '</div>' +
+      '<div class="pv-faixa">' +
+        'entre ' + formatarMoeda(res.totalMinimo) + ' e ' + formatarMoeda(res.totalMaximo) +
+      '</div>' +
+
+      '<div class="pv-vs-receita">' +
+        '<div class="pvr-linha">' +
+          '<span>Receita de referência</span>' +
+          '<b class="verde">' + formatarMoeda(res.receitaReferencia) + '</b>' +
+        '</div>' +
+        '<div class="pvr-linha">' +
+          '<span>Sobra prevista</span>' +
+          '<b class="' + (res.sobraPrevista >= 0 ? "verde" : "vermelho") + '">' +
+            formatarMoeda(res.sobraPrevista) +
+          '</b>' +
+        '</div>' +
+        '<div class="pvr-barra">' +
+          '<div class="pvr-preench ' + corComp + '" style="width:' + Math.min(comp, 100) + '%"></div>' +
+        '</div>' +
+        '<div class="pvr-status ' + corComp + '">' +
+          statusComp + ' &middot; ' + comp.toFixed(0) + '% da receita' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  // ---- Como o sistema pensou (perfis) ----
+  let perfisHtml = "";
+  r.perfis.forEach(function (p) {
+    const info = PERFIS_INFO[p.perfil] || PERFIS_INFO.eventual;
+    perfisHtml +=
+      '<div class="pv-perfil">' +
+        '<div class="pvp-topo">' +
+          '<span class="pvp-nome">' + info.icone + ' ' + escaparHtml(p.nome) + '</span>' +
+          '<b class="pvp-valor">' + formatarMoeda(p.total) + '</b>' +
+        '</div>' +
+        '<div class="pvp-desc">' + escaparHtml(info.desc) +
+          ' <span class="pvp-qtd">(' + p.qtd + (p.qtd === 1 ? ' categoria' : ' categorias') + ')</span>' +
+        '</div>' +
+      '</div>';
+  });
+
+  const blocoPerfis =
+    '<div class="card">' +
+      '<h2>🧠 Como o sistema previu</h2>' +
+      '<p class="pv-intro">' +
+        'Cada categoria tem um comportamento diferente. Usar a média para todas daria ' +
+        'resultado errado — por isso o sistema classifica cada uma e aplica o método certo.' +
+      '</p>' +
+      perfisHtml +
+    '</div>';
+
+  // ---- Detalhe por categoria ----
+  let cats = "";
+  r.previsoes.forEach(function (p, idx) {
+    const info = PERFIS_INFO[p.perfil] || PERFIS_INFO.eventual;
+    const conf = CONFIANCA_INFO[p.confianca] || CONFIANCA_INFO.baixa;
+    const h = p.historico;
+
+    // Mini-gráfico da série histórica
+    const maxSerie = Math.max.apply(null, h.serie.concat([1]));
+    let spark = "";
+    h.serie.forEach(function (v) {
+      const alt = (v / maxSerie) * 100;
+      spark += '<div class="pv-spark-bar" style="height:' + Math.max(alt, 3) + '%;' +
+               (v === 0 ? 'opacity:0.25;' : '') + '"></div>';
+    });
+
+    const previstoTxt = p.previsto > 0
+      ? formatarMoeda(p.previsto)
+      : '<span class="pv-zero">—</span>';
+
+    cats +=
+      '<div class="pv-cat" onclick="alternarDetalhePrev(' + idx + ')">' +
+        '<div class="pvc-topo">' +
+          '<div class="pvc-esq">' +
+            '<span class="pvc-perfil" style="background:' + info.cor + '20; color:' + info.cor + ';">' +
+              info.icone +
+            '</span>' +
+            '<span class="pvc-nome">' + escaparHtml(p.categoria) + '</span>' +
+          '</div>' +
+          '<div class="pvc-valor">' + previstoTxt + '</div>' +
+        '</div>' +
+
+        '<div class="pvc-meta">' +
+          '<span class="pvc-conf" style="color:' + conf.cor + ';">confiança ' + conf.txt + '</span>' +
+          (p.previsto > 0 && p.minimo !== p.maximo
+            ? '<span class="pvc-faixa">' + formatarMoeda(p.minimo) + ' – ' + formatarMoeda(p.maximo) + '</span>'
+            : '') +
+        '</div>' +
+
+        '<div class="pv-detalhe" id="pv-det-' + idx + '">' +
+          '<div class="pvd-expl">' + escaparHtml(p.explicacao) + '</div>' +
+
+          '<div class="pv-spark">' + spark + '</div>' +
+          '<div class="pv-spark-legenda">últimos ' + h.totalMeses + ' meses</div>' +
+
+          '<div class="pvd-stats">' +
+            '<div><span>Média</span><b>' + formatarMoeda(h.media) + '</b></div>' +
+            '<div><span>Último</span><b>' + formatarMoeda(h.ultimo) + '</b></div>' +
+            '<div><span>Frequência</span><b>' + h.mesesComGasto + '/' + h.totalMeses + '</b></div>' +
+          '</div>' +
+
+          (Math.abs(h.tendencia) > 5
+            ? '<div class="pvd-tend ' + (h.tendencia > 0 ? "alta" : "baixa") + '">' +
+                (h.tendencia > 0 ? "▲ Subindo" : "▼ Caindo") + ' ' +
+                Math.abs(h.tendencia).toFixed(0) + '% no período' +
+              '</div>'
+            : '') +
+
+          (p.agendado > 0
+            ? '<div class="pvd-agendado">🔒 ' + formatarMoeda(p.agendado) + ' já lançado para o mês</div>'
+            : '') +
+        '</div>' +
+      '</div>';
+  });
+
+  const blocoCats =
+    '<div class="card">' +
+      '<h2>Detalhe por categoria</h2>' +
+      '<p class="pv-intro">Toque numa categoria para ver como a previsão foi feita.</p>' +
+      cats +
+    '</div>';
+
+  return principal + blocoPerfis + blocoCats;
+}
+
+// Abre/fecha o detalhe de uma categoria
+function alternarDetalhePrev(idx) {
+  const el = document.getElementById("pv-det-" + idx);
+  if (!el) return;
+  const aberto = el.classList.contains("aberto");
+  el.classList.toggle("aberto", !aberto);
 }

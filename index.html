@@ -876,6 +876,123 @@
     .aviso-venc.critico { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
     .aviso-venc.atencao { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
 
+
+    /* ===================== PREVISÃO ORÇAMENTÁRIA ===================== */
+    .pv-principal {
+      background: linear-gradient(160deg, #1a3a5c 0%, #2c5f8a 100%);
+      color: #fff; border: none; text-align: center; padding: 26px 20px;
+    }
+    .pv-label { font-size: 11px; color: #a9c4dd; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+    .pv-mes { font-size: 17px; font-weight: 700; margin-top: 3px; }
+    .pv-valor { font-size: 38px; font-weight: 800; margin-top: 10px; letter-spacing: -1px; }
+    .pv-faixa { font-size: 12px; color: #a9c4dd; margin-top: 4px; }
+
+    .pv-vs-receita {
+      background: rgba(0,0,0,0.2); border-radius: 12px;
+      padding: 14px; margin-top: 20px; text-align: left;
+    }
+    .pvr-linha {
+      display: flex; justify-content: space-between; font-size: 13px;
+      padding: 4px 0; gap: 10px;
+    }
+    .pvr-linha span { color: #a9c4dd; }
+    .pvr-linha b { white-space: nowrap; }
+    .pvr-linha b.verde { color: #7fd4a8; }
+    .pvr-linha b.vermelho { color: #fca5a5; }
+    .pvr-barra {
+      background: rgba(255,255,255,0.15); border-radius: 6px;
+      height: 8px; margin-top: 10px; overflow: hidden;
+    }
+    .pvr-preench { height: 8px; border-radius: 6px; transition: width 0.6s; }
+    .pvr-preench.verde { background: #7fd4a8; }
+    .pvr-preench.laranja { background: #fb923c; }
+    .pvr-preench.vermelho { background: #f87171; }
+    .pvr-status {
+      font-size: 12px; font-weight: 700; margin-top: 8px; text-align: center;
+    }
+    .pvr-status.verde { color: #7fd4a8; }
+    .pvr-status.laranja { color: #fb923c; }
+    .pvr-status.vermelho { color: #fca5a5; }
+
+    .pv-intro {
+      font-size: 12px; color: var(--cinza-texto); line-height: 1.5;
+      margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid #f1f3f4;
+    }
+
+    /* Perfis */
+    .pv-perfil { padding: 11px 0; border-bottom: 1px solid #f1f3f4; }
+    .pv-perfil:last-child { border-bottom: none; }
+    .pvp-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .pvp-nome { font-size: 14px; font-weight: 700; color: #1e293b; }
+    .pvp-valor { font-size: 15px; font-weight: 800; color: var(--azul); white-space: nowrap; }
+    .pvp-desc { font-size: 11px; color: var(--cinza-texto); margin-top: 3px; line-height: 1.5; }
+    .pvp-qtd { color: #94a3b8; }
+
+    /* Categorias */
+    .pv-cat {
+      padding: 12px 0; border-bottom: 1px solid #f1f3f4; cursor: pointer;
+    }
+    .pv-cat:last-child { border-bottom: none; }
+    .pv-cat:active { background: #fafbfc; }
+    .pvc-topo { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .pvc-esq { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+    .pvc-perfil {
+      width: 26px; height: 26px; border-radius: 7px; display: flex;
+      align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0;
+    }
+    .pvc-nome { font-size: 13px; color: #1e293b; line-height: 1.35; }
+    .pvc-valor { font-size: 15px; font-weight: 700; color: var(--azul); white-space: nowrap; }
+    .pv-zero { color: #cbd5e1; font-weight: 400; }
+    .pvc-meta {
+      display: flex; justify-content: space-between; margin-top: 5px;
+      font-size: 10px; padding-left: 34px; gap: 8px;
+    }
+    .pvc-conf { font-weight: 700; text-transform: uppercase; }
+    .pvc-faixa { color: #94a3b8; }
+
+    /* Detalhe expansível */
+    .pv-detalhe {
+      max-height: 0; overflow: hidden; transition: max-height 0.35s ease;
+      margin-left: 34px;
+    }
+    .pv-detalhe.aberto { max-height: 420px; margin-top: 12px; }
+    .pvd-expl {
+      font-size: 12px; color: #475569; line-height: 1.6;
+      background: var(--cinza-fundo); border-radius: 8px; padding: 11px;
+      border-left: 3px solid var(--azul-claro);
+    }
+
+    .pv-spark {
+      display: flex; align-items: flex-end; gap: 3px; height: 42px;
+      margin-top: 12px; padding: 0 2px;
+    }
+    .pv-spark-bar {
+      flex: 1; background: var(--azul-claro); border-radius: 2px 2px 0 0; min-height: 2px;
+    }
+    .pv-spark-legenda {
+      font-size: 10px; color: #94a3b8; text-align: center; margin-top: 4px;
+    }
+
+    .pvd-stats { display: flex; gap: 8px; margin-top: 12px; }
+    .pvd-stats div {
+      flex: 1; text-align: center; background: var(--cinza-fundo);
+      border-radius: 8px; padding: 8px 4px;
+    }
+    .pvd-stats span { display: block; font-size: 10px; color: var(--cinza-texto); text-transform: uppercase; }
+    .pvd-stats b { display: block; font-size: 12px; color: #1e293b; margin-top: 2px; }
+
+    .pvd-tend {
+      font-size: 11px; font-weight: 700; text-align: center;
+      padding: 7px; border-radius: 7px; margin-top: 9px;
+    }
+    .pvd-tend.alta { background: #fef2f2; color: #b91c1c; }
+    .pvd-tend.baixa { background: #eef8f3; color: #1a7a52; }
+
+    .pvd-agendado {
+      font-size: 11px; color: #1d4ed8; background: #eff6ff;
+      border-radius: 7px; padding: 8px; margin-top: 9px; text-align: center; font-weight: 600;
+    }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
