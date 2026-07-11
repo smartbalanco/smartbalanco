@@ -879,17 +879,20 @@ let grupoEditando = null;     // grupo aberto no modal
 function trocarAba(nome) {
   abaAtiva = nome;
 
-  document.getElementById("conteudo-dash").style.display = (nome === "dashboard") ? "block" : "none";
+  document.getElementById("conteudo-dash").style.display  = (nome === "dashboard")  ? "block" : "none";
   document.getElementById("conteudo-aprov").style.display = (nome === "aprovacoes") ? "block" : "none";
-  document.getElementById("nav-mes-wrap").style.display = (nome === "dashboard") ? "flex" : "none";
+  document.getElementById("conteudo-rel").style.display   = (nome === "relatorios") ? "block" : "none";
+  document.getElementById("nav-mes-wrap").style.display   = (nome === "dashboard")  ? "flex"  : "none";
 
   document.getElementById("tab-dashboard").classList.toggle("ativa", nome === "dashboard");
   document.getElementById("tab-aprovacoes").classList.toggle("ativa", nome === "aprovacoes");
+  document.getElementById("tab-relatorios").classList.toggle("ativa", nome === "relatorios");
 
   // Botão (+) só faz sentido no dashboard
   document.getElementById("btn-nova-despesa").style.display = (nome === "dashboard") ? "flex" : "none";
 
   if (nome === "aprovacoes") carregarAprovacoes();
+  if (nome === "relatorios") renderizarTelaRelatorios();
 }
 
 // ---------- Carrega a lista ----------
@@ -1297,4 +1300,614 @@ function definirCategoriaCampo(destinoId, valor) {
       visivel.classList.add("vazio-cat");
     }
   }
+}
+
+
+// ============================================================================
+// ===================== RELATÓRIOS ===========================================
+// ============================================================================
+
+const CACHE_REL_SALVOS = "sb_rel_salvos";  // relatórios fixados offline
+let relatorioAtual = null;                  // relatório exibido no momento
+
+// Definição dos relatórios disponíveis e seus períodos
+const RELATORIOS = {
+  evolucao: {
+    nome: "Evolução Mensal",
+    icone: "📈",
+    desc: "Receitas x despesas ao longo do ano",
+    periodo: "ano"
+  },
+  comparacao: {
+    nome: "Comparação entre Meses",
+    icone: "⚖️",
+    desc: "Compare dois meses lado a lado",
+    periodo: "doisMeses"
+  },
+  regra503020: {
+    nome: "Regra 50/30/20",
+    icone: "🎯",
+    desc: "Sobrevivência, estilo de vida e riqueza",
+    periodo: "mes"
+  },
+  dre: {
+    nome: "DRE do Mês",
+    icone: "📋",
+    desc: "Receitas e despesas detalhadas por grupo",
+    periodo: "mes"
+  }
+};
+
+const MESES_NOMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+                     "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+// ---------- Tela inicial de relatórios ----------
+function renderizarTelaRelatorios() {
+  const wrap = document.getElementById("conteudo-rel");
+
+  const salvos = lerRelatoriosSalvos();
+  let htmlSalvos = "";
+
+  if (salvos.length > 0) {
+    let itens = "";
+    salvos.forEach(function (s, i) {
+      itens +=
+        '<div class="rel-salvo">' +
+          '<button class="rs-abrir" onclick="abrirRelatorioSalvo(' + i + ')">' +
+            '<span class="rs-icone">' + (RELATORIOS[s.tipo] ? RELATORIOS[s.tipo].icone : "📄") + '</span>' +
+            '<span class="rs-info">' +
+              '<b>' + escaparHtml(s.meta.titulo) + '</b>' +
+              '<span>' + escaparHtml(s.meta.subtitulo) + ' &middot; ' + escaparHtml(s.meta.geradoEm) + '</span>' +
+            '</span>' +
+          '</button>' +
+          '<button class="rs-excluir" onclick="excluirRelatorioSalvo(' + i + ')" title="Excluir">🗑️</button>' +
+        '</div>';
+    });
+
+    htmlSalvos =
+      '<div class="card">' +
+        '<h2>📌 Salvos offline</h2>' +
+        itens +
+      '</div>';
+  }
+
+  let htmlDisponiveis = '<div class="card"><h2>Gerar relatório</h2>';
+  Object.keys(RELATORIOS).forEach(function (k) {
+    const r = RELATORIOS[k];
+    htmlDisponiveis +=
+      '<button class="rel-opcao" onclick="abrirPeriodo(\'' + k + '\')">' +
+        '<span class="ro-icone">' + r.icone + '</span>' +
+        '<span class="ro-info">' +
+          '<b>' + r.nome + '</b>' +
+          '<span>' + r.desc + '</span>' +
+        '</span>' +
+        '<span class="ro-seta">›</span>' +
+      '</button>';
+  });
+  htmlDisponiveis += '</div>';
+
+  wrap.innerHTML = htmlSalvos + htmlDisponiveis;
+}
+
+// ---------- Seletor de período ----------
+let relTipoEscolhido = null;
+
+function abrirPeriodo(tipo) {
+  relTipoEscolhido = tipo;
+  const r = RELATORIOS[tipo];
+
+  document.getElementById("modal-periodo").style.display = "flex";
+  document.getElementById("mp-titulo").textContent = r.icone + " " + r.nome;
+
+  const corpo = document.getElementById("mp-corpo");
+  const hoje = new Date();
+  const anoAtual = hoje.getFullYear();
+  const mesAtual = hoje.getMonth();
+
+  if (r.periodo === "ano") {
+    let opts = "";
+    for (let a = anoAtual; a >= anoAtual - 4; a--) {
+      opts += '<option value="' + a + '"' + (a === anoAtual ? ' selected' : '') + '>' + a + '</option>';
+    }
+    corpo.innerHTML =
+      '<div class="campo-bloco">' +
+        '<label for="mp-ano">Ano</label>' +
+        '<select id="mp-ano">' + opts + '</select>' +
+      '</div>';
+
+  } else if (r.periodo === "mes") {
+    corpo.innerHTML =
+      '<div class="linha-dupla">' +
+        '<div class="campo-bloco">' +
+          '<label for="mp-mes">Mês</label>' +
+          '<select id="mp-mes">' + opcoesMeses(mesAtual) + '</select>' +
+        '</div>' +
+        '<div class="campo-bloco">' +
+          '<label for="mp-ano">Ano</label>' +
+          '<select id="mp-ano">' + opcoesAnos(anoAtual) + '</select>' +
+        '</div>' +
+      '</div>';
+
+  } else if (r.periodo === "doisMeses") {
+    let mesB = mesAtual - 1, anoB = anoAtual;
+    if (mesB < 0) { mesB = 11; anoB--; }
+
+    corpo.innerHTML =
+      '<div class="mp-secao">Comparar este mês:</div>' +
+      '<div class="linha-dupla">' +
+        '<div class="campo-bloco">' +
+          '<label for="mp-mesA">Mês</label>' +
+          '<select id="mp-mesA">' + opcoesMeses(mesAtual) + '</select>' +
+        '</div>' +
+        '<div class="campo-bloco">' +
+          '<label for="mp-anoA">Ano</label>' +
+          '<select id="mp-anoA">' + opcoesAnos(anoAtual) + '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mp-secao">…com este mês:</div>' +
+      '<div class="linha-dupla">' +
+        '<div class="campo-bloco">' +
+          '<label for="mp-mesB">Mês</label>' +
+          '<select id="mp-mesB">' + opcoesMeses(mesB) + '</select>' +
+        '</div>' +
+        '<div class="campo-bloco">' +
+          '<label for="mp-anoB">Ano</label>' +
+          '<select id="mp-anoB">' + opcoesAnos(anoB) + '</select>' +
+        '</div>' +
+      '</div>';
+  }
+}
+
+function opcoesMeses(selecionado) {
+  let o = "";
+  for (let m = 0; m < 12; m++) {
+    o += '<option value="' + m + '"' + (m === selecionado ? ' selected' : '') + '>' + MESES_NOMES[m] + '</option>';
+  }
+  return o;
+}
+
+function opcoesAnos(selecionado) {
+  const atual = new Date().getFullYear();
+  let o = "";
+  for (let a = atual + 1; a >= atual - 4; a--) {
+    o += '<option value="' + a + '"' + (a === selecionado ? ' selected' : '') + '>' + a + '</option>';
+  }
+  return o;
+}
+
+function fecharModalPeriodo() {
+  document.getElementById("modal-periodo").style.display = "none";
+}
+
+// ---------- Gerar ----------
+async function gerarRelatorioAgora() {
+  const tipo = relTipoEscolhido;
+  if (!tipo) return;
+
+  const r = RELATORIOS[tipo];
+  const params = { tipoRel: tipo };
+
+  if (r.periodo === "ano") {
+    params.ano = document.getElementById("mp-ano").value;
+  } else if (r.periodo === "mes") {
+    params.mes = document.getElementById("mp-mes").value;
+    params.ano = document.getElementById("mp-ano").value;
+  } else if (r.periodo === "doisMeses") {
+    params.mesA = document.getElementById("mp-mesA").value;
+    params.anoA = document.getElementById("mp-anoA").value;
+    params.mesB = document.getElementById("mp-mesB").value;
+    params.anoB = document.getElementById("mp-anoB").value;
+  }
+
+  fecharModalPeriodo();
+
+  const wrap = document.getElementById("conteudo-rel");
+  wrap.innerHTML =
+    '<div class="card" style="text-align:center; padding:46px 20px;">' +
+      '<div class="spinner" style="margin:0 auto 16px;"></div>' +
+      '<p style="color:var(--cinza-texto); font-size:14px;">Gerando ' + r.nome + '...</p>' +
+    '</div>';
+
+  try {
+    const res = await chamarServidor("gerarRelatorio", params);
+    if (res.ok) {
+      relatorioAtual = res;
+      renderizarRelatorio(res, false);
+    } else {
+      wrap.innerHTML = '<div class="card"><p class="vazio">⚠️ ' + escaparHtml(res.mensagem || "Erro ao gerar.") + '</p></div>';
+      setTimeout(renderizarTelaRelatorios, 2500);
+    }
+  } catch (e) {
+    wrap.innerHTML = '<div class="card"><p class="vazio">⚠️ Sem conexão com o servidor.</p></div>';
+    setTimeout(renderizarTelaRelatorios, 2500);
+  }
+}
+
+// ---------- Renderiza o relatório ----------
+function renderizarRelatorio(res, ehSalvo) {
+  const wrap = document.getElementById("conteudo-rel");
+  relatorioAtual = res;
+
+  let corpo = "";
+  if (res.tipo === "evolucao")        corpo = htmlEvolucao(res);
+  else if (res.tipo === "comparacao") corpo = htmlComparacao(res);
+  else if (res.tipo === "regra503020") corpo = htmlRegra(res);
+  else if (res.tipo === "dre")        corpo = htmlDRE(res);
+
+  const jaSalvo = ehSalvo || relatorioJaSalvo(res);
+
+  wrap.innerHTML =
+    '<div class="rel-barra">' +
+      '<button class="rb-btn" onclick="renderizarTelaRelatorios()">‹ Voltar</button>' +
+      '<div class="rb-acoes">' +
+        (jaSalvo
+          ? '<button class="rb-btn salvo" disabled>📌 Salvo</button>'
+          : '<button class="rb-btn" onclick="salvarRelatorioOffline()">📌 Salvar</button>') +
+        '<button class="rb-btn" onclick="compartilharRelatorio()">📤</button>' +
+        '<button class="rb-btn" onclick="imprimirRelatorio()">🖨️</button>' +
+      '</div>' +
+    '</div>' +
+
+    '<div id="rel-imprimivel">' +
+      '<div class="rel-cabecalho">' +
+        '<h1>' + escaparHtml(res.meta.titulo) + '</h1>' +
+        '<p class="rc-sub">' + escaparHtml(res.meta.subtitulo) + '</p>' +
+        '<p class="rc-data">' + escaparHtml(res.meta.geradoEm) + '</p>' +
+      '</div>' +
+      corpo +
+      '<div class="rel-assinatura">' +
+        '<span class="ra-linha"></span>' +
+        '<span class="ra-txt">' + escaparHtml(res.meta.assinatura) + '</span>' +
+      '</div>' +
+    '</div>';
+
+  window.scrollTo(0, 0);
+}
+
+// ============================================================================
+// HTML DE CADA RELATÓRIO
+// ============================================================================
+
+function htmlEvolucao(r) {
+  const max = Math.max.apply(null, r.meses.map(function (m) {
+    return Math.max(m.receitas, m.despesas);
+  })) || 1;
+
+  let barras = "";
+  r.meses.forEach(function (m) {
+    if (m.receitas === 0 && m.despesas === 0) return;
+    const hR = (m.receitas / max) * 100;
+    const hD = (m.despesas / max) * 100;
+    barras +=
+      '<div class="ev-col">' +
+        '<div class="ev-barras">' +
+          '<div class="ev-bar rec" style="height:' + hR + '%" title="' + formatarMoeda(m.receitas) + '"></div>' +
+          '<div class="ev-bar des" style="height:' + hD + '%" title="' + formatarMoeda(m.despesas) + '"></div>' +
+        '</div>' +
+        '<div class="ev-mes">' + m.abrev + '</div>' +
+      '</div>';
+  });
+
+  let linhas = "";
+  r.meses.forEach(function (m) {
+    if (m.receitas === 0 && m.despesas === 0) return;
+    const cor = m.saldo >= 0 ? "verde" : "vermelho";
+    linhas +=
+      '<tr>' +
+        '<td>' + m.nome + '</td>' +
+        '<td class="num verde">' + formatarMoeda(m.receitas) + '</td>' +
+        '<td class="num vermelho">' + formatarMoeda(m.despesas) + '</td>' +
+        '<td class="num ' + cor + '"><b>' + formatarMoeda(m.saldo) + '</b></td>' +
+      '</tr>';
+  });
+
+  return (
+    '<div class="card">' +
+      '<h2>Receitas x Despesas</h2>' +
+      '<div class="ev-grafico">' + barras + '</div>' +
+      '<div class="ev-legenda">' +
+        '<span><i class="lg rec"></i> Receitas</span>' +
+        '<span><i class="lg des"></i> Despesas</span>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<h2>Detalhamento</h2>' +
+      '<table class="rel-tabela">' +
+        '<thead><tr><th>Mês</th><th class="num">Receitas</th><th class="num">Despesas</th><th class="num">Saldo</th></tr></thead>' +
+        '<tbody>' + linhas + '</tbody>' +
+        '<tfoot><tr>' +
+          '<td><b>Total</b></td>' +
+          '<td class="num verde"><b>' + formatarMoeda(r.totais.receitas) + '</b></td>' +
+          '<td class="num vermelho"><b>' + formatarMoeda(r.totais.despesas) + '</b></td>' +
+          '<td class="num ' + (r.totais.saldo >= 0 ? 'verde' : 'vermelho') + '"><b>' + formatarMoeda(r.totais.saldo) + '</b></td>' +
+        '</tr></tfoot>' +
+      '</table>' +
+      '<div class="rel-nota">' +
+        'Média mensal: <b class="verde">' + formatarMoeda(r.totais.mediaReceitas) + '</b> de receita · ' +
+        '<b class="vermelho">' + formatarMoeda(r.totais.mediaDespesas) + '</b> de despesa ' +
+        '(' + r.totais.mesesComDados + ' meses com dados)' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function htmlComparacao(r) {
+  function cardMes(m, destaque) {
+    return (
+      '<div class="cp-mes' + (destaque ? ' destaque' : '') + '">' +
+        '<div class="cp-nome">' + escaparHtml(m.nome) + '</div>' +
+        '<div class="cp-linha"><span>Receitas</span><b class="verde">' + formatarMoeda(m.receitas) + '</b></div>' +
+        '<div class="cp-linha"><span>Despesas</span><b class="vermelho">' + formatarMoeda(m.despesas) + '</b></div>' +
+        '<div class="cp-linha total"><span>Saldo</span><b class="' + (m.saldo >= 0 ? 'verde' : 'vermelho') + '">' + formatarMoeda(m.saldo) + '</b></div>' +
+      '</div>'
+    );
+  }
+
+  const v = r.variacao;
+  const setaD = v.despesas > 0 ? "▲" : (v.despesas < 0 ? "▼" : "―");
+  const corD = v.despesas > 0 ? "vermelho" : "verde";  // gastar mais é ruim
+  const setaR = v.receitas > 0 ? "▲" : (v.receitas < 0 ? "▼" : "―");
+  const corR = v.receitas > 0 ? "verde" : "vermelho";
+
+  let cats = "";
+  r.categorias.forEach(function (c) {
+    const cor = c.diferenca > 0 ? "vermelho" : (c.diferenca < 0 ? "verde" : "");
+    const seta = c.diferenca > 0 ? "▲" : (c.diferenca < 0 ? "▼" : "―");
+    cats +=
+      '<tr>' +
+        '<td class="cat">' + escaparHtml(c.categoria) + '</td>' +
+        '<td class="num">' + formatarMoeda(c.valorA) + '</td>' +
+        '<td class="num cinza">' + formatarMoeda(c.valorB) + '</td>' +
+        '<td class="num ' + cor + '"><b>' + seta + ' ' + formatarMoeda(Math.abs(c.diferenca)) + '</b></td>' +
+      '</tr>';
+  });
+
+  return (
+    '<div class="card">' +
+      '<div class="cp-wrap">' + cardMes(r.mesA, true) + cardMes(r.mesB, false) + '</div>' +
+
+      '<div class="cp-variacao">' +
+        '<div class="cv-item">' +
+          '<span>Despesas</span>' +
+          '<b class="' + corD + '">' + setaD + ' ' + Math.abs(v.despesasPct).toFixed(1) + '%</b>' +
+          '<small>' + (v.despesas >= 0 ? '+' : '−') + formatarMoeda(Math.abs(v.despesas)) + '</small>' +
+        '</div>' +
+        '<div class="cv-item">' +
+          '<span>Receitas</span>' +
+          '<b class="' + corR + '">' + setaR + ' ' + Math.abs(v.receitasPct).toFixed(1) + '%</b>' +
+          '<small>' + (v.receitas >= 0 ? '+' : '−') + formatarMoeda(Math.abs(v.receitas)) + '</small>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<h2>Variação por categoria</h2>' +
+      '<table class="rel-tabela compacta">' +
+        '<thead><tr><th>Categoria</th><th class="num">' + escaparHtml(r.mesA.nome.split("/")[0]) + '</th>' +
+        '<th class="num">' + escaparHtml(r.mesB.nome.split("/")[0]) + '</th><th class="num">Dif.</th></tr></thead>' +
+        '<tbody>' + (cats || '<tr><td colspan="4" class="vazio">Sem dados.</td></tr>') + '</tbody>' +
+      '</table>' +
+    '</div>'
+  );
+}
+
+function htmlRegra(r) {
+  let baldes = "";
+  r.baldes.forEach(function (b) {
+    const corStatus = b.status === "ok" ? "verde" : (b.status === "atencao" ? "laranja" : "vermelho");
+    const alvoTxt = b.tipo === "max" ? "ideal até " + b.ideal + "%" : "ideal mín. " + b.ideal + "%";
+    const largura = Math.min(b.percentual, 100);
+
+    let itens = "";
+    b.categorias.slice(0, 6).forEach(function (c) {
+      itens += '<div class="rg-item"><span>' + escaparHtml(c.categoria) + '</span><b>' + formatarMoeda(c.valor) + '</b></div>';
+    });
+
+    baldes +=
+      '<div class="rg-balde">' +
+        '<div class="rg-topo">' +
+          '<span class="rg-nome">' + escaparHtml(b.nome) + '</span>' +
+          '<span class="rg-pct ' + corStatus + '">' + b.percentual.toFixed(1) + '%</span>' +
+        '</div>' +
+        '<div class="rg-barra">' +
+          '<div class="rg-preench ' + corStatus + '" style="width:' + largura + '%"></div>' +
+          '<div class="rg-alvo" style="left:' + Math.min(b.ideal, 100) + '%"></div>' +
+        '</div>' +
+        '<div class="rg-info">' +
+          '<span>' + formatarMoeda(b.valor) + '</span>' +
+          '<span class="rg-alvo-txt">' + alvoTxt + '</span>' +
+        '</div>' +
+        (itens ? '<div class="rg-itens">' + itens + '</div>' : '') +
+      '</div>';
+  });
+
+  return (
+    '<div class="card">' +
+      '<div class="rg-base">' +
+        'Base de cálculo: receita de <b>' + escaparHtml(r.mesBaseNome) + '</b> = ' +
+        '<b class="verde">' + formatarMoeda(r.receitaBase) + '</b>' +
+      '</div>' +
+      baldes +
+      '<div class="rg-resumo">' +
+        '<div><span>Total gasto</span><b class="vermelho">' + formatarMoeda(r.totalDespesas) + '</b></div>' +
+        '<div><span>Sobra</span><b class="' + (r.sobra >= 0 ? 'verde' : 'vermelho') + '">' + formatarMoeda(r.sobra) + '</b></div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function htmlDRE(r) {
+  function bloco(titulo, lista, classe, total) {
+    let grupos = "";
+    lista.forEach(function (g) {
+      let itens = "";
+      g.itens.forEach(function (it) {
+        itens += '<div class="dre-item"><span>' + escaparHtml(it.categoria) + '</span><b>' + formatarMoeda(it.valor) + '</b></div>';
+      });
+      grupos +=
+        '<div class="dre-grupo">' +
+          '<div class="dg-topo ' + classe + '">' +
+            '<span>' + escaparHtml(g.grupo) + '</span>' +
+            '<b>' + formatarMoeda(g.total) + '</b>' +
+          '</div>' +
+          itens +
+        '</div>';
+    });
+
+    if (!grupos) grupos = '<p class="vazio">Nenhum lançamento.</p>';
+
+    return (
+      '<div class="card">' +
+        '<h2>' + titulo + '</h2>' +
+        grupos +
+        '<div class="dre-total ' + classe + '"><span>Total</span><b>' + formatarMoeda(total) + '</b></div>' +
+      '</div>'
+    );
+  }
+
+  const corRes = r.resultado >= 0 ? "verde" : "vermelho";
+
+  return (
+    bloco("🟢 Receitas", r.receitas, "rec", r.totalReceitas) +
+    bloco("🔴 Despesas", r.despesas, "des", r.totalDespesas) +
+    '<div class="card dre-resultado">' +
+      '<span>Resultado do mês</span>' +
+      '<b class="' + corRes + '">' + formatarMoeda(r.resultado) + '</b>' +
+    '</div>'
+  );
+}
+
+// ============================================================================
+// SALVAR / EXCLUIR OFFLINE
+// ============================================================================
+function lerRelatoriosSalvos() {
+  try {
+    const b = localStorage.getItem(CACHE_REL_SALVOS);
+    return b ? JSON.parse(b) : [];
+  } catch (e) { return []; }
+}
+
+function relatorioJaSalvo(res) {
+  const salvos = lerRelatoriosSalvos();
+  return salvos.some(function (s) {
+    return s.tipo === res.tipo && s.meta.subtitulo === res.meta.subtitulo;
+  });
+}
+
+function salvarRelatorioOffline() {
+  if (!relatorioAtual) return;
+  try {
+    const salvos = lerRelatoriosSalvos();
+    salvos.unshift(relatorioAtual);
+    if (salvos.length > 20) salvos.length = 20;  // limite
+    localStorage.setItem(CACHE_REL_SALVOS, JSON.stringify(salvos));
+    mostrarToast("📌 Relatório salvo offline!");
+    renderizarRelatorio(relatorioAtual, true);
+  } catch (e) {
+    mostrarToast("❌ Não foi possível salvar (armazenamento cheio?).");
+  }
+}
+
+function abrirRelatorioSalvo(idx) {
+  const salvos = lerRelatoriosSalvos();
+  const r = salvos[idx];
+  if (r) renderizarRelatorio(r, true);
+}
+
+function excluirRelatorioSalvo(idx) {
+  const salvos = lerRelatoriosSalvos();
+  const r = salvos[idx];
+  if (!r) return;
+  if (!confirm("Excluir o relatório salvo \"" + r.meta.titulo + " - " + r.meta.subtitulo + "\"?")) return;
+
+  salvos.splice(idx, 1);
+  localStorage.setItem(CACHE_REL_SALVOS, JSON.stringify(salvos));
+  mostrarToast("🗑️ Relatório excluído.");
+  renderizarTelaRelatorios();
+}
+
+// ============================================================================
+// IMPRIMIR / COMPARTILHAR
+// ============================================================================
+function imprimirRelatorio() {
+  window.print();
+}
+
+async function compartilharRelatorio() {
+  if (!relatorioAtual) return;
+  const texto = relatorioParaTexto(relatorioAtual);
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: relatorioAtual.meta.titulo + " - " + relatorioAtual.meta.subtitulo,
+        text: texto
+      });
+    } catch (e) { /* usuário cancelou */ }
+  } else {
+    try {
+      await navigator.clipboard.writeText(texto);
+      mostrarToast("📋 Relatório copiado! Cole onde quiser.");
+    } catch (e) {
+      mostrarToast("❌ Não foi possível copiar.");
+    }
+  }
+}
+
+// Converte o relatório em texto puro (para compartilhar)
+function relatorioParaTexto(r) {
+  let t = "*" + r.meta.titulo.toUpperCase() + "*\n";
+  t += r.meta.subtitulo + "\n";
+  t += r.meta.geradoEm + "\n";
+  t += "――――――――――――――――\n\n";
+
+  if (r.tipo === "evolucao") {
+    r.meses.forEach(function (m) {
+      if (m.receitas === 0 && m.despesas === 0) return;
+      t += m.nome + "\n";
+      t += "  Receitas: " + formatarMoeda(m.receitas) + "\n";
+      t += "  Despesas: " + formatarMoeda(m.despesas) + "\n";
+      t += "  Saldo: " + formatarMoeda(m.saldo) + "\n\n";
+    });
+    t += "TOTAL DO ANO\n";
+    t += "  Receitas: " + formatarMoeda(r.totais.receitas) + "\n";
+    t += "  Despesas: " + formatarMoeda(r.totais.despesas) + "\n";
+    t += "  Saldo: " + formatarMoeda(r.totais.saldo) + "\n";
+
+  } else if (r.tipo === "comparacao") {
+    [r.mesA, r.mesB].forEach(function (m) {
+      t += m.nome + "\n";
+      t += "  Receitas: " + formatarMoeda(m.receitas) + "\n";
+      t += "  Despesas: " + formatarMoeda(m.despesas) + "\n";
+      t += "  Saldo: " + formatarMoeda(m.saldo) + "\n\n";
+    });
+    t += "VARIAÇÃO\n";
+    t += "  Despesas: " + r.variacao.despesasPct.toFixed(1) + "%\n";
+    t += "  Receitas: " + r.variacao.receitasPct.toFixed(1) + "%\n";
+
+  } else if (r.tipo === "regra503020") {
+    t += "Receita base (" + r.mesBaseNome + "): " + formatarMoeda(r.receitaBase) + "\n\n";
+    r.baldes.forEach(function (b) {
+      t += b.nome + ": " + formatarMoeda(b.valor) + " (" + b.percentual.toFixed(1) + "%)\n";
+    });
+    t += "\nTotal gasto: " + formatarMoeda(r.totalDespesas) + "\n";
+    t += "Sobra: " + formatarMoeda(r.sobra) + "\n";
+
+  } else if (r.tipo === "dre") {
+    t += "RECEITAS\n";
+    r.receitas.forEach(function (g) {
+      t += "  " + g.grupo + ": " + formatarMoeda(g.total) + "\n";
+    });
+    t += "  Total: " + formatarMoeda(r.totalReceitas) + "\n\n";
+    t += "DESPESAS\n";
+    r.despesas.forEach(function (g) {
+      t += "  " + g.grupo + ": " + formatarMoeda(g.total) + "\n";
+    });
+    t += "  Total: " + formatarMoeda(r.totalDespesas) + "\n\n";
+    t += "RESULTADO: " + formatarMoeda(r.resultado) + "\n";
+  }
+
+  t += "\n――――――――――――――――\n" + r.meta.assinatura;
+  return t;
 }
