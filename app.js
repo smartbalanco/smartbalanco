@@ -1015,9 +1015,10 @@ async function gravarNovaDespesa(params, desc) {
 // ===================== APROVAÇÕES ===========================================
 // ============================================================================
 
-let abaAtiva = "dashboard";   // "dashboard" ou "aprovacoes"
-let gruposAprovacao = [];     // cache dos grupos carregados
-let grupoEditando = null;     // grupo aberto no modal
+let abaAtiva = "dashboard";        // "dashboard", "aprovacoes" ou "relatorios"
+let gruposAprovacao = [];          // cache dos grupos carregados
+let grupoEditando = null;          // grupo aberto no modal
+let aprovacoesPreCarregadas = false;  // já buscamos as aprovações em 2º plano?
 
 // ---------- Troca de aba ----------
 function trocarAba(nome) {
@@ -1035,25 +1036,36 @@ function trocarAba(nome) {
   // Botão (+) só faz sentido no dashboard
   document.getElementById("btn-nova-despesa").style.display = (nome === "dashboard") ? "flex" : "none";
 
-  if (nome === "aprovacoes") carregarAprovacoes();
+  if (nome === "aprovacoes") carregarAprovacoes(false);
   if (nome === "relatorios") renderizarTelaRelatorios();
 }
 
 // ---------- Carrega a lista ----------
-async function carregarAprovacoes() {
+async function carregarAprovacoes(forcar) {
   const lista = document.getElementById("lista-aprovacoes");
-  lista.innerHTML = '<p class="vazio">Carregando...</p>';
+
+  // 👉 Se já temos os dados pré-carregados, mostra IMEDIATAMENTE.
+  if (aprovacoesPreCarregadas && !forcar) {
+    renderizarAprovacoes();
+  } else {
+    lista.innerHTML = '<p class="vazio">Carregando...</p>';
+  }
 
   try {
     const r = await chamarServidor("listarAprovacoes");
     if (!r.ok) {
-      lista.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro ao carregar.") + '</p>';
+      if (!aprovacoesPreCarregadas) {
+        lista.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro ao carregar.") + '</p>';
+      }
       return;
     }
     gruposAprovacao = r.grupos || [];
+    aprovacoesPreCarregadas = true;
     renderizarAprovacoes();
   } catch (e) {
-    lista.innerHTML = '<p class="vazio">⚠️ Sem conexão.</p>';
+    if (!aprovacoesPreCarregadas) {
+      lista.innerHTML = '<p class="vazio">⚠️ Sem conexão.</p>';
+    }
   }
 }
 
@@ -1317,13 +1329,17 @@ function mostrarErroAprov(msg) {
 }
 
 
-// Busca a contagem de pendentes (para o badge), sem trocar de aba
+// Pré-carrega as aprovações em segundo plano (para abrir instantâneo depois)
 async function checarPendentesAprovacao() {
   try {
     const r = await chamarServidor("listarAprovacoes");
     if (r.ok) {
       gruposAprovacao = r.grupos || [];
+      aprovacoesPreCarregadas = true;
       atualizarBadgeAprovacoes(gruposAprovacao.length);
+
+      // Se a aba de aprovações já estiver aberta, atualiza a tela
+      if (abaAtiva === "aprovacoes") renderizarAprovacoes();
     }
   } catch (e) {
     // silencioso
@@ -1479,6 +1495,24 @@ const RELATORIOS = {
     icone: "📋",
     desc: "Receitas e despesas detalhadas por grupo",
     periodo: "mes"
+  },
+  parcelamentos: {
+    nome: "Parcelamentos Ativos",
+    icone: "💳",
+    desc: "O que ainda falta pagar e o progresso",
+    periodo: "nenhum"
+  },
+  projecao: {
+    nome: "Projeção Futura",
+    icone: "🔮",
+    desc: "Quanto já está comprometido nos próximos meses",
+    periodo: "meses"
+  },
+  extrato: {
+    nome: "Extrato do Mês",
+    icone: "🧾",
+    desc: "Todos os lançamentos do mês",
+    periodo: "mes"
   }
 };
 
@@ -1572,6 +1606,26 @@ function abrirPeriodo(tipo) {
         '</div>' +
       '</div>';
 
+  } else if (r.periodo === "nenhum") {
+    corpo.innerHTML =
+      '<p style="font-size:14px; color:var(--cinza-texto); line-height:1.6; text-align:center; padding:10px 0;">' +
+        'Este relatório mostra <b>todos os parcelamentos em aberto</b> no momento.<br>' +
+        'Não precisa escolher período.' +
+      '</p>';
+
+  } else if (r.periodo === "meses") {
+    corpo.innerHTML =
+      '<div class="campo-bloco">' +
+        '<label for="mp-meses">Quantos meses à frente?</label>' +
+        '<select id="mp-meses">' +
+          '<option value="3">3 meses</option>' +
+          '<option value="6" selected>6 meses</option>' +
+          '<option value="12">12 meses</option>' +
+          '<option value="18">18 meses</option>' +
+          '<option value="24">24 meses</option>' +
+        '</select>' +
+      '</div>';
+
   } else if (r.periodo === "doisMeses") {
     let mesB = mesAtual - 1, anoB = anoAtual;
     if (mesB < 0) { mesB = 11; anoB--; }
@@ -1636,6 +1690,10 @@ async function gerarRelatorioAgora() {
   } else if (r.periodo === "mes") {
     params.mes = document.getElementById("mp-mes").value;
     params.ano = document.getElementById("mp-ano").value;
+  } else if (r.periodo === "meses") {
+    params.meses = document.getElementById("mp-meses").value;
+  } else if (r.periodo === "nenhum") {
+    // sem parâmetros
   } else if (r.periodo === "doisMeses") {
     params.mesA = document.getElementById("mp-mesA").value;
     params.anoA = document.getElementById("mp-anoA").value;
@@ -1673,10 +1731,13 @@ function renderizarRelatorio(res, ehSalvo) {
   relatorioAtual = res;
 
   let corpo = "";
-  if (res.tipo === "evolucao")        corpo = htmlEvolucao(res);
-  else if (res.tipo === "comparacao") corpo = htmlComparacao(res);
-  else if (res.tipo === "regra503020") corpo = htmlRegra(res);
-  else if (res.tipo === "dre")        corpo = htmlDRE(res);
+  if (res.tipo === "evolucao")            corpo = htmlEvolucao(res);
+  else if (res.tipo === "comparacao")     corpo = htmlComparacao(res);
+  else if (res.tipo === "regra503020")    corpo = htmlRegra(res);
+  else if (res.tipo === "dre")            corpo = htmlDRE(res);
+  else if (res.tipo === "parcelamentos")  corpo = htmlParcelamentos(res);
+  else if (res.tipo === "projecao")       corpo = htmlProjecao(res);
+  else if (res.tipo === "extrato")        corpo = htmlExtrato(res);
 
   const jaSalvo = ehSalvo || relatorioJaSalvo(res);
 
@@ -2050,6 +2111,33 @@ function relatorioParaTexto(r) {
     });
     t += "  Total: " + formatarMoeda(r.totalDespesas) + "\n\n";
     t += "RESULTADO: " + formatarMoeda(r.resultado) + "\n";
+
+  } else if (r.tipo === "parcelamentos") {
+    t += "Falta pagar: " + formatarMoeda(r.resumo.totalRestante) + "\n";
+    t += "Por mês: " + formatarMoeda(r.resumo.parcelaMensal) + "\n";
+    t += "Progresso: " + r.resumo.progressoGeral.toFixed(1) + "%\n\n";
+    r.parcelamentos.forEach(function (p) {
+      t += p.descricao + "\n";
+      t += "  " + p.pagas + "/" + p.totalParcelas + " pagas · falta " + formatarMoeda(p.valorRestante) + "\n";
+      t += "  " + formatarMoeda(p.valorParcela) + "/mês até " + p.ultimoVenc + "\n\n";
+    });
+
+  } else if (r.tipo === "projecao") {
+    t += "Total comprometido: " + formatarMoeda(r.resumo.totalComprometido) + "\n";
+    t += "Média mensal: " + formatarMoeda(r.resumo.mediaMensal) + "\n";
+    t += "Comprometimento: " + r.resumo.comprometimentoMedio.toFixed(1) + "%\n\n";
+    r.meses.forEach(function (m) {
+      t += m.nome + ": " + formatarMoeda(m.total) + "\n";
+    });
+
+  } else if (r.tipo === "extrato") {
+    t += "Receitas: " + formatarMoeda(r.resumo.receitas) + "\n";
+    t += "Despesas: " + formatarMoeda(r.resumo.despesas) + "\n";
+    t += "Saldo: " + formatarMoeda(r.resumo.saldo) + "\n\n";
+    r.itens.forEach(function (it) {
+      const sinal = it.tipo === "receita" ? "+" : "-";
+      t += it.data + " " + it.descricao + " " + sinal + formatarMoeda(it.valor) + "\n";
+    });
   }
 
   t += "\n――――――――――――――――\n" + r.meta.assinatura;
@@ -2321,10 +2409,244 @@ function configurarDeteccaoRetorno() {
 async function atualizarAoVoltar() {
   if (!sessaoAtual || appBloqueado) return;
 
+  // Aprovações são sempre atualizadas em segundo plano (para abrir instantâneo)
+  checarPendentesAprovacao();
+
   if (abaAtiva === "dashboard") {
     await recarregarDados();
-    checarPendentesAprovacao();
-  } else if (abaAtiva === "aprovacoes") {
-    await carregarAprovacoes();
   }
+}
+
+// ============================================================================
+// HTML DOS RELATÓRIOS DO BLOCO 2
+// ============================================================================
+
+function htmlParcelamentos(r) {
+  const res = r.resumo;
+
+  if (!r.parcelamentos || r.parcelamentos.length === 0) {
+    return '<div class="card" style="text-align:center; padding:40px 20px;">' +
+             '<div style="font-size:40px; margin-bottom:10px;">🎉</div>' +
+             '<p style="font-size:15px; color:#334155; font-weight:600;">Nenhum parcelamento em aberto!</p>' +
+           '</div>';
+  }
+
+  let cards = "";
+  r.parcelamentos.forEach(function (p) {
+    const cartao = iconeCartao(p.metodo);
+    cards +=
+      '<div class="pc-item">' +
+        '<div class="pc-topo">' +
+          '<div class="pc-desc">' + escaparHtml(p.descricao) + cartao + '</div>' +
+          '<div class="pc-restante">' + formatarMoeda(p.valorRestante) + '</div>' +
+        '</div>' +
+
+        '<div class="pc-barra">' +
+          '<div class="pc-preench" style="width:' + p.progresso + '%"></div>' +
+        '</div>' +
+
+        '<div class="pc-info">' +
+          '<span><b>' + p.pagas + '/' + p.totalParcelas + '</b> pagas</span>' +
+          '<span>' + formatarMoeda(p.valorParcela) + '/mês</span>' +
+          '<span>até ' + escaparHtml(p.ultimoVenc) + '</span>' +
+        '</div>' +
+
+        '<div class="pc-detalhes">' +
+          'Total: ' + formatarMoeda(p.valorTotal) +
+          ' &middot; Pago: <b class="verde">' + formatarMoeda(p.valorPago) + '</b>' +
+          ' &middot; Próxima: ' + escaparHtml(p.proximoVenc) +
+        '</div>' +
+      '</div>';
+  });
+
+  return (
+    '<div class="card">' +
+      '<div class="pc-resumo">' +
+        '<div class="pr-box">' +
+          '<span>Falta pagar</span>' +
+          '<b class="vermelho">' + formatarMoeda(res.totalRestante) + '</b>' +
+        '</div>' +
+        '<div class="pr-box">' +
+          '<span>Por mês</span>' +
+          '<b class="laranja">' + formatarMoeda(res.parcelaMensal) + '</b>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="pc-geral">' +
+        '<div class="pg-topo">' +
+          '<span>Progresso geral</span>' +
+          '<b>' + res.progressoGeral.toFixed(1) + '%</b>' +
+        '</div>' +
+        '<div class="pc-barra grande">' +
+          '<div class="pc-preench" style="width:' + res.progressoGeral + '%"></div>' +
+        '</div>' +
+        '<div class="pg-info">' +
+          formatarMoeda(res.totalPago) + ' pagos de ' + formatarMoeda(res.totalGeral) +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<h2>' + res.quantidade + ' ' + (res.quantidade === 1 ? 'compra em aberto' : 'compras em aberto') + '</h2>' +
+      cards +
+    '</div>'
+  );
+}
+
+function htmlProjecao(r) {
+  const res = r.resumo;
+  const max = Math.max.apply(null, r.meses.map(function (m) { return m.total; })) || 1;
+
+  let barras = "";
+  r.meses.forEach(function (m) {
+    const h = (m.total / max) * 100;
+    barras +=
+      '<div class="pj-col">' +
+        '<div class="pj-valor">' + (m.total > 0 ? formatarMoedaCurta(m.total) : "—") + '</div>' +
+        '<div class="pj-bar-wrap">' +
+          '<div class="pj-bar" style="height:' + h + '%"></div>' +
+        '</div>' +
+        '<div class="pj-mes">' + escaparHtml(m.abrev) + '</div>' +
+      '</div>';
+  });
+
+  let linhas = "";
+  r.meses.forEach(function (m) {
+    let cats = "";
+    m.topCategorias.forEach(function (c) {
+      cats += '<div class="pj-cat"><span>' + escaparHtml(c.categoria) + '</span><b>' + formatarMoeda(c.valor) + '</b></div>';
+    });
+
+    linhas +=
+      '<div class="pj-mes-bloco">' +
+        '<div class="pj-mb-topo">' +
+          '<span>' + escaparHtml(m.nome) + '</span>' +
+          '<b class="vermelho">' + formatarMoeda(m.total) + '</b>' +
+        '</div>' +
+        '<div class="pj-mb-sub">' +
+          (m.parcelas > 0 ? '📦 Parcelas: ' + formatarMoeda(m.parcelas) + ' &middot; ' : '') +
+          '🧾 À vista: ' + formatarMoeda(m.avista) +
+          (m.receitas > 0 ? ' &middot; 🟢 Receitas: ' + formatarMoeda(m.receitas) : '') +
+        '</div>' +
+        (cats ? '<div class="pj-cats">' + cats + '</div>' : '') +
+      '</div>';
+  });
+
+  const alerta = res.comprometimentoMedio > 80
+    ? '<div class="pj-alerta critico">🔴 Comprometimento médio de <b>' + res.comprometimentoMedio.toFixed(1) + '%</b> da sua receita base.</div>'
+    : (res.comprometimentoMedio > 50
+      ? '<div class="pj-alerta atencao">🟠 Comprometimento médio de <b>' + res.comprometimentoMedio.toFixed(1) + '%</b> da sua receita base.</div>'
+      : '<div class="pj-alerta ok">🟢 Comprometimento médio de <b>' + res.comprometimentoMedio.toFixed(1) + '%</b> da sua receita base.</div>');
+
+  return (
+    '<div class="card">' +
+      '<h2>Comprometimento mês a mês</h2>' +
+      '<div class="pj-grafico">' + barras + '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<div class="pj-resumo">' +
+        '<div class="pr-box">' +
+          '<span>Total comprometido</span>' +
+          '<b class="vermelho">' + formatarMoeda(res.totalComprometido) + '</b>' +
+        '</div>' +
+        '<div class="pr-box">' +
+          '<span>Média mensal</span>' +
+          '<b>' + formatarMoeda(res.mediaMensal) + '</b>' +
+        '</div>' +
+      '</div>' +
+      alerta +
+      '<div class="rel-nota">' +
+        'Referência: receita base de ' + formatarMoeda(res.receitaReferencia) + '. ' +
+        'Do total, <b>' + formatarMoeda(res.totalParcelas) + '</b> são parcelas de compras já feitas.' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<h2>Detalhamento</h2>' +
+      linhas +
+    '</div>'
+  );
+}
+
+function htmlExtrato(r) {
+  const res = r.resumo;
+
+  if (!r.itens || r.itens.length === 0) {
+    return '<div class="card"><p class="vazio">Nenhum lançamento neste mês.</p></div>';
+  }
+
+  let linhas = "";
+  r.itens.forEach(function (it) {
+    const cartaoHtml = it.ehCartao
+      ? '<span class="ex-cartao">💳 ' + escaparHtml(it.cartao) + '</span>'
+      : '';
+
+    const parcHtml = it.parcela
+      ? '<span class="ex-parc">' + escaparHtml(it.parcela) + '</span>'
+      : '';
+
+    const catHtml = it.codCategoria
+      ? '<button class="ex-cat" onclick="mostrarCategoriaCompleta(this)" data-cat="' +
+        escaparHtml(it.categoria) + '">' + escaparHtml(it.codCategoria) + '</button>'
+      : '';
+
+    const pagoHtml = (it.tipo === "despesa" && !it.pago)
+      ? '<span class="ex-pendente">⏳</span>'
+      : '';
+
+    linhas +=
+      '<div class="ex-linha ' + it.tipo + '">' +
+        '<div class="ex-data">' + escaparHtml(it.data) + '</div>' +
+        '<div class="ex-meio">' +
+          '<div class="ex-desc">' + escaparHtml(it.descricao) + pagoHtml + '</div>' +
+          '<div class="ex-tags">' + catHtml + cartaoHtml + parcHtml + '</div>' +
+        '</div>' +
+        '<div class="ex-valor ' + (it.tipo === "receita" ? "verde" : "vermelho") + '">' +
+          (it.tipo === "receita" ? "+" : "−") + formatarMoeda(it.valor).replace("R$ ", "") +
+        '</div>' +
+      '</div>';
+  });
+
+  return (
+    '<div class="card">' +
+      '<div class="ex-resumo">' +
+        '<div><span>Receitas</span><b class="verde">' + formatarMoeda(res.receitas) + '</b></div>' +
+        '<div><span>Despesas</span><b class="vermelho">' + formatarMoeda(res.despesas) + '</b></div>' +
+        '<div><span>Saldo</span><b class="' + (res.saldo >= 0 ? 'verde' : 'vermelho') + '">' + formatarMoeda(res.saldo) + '</b></div>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<h2>' + res.quantidade + ' lançamentos</h2>' +
+      '<div class="ex-lista">' + linhas + '</div>' +
+      '<div class="rel-nota">Toque no código da categoria para ver o nome completo. ⏳ = pendente de pagamento.</div>' +
+    '</div>'
+  );
+}
+
+// Mostra o nome completo da categoria ao tocar no badge
+function mostrarCategoriaCompleta(botao) {
+  const cat = botao.getAttribute("data-cat");
+  mostrarToast("📂 " + cat);
+}
+
+// Ícone do cartão (se for cartão)
+function iconeCartao(metodo) {
+  const m = (metodo || "").toLowerCase();
+  if (m.indexOf("cart") === -1) return "";
+  let nome = "";
+  if (m.indexOf("xp") !== -1) nome = "XP";
+  else if (m.indexOf("inter") !== -1) nome = "Inter";
+  else if (m.indexOf("nubank") !== -1) nome = "Nubank";
+  else if (m.indexOf("amazon") !== -1) nome = "Amazon";
+  else if (m.indexOf("mp") !== -1) nome = "MP";
+  else nome = metodo;
+  return ' <span class="ex-cartao">💳 ' + escaparHtml(nome) + '</span>';
+}
+
+// Formata valores grandes de forma curta (para caber nos gráficos)
+function formatarMoedaCurta(v) {
+  if (v >= 1000) return (v / 1000).toFixed(1).replace(".", ",") + "k";
+  return Math.round(v).toString();
 }
