@@ -332,6 +332,77 @@
     .linha-dupla { display: flex; gap: 12px; }
     .linha-dupla .campo-bloco { flex: 1; }
 
+
+    /* ---------- ABAS (Dashboard / Aprovações) ---------- */
+    .abas {
+      display: flex; background: rgba(0,0,0,0.18); border-radius: 10px;
+      padding: 4px; margin-top: 10px; gap: 4px;
+    }
+    .abas button {
+      flex: 1; background: transparent; color: #a9c4dd; border: none;
+      padding: 9px 6px; border-radius: 7px; font-size: 13px; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .abas button.ativa { background: rgba(255,255,255,0.92); color: var(--azul); }
+    #badge-aprov {
+      display: none; background: var(--vermelho); color: #fff;
+      border-radius: 10px; min-width: 18px; height: 18px; padding: 0 5px;
+      font-size: 11px; font-weight: 700; align-items: center; justify-content: center;
+    }
+
+    /* ---------- CARDS DE APROVAÇÃO ---------- */
+    #conteudo-aprov { display: none; padding: 16px; max-width: 620px; margin: 0 auto; }
+    .card-aprov { padding: 16px; }
+    .ap-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .ap-desc { font-size: 15px; font-weight: 700; color: #1e293b; flex: 1; line-height: 1.3; }
+    .ap-mov {
+      font-size: 10px; color: var(--azul-claro); background: #eef4fa;
+      padding: 3px 8px; border-radius: 12px; font-weight: 700; white-space: nowrap;
+    }
+    .ap-valor {
+      font-size: 24px; font-weight: 800; color: var(--azul); margin-top: 10px;
+      display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    }
+    .ap-parc { font-size: 12px; font-weight: 600; color: var(--cinza-texto); }
+    .ap-infos { display: flex; gap: 10px; margin-top: 12px; }
+    .ap-infos div {
+      flex: 1; background: var(--cinza-fundo); border-radius: 8px; padding: 8px 10px;
+    }
+    .ap-infos span {
+      display: block; font-size: 10px; color: var(--cinza-texto); text-transform: uppercase;
+    }
+    .ap-infos b { display: block; font-size: 13px; color: #1e293b; margin-top: 2px; }
+    .ap-cat {
+      margin-top: 10px; font-size: 12px; color: var(--cinza-texto);
+      background: var(--cinza-fundo); padding: 7px 10px; border-radius: 8px;
+      border-left: 3px solid var(--azul-claro);
+    }
+    .ap-acoes { display: flex; gap: 8px; margin-top: 14px; }
+    .ap-btn {
+      flex: 1; padding: 11px 4px; border: none; border-radius: 9px;
+      font-size: 13px; font-weight: 700; cursor: pointer;
+    }
+    .ap-btn.aprovar { background: var(--verde); color: #fff; }
+    .ap-btn.editar { background: var(--cinza-fundo); color: var(--azul); }
+    .ap-btn.rejeitar { background: #fef2f2; color: #b91c1c; }
+    .ap-btn:active { transform: scale(0.97); }
+
+    #ea-erro {
+      display: none; background: #fef2f2; color: #b91c1c;
+      border: 1px solid #fecaca; border-radius: 8px;
+      padding: 11px 14px; font-size: 13px; margin-bottom: 14px;
+    }
+    #ea-info-parcelas {
+      display: none; background: #eef4fa; color: var(--azul-claro);
+      font-size: 11px; padding: 10px 12px; border-radius: 8px;
+      margin-top: 12px; line-height: 1.5; border-left: 3px solid var(--azul-claro);
+    }
+    .ea-previa {
+      display: none; background: #eef8f3; color: var(--verde);
+      font-size: 13px; font-weight: 700; text-align: center;
+      padding: 9px; border-radius: 8px; margin-top: 10px;
+    }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
@@ -368,10 +439,19 @@
           <button onclick="sair()">Sair</button>
         </div>
       </div>
-      <div class="nav-mes">
+      <div class="nav-mes" id="nav-mes-wrap">
         <button class="seta" onclick="mudarMes(-1)">&#8249;</button>
         <span class="mes-txt" id="mes-referencia"></span>
         <button class="seta" onclick="mudarMes(1)">&#8250;</button>
+      </div>
+
+      <div class="abas">
+        <button id="tab-dashboard" class="ativa" onclick="trocarAba('dashboard')">
+          📊 Dashboard
+        </button>
+        <button id="tab-aprovacoes" onclick="trocarAba('aprovacoes')">
+          📥 Aprovações <span id="badge-aprov"></span>
+        </button>
       </div>
     </div>
 
@@ -437,6 +517,12 @@
       </div>
 
     </div>
+
+    <!-- ============ CONTEÚDO: APROVAÇÕES ============ -->
+    <div id="conteudo-aprov">
+      <div id="lista-aprovacoes"></div>
+    </div>
+
   </div>
 
 
@@ -571,8 +657,7 @@
           <label for="nd-metodo">Método de pagamento</label>
           <select id="nd-metodo" onchange="atualizarCamposDespesa()"></select>
           <div id="nd-aviso-cartao">
-            💳 O vencimento será calculado conforme o fechamento da fatura.<br>
-            A compra já entra como <b>quitada</b> (quem se paga é a fatura, não a compra individual).
+            💳 O vencimento será calculado automaticamente conforme o fechamento da fatura deste cartão.
           </div>
         </div>
 
@@ -591,7 +676,7 @@
           <input type="date" id="nd-vencimento" />
         </div>
 
-        <div class="toggle-editar" id="nd-toggle-pago" onclick="document.getElementById('nd-chk-pago').click()">
+        <div class="toggle-editar" onclick="document.getElementById('nd-chk-pago').click()">
           <input type="checkbox" id="nd-chk-pago"
                  onclick="event.stopPropagation(); atualizarCamposDespesa();" />
           <label for="nd-chk-pago" onclick="event.stopPropagation();">✅ Esta despesa já foi paga</label>
@@ -618,6 +703,65 @@
         <div class="modal-acoes">
           <button class="btn-modal voltar" onclick="voltarDoResumoDespesa()">Voltar</button>
           <button class="btn-modal confirmar" onclick="enviarNovaDespesa()">Sim, lançar</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- ============ MODAL EDITAR APROVAÇÃO ============ -->
+  <div class="modal-fundo" id="modal-aprov">
+    <div class="modal-caixa">
+
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Editar e aprovar</div>
+          <div class="mt-mov" id="ea-mov">MOV-</div>
+        </div>
+        <button class="fechar" onclick="fecharModalAprov()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <div id="ea-erro"></div>
+
+        <div class="campo-bloco">
+          <label for="ea-descricao">Descrição</label>
+          <input type="text" id="ea-descricao" />
+        </div>
+
+        <div class="campo-bloco">
+          <label for="ea-valor">Valor total (R$)</label>
+          <input type="number" id="ea-valor" step="0.01" inputmode="decimal"
+                 oninput="atualizarPreviaAprov()" />
+        </div>
+
+        <div class="ea-previa" id="ea-previa"></div>
+        <div id="ea-info-parcelas"></div>
+
+        <div class="campo-bloco">
+          <label for="ea-datacompra">Data da compra</label>
+          <input type="date" id="ea-datacompra" />
+        </div>
+
+        <div class="campo-bloco campo-data-destaque">
+          <label for="ea-primeirovenc">📅 1º vencimento</label>
+          <input type="date" id="ea-primeirovenc" />
+        </div>
+
+        <div class="campo-bloco">
+          <label for="ea-metodo">Método de pagamento</label>
+          <select id="ea-metodo"></select>
+        </div>
+
+        <div class="campo-bloco">
+          <label for="ea-categoria">Categoria</label>
+          <select id="ea-categoria"></select>
+        </div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharModalAprov()">Cancelar</button>
+          <button class="btn-modal confirmar" onclick="salvarEAprovar()">Salvar e aprovar</button>
         </div>
       </div>
 

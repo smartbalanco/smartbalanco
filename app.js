@@ -110,7 +110,10 @@ async function entrarNoApp() {
     mostrarCarregando("Carregando seus dados...");
   }
 
-  // 2. Busca os dados frescos (em segundo plano se o cache já apareceu)
+  // 2. Checa aprovações pendentes em segundo plano (para mostrar o badge)
+  checarPendentesAprovacao();
+
+  // 3. Busca os dados frescos (em segundo plano se o cache já apareceu)
   try {
     const r = await chamarServidor("dashboard", { mes: mesExibido, ano: anoExibido });
     if (r.ok) {
@@ -734,18 +737,10 @@ function atualizarCamposDespesa() {
   document.getElementById("nd-bloco-vencimento").style.display = ehCartao ? "none" : "block";
   document.getElementById("nd-aviso-cartao").style.display = ehCartao ? "block" : "none";
 
-  // 👉 Se for cartão, a compra já nasce quitada (quem se paga é a fatura).
-  // Então a caixa "já foi paga" não faz sentido: some.
-  const blocoPago = document.getElementById("nd-toggle-pago");
-  if (ehCartao) {
-    blocoPago.style.display = "none";
-    document.getElementById("nd-chk-pago").checked = false;
-    document.getElementById("nd-bloco-datapgto").style.display = "none";
-  } else {
-    blocoPago.style.display = "flex";
-    document.getElementById("nd-bloco-datapgto").style.display = jaPago ? "block" : "none";
-  }
+  // Data de pagamento: aparece só se marcado como pago
+  document.getElementById("nd-bloco-datapgto").style.display = jaPago ? "block" : "none";
 
+  // Mostra o valor da parcela em tempo real
   atualizarPreviaParcela();
 }
 
@@ -868,5 +863,322 @@ async function gravarNovaDespesa(params, desc) {
     }
   } catch (e) {
     mostrarToast("❌ Sem conexão. \"" + desc + "\" NÃO foi lançada.");
+  }
+}
+
+
+// ============================================================================
+// ===================== APROVAÇÕES ===========================================
+// ============================================================================
+
+let abaAtiva = "dashboard";   // "dashboard" ou "aprovacoes"
+let gruposAprovacao = [];     // cache dos grupos carregados
+let grupoEditando = null;     // grupo aberto no modal
+
+// ---------- Troca de aba ----------
+function trocarAba(nome) {
+  abaAtiva = nome;
+
+  document.getElementById("conteudo-dash").style.display = (nome === "dashboard") ? "block" : "none";
+  document.getElementById("conteudo-aprov").style.display = (nome === "aprovacoes") ? "block" : "none";
+  document.getElementById("nav-mes-wrap").style.display = (nome === "dashboard") ? "flex" : "none";
+
+  document.getElementById("tab-dashboard").classList.toggle("ativa", nome === "dashboard");
+  document.getElementById("tab-aprovacoes").classList.toggle("ativa", nome === "aprovacoes");
+
+  // Botão (+) só faz sentido no dashboard
+  document.getElementById("btn-nova-despesa").style.display = (nome === "dashboard") ? "flex" : "none";
+
+  if (nome === "aprovacoes") carregarAprovacoes();
+}
+
+// ---------- Carrega a lista ----------
+async function carregarAprovacoes() {
+  const lista = document.getElementById("lista-aprovacoes");
+  lista.innerHTML = '<p class="vazio">Carregando...</p>';
+
+  try {
+    const r = await chamarServidor("listarAprovacoes");
+    if (!r.ok) {
+      lista.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro ao carregar.") + '</p>';
+      return;
+    }
+    gruposAprovacao = r.grupos || [];
+    renderizarAprovacoes();
+  } catch (e) {
+    lista.innerHTML = '<p class="vazio">⚠️ Sem conexão.</p>';
+  }
+}
+
+function renderizarAprovacoes() {
+  const lista = document.getElementById("lista-aprovacoes");
+  lista.innerHTML = "";
+
+  atualizarBadgeAprovacoes(gruposAprovacao.length);
+
+  if (gruposAprovacao.length === 0) {
+    lista.innerHTML =
+      '<div class="card" style="text-align:center; padding:36px 20px;">' +
+        '<div style="font-size:40px; margin-bottom:10px;">✅</div>' +
+        '<p style="font-size:15px; color:#334155; font-weight:600;">Nada pendente!</p>' +
+        '<p style="font-size:13px; color:#94a3b8; margin-top:4px;">Não há lançamentos aguardando aprovação.</p>' +
+      '</div>';
+    return;
+  }
+
+  gruposAprovacao.forEach(function (g, idx) {
+    const faixa = (g.movInicial === g.movFinal)
+      ? "MOV-" + g.movInicial
+      : "MOV-" + g.movInicial + " a " + g.movFinal;
+
+    const parcTxt = (g.totalParcelas > 1)
+      ? g.totalParcelas + "x de " + formatarMoeda(g.valorParcela)
+      : "À vista";
+
+    const card = document.createElement("div");
+    card.className = "card card-aprov";
+    card.innerHTML =
+      '<div class="ap-topo">' +
+        '<div class="ap-desc">' + escaparHtml(g.descricao) + '</div>' +
+        '<div class="ap-mov">' + faixa + '</div>' +
+      '</div>' +
+
+      '<div class="ap-valor">' + formatarMoeda(g.valorTotal) +
+        '<span class="ap-parc">' + parcTxt + '</span>' +
+      '</div>' +
+
+      '<div class="ap-infos">' +
+        '<div><span>Vencimento</span><b>' + formatarDataBr(g.primeiroVenc) + '</b></div>' +
+        '<div><span>Método</span><b>' + escaparHtml(g.metodo || "-") + '</b></div>' +
+      '</div>' +
+      '<div class="ap-cat">' + escaparHtml(g.categoria || "sem categoria") + '</div>' +
+
+      '<div class="ap-acoes">' +
+        '<button class="ap-btn rejeitar" onclick="confirmarRejeicao(' + idx + ')">🗑️ Rejeitar</button>' +
+        '<button class="ap-btn editar" onclick="abrirEdicaoAprovacao(' + idx + ')">✏️ Editar</button>' +
+        '<button class="ap-btn aprovar" onclick="aprovarDireto(' + idx + ')">✅ Aprovar</button>' +
+      '</div>';
+
+    lista.appendChild(card);
+  });
+}
+
+function atualizarBadgeAprovacoes(n) {
+  const badge = document.getElementById("badge-aprov");
+  if (!badge) return;
+  if (n > 0) {
+    badge.textContent = n;
+    badge.style.display = "inline-flex";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+// ---------- Aprovar sem editar ----------
+function aprovarDireto(idx) {
+  const g = gruposAprovacao[idx];
+  if (!g) return;
+
+  const txt = (g.totalParcelas > 1)
+    ? "Aprovar \"" + g.descricao + "\" (" + g.totalParcelas + " parcelas)?"
+    : "Aprovar \"" + g.descricao + "\"?";
+
+  if (!confirm(txt + "\n\nSerá enviado para a planilha de Transações.")) return;
+
+  removerCardAprovacao(idx);
+  mostrarToast("⏳ Aprovando \"" + g.descricao + "\"...", true);
+  executarAprovacao({ chave: g.chave }, g.descricao);
+}
+
+// ---------- Rejeitar ----------
+function confirmarRejeicao(idx) {
+  const g = gruposAprovacao[idx];
+  if (!g) return;
+
+  const linhasTxt = (g.totalParcelas > 1) ? g.totalParcelas + " linhas" : "1 linha";
+  if (!confirm("🗑️ REJEITAR \"" + g.descricao + "\"?\n\n" +
+               linhasTxt + " serão APAGADAS da fila e NÃO irão para Transações.\n\nEsta ação não pode ser desfeita.")) return;
+
+  removerCardAprovacao(idx);
+  mostrarToast("⏳ Rejeitando...", true);
+  executarRejeicao({ chave: g.chave }, g.descricao);
+}
+
+function removerCardAprovacao(idx) {
+  gruposAprovacao.splice(idx, 1);
+  renderizarAprovacoes();
+}
+
+async function executarAprovacao(params, desc) {
+  try {
+    const r = await chamarServidor("aprovarGrupo", params);
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      limparTodoCache();
+      await carregarAprovacoes();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Falha ao aprovar."));
+      await carregarAprovacoes();
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão. \"" + desc + "\" NÃO foi aprovado.");
+    await carregarAprovacoes();
+  }
+}
+
+async function executarRejeicao(params, desc) {
+  try {
+    const r = await chamarServidor("rejeitarGrupo", params);
+    if (r.ok) {
+      mostrarToast("🗑️ " + r.mensagem);
+      await carregarAprovacoes();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Falha ao rejeitar."));
+      await carregarAprovacoes();
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão. Nada foi removido.");
+    await carregarAprovacoes();
+  }
+}
+
+// Limpa o cache do dashboard (os dados mudaram)
+function limparTodoCache() {
+  try {
+    const remover = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.indexOf(CACHE_PREFIXO) === 0) remover.push(k);
+    }
+    remover.forEach(function (k) { localStorage.removeItem(k); });
+  } catch (e) {}
+}
+
+// ============================================================================
+// MODAL DE EDIÇÃO DA APROVAÇÃO
+// ============================================================================
+async function abrirEdicaoAprovacao(idx) {
+  const g = gruposAprovacao[idx];
+  if (!g) return;
+  grupoEditando = g;
+
+  const modal = document.getElementById("modal-aprov");
+  modal.style.display = "flex";
+  document.getElementById("ea-erro").style.display = "none";
+
+  // Carrega listas se preciso
+  if (!listasValidas) {
+    try {
+      const rl = await chamarServidor("listasValidas");
+      if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
+    } catch (e) {
+      listasValidas = { categorias: [], metodos: [] };
+    }
+  }
+
+  const faixa = (g.movInicial === g.movFinal)
+    ? "MOV-" + g.movInicial
+    : "MOV-" + g.movInicial + " a " + g.movFinal;
+  document.getElementById("ea-mov").textContent = faixa;
+
+  document.getElementById("ea-descricao").value = g.descricao;
+  document.getElementById("ea-valor").value = Number(g.valorTotal).toFixed(2);
+  document.getElementById("ea-datacompra").value = g.dataCompra;
+  document.getElementById("ea-primeirovenc").value = g.primeiroVenc;
+
+  montarSelect("ea-metodo", listasValidas.metodos, g.metodo);
+  montarSelect("ea-categoria", listasValidas.categorias, g.categoria);
+
+  // Info de parcelas (travado)
+  const infoParc = document.getElementById("ea-info-parcelas");
+  if (g.totalParcelas > 1) {
+    infoParc.innerHTML =
+      '📦 <b>' + g.totalParcelas + ' parcelas.</b> O valor total será dividido igualmente. ' +
+      'As demais parcelas seguem mês a mês a partir do 1º vencimento.<br>' +
+      '<span style="color:#94a3b8;">Para mudar o número de parcelas, rejeite e lance manualmente.</span>';
+    infoParc.style.display = "block";
+  } else {
+    infoParc.style.display = "none";
+  }
+
+  atualizarPreviaAprov();
+}
+
+function atualizarPreviaAprov() {
+  if (!grupoEditando) return;
+  const valor = parseFloat(document.getElementById("ea-valor").value) || 0;
+  const parc = grupoEditando.totalParcelas;
+  const el = document.getElementById("ea-previa");
+
+  if (valor > 0 && parc > 1) {
+    el.textContent = parc + "x de " + formatarMoeda(valor / parc);
+    el.style.display = "block";
+  } else if (valor > 0) {
+    el.textContent = "À vista: " + formatarMoeda(valor);
+    el.style.display = "block";
+  } else {
+    el.style.display = "none";
+  }
+}
+
+function fecharModalAprov() {
+  document.getElementById("modal-aprov").style.display = "none";
+  grupoEditando = null;
+}
+
+function salvarEAprovar() {
+  const g = grupoEditando;
+  if (!g) return;
+
+  const desc = document.getElementById("ea-descricao").value.trim();
+  const valor = parseFloat(document.getElementById("ea-valor").value);
+  const dataCompra = document.getElementById("ea-datacompra").value;
+  const primeiroVenc = document.getElementById("ea-primeirovenc").value;
+  const metodo = document.getElementById("ea-metodo").value;
+  const categoria = document.getElementById("ea-categoria").value;
+
+  if (!desc) return mostrarErroAprov("Informe a descrição.");
+  if (!valor || valor <= 0) return mostrarErroAprov("Valor deve ser maior que zero.");
+  if (!dataCompra) return mostrarErroAprov("Informe a data da compra.");
+  if (!primeiroVenc) return mostrarErroAprov("Informe o 1º vencimento.");
+  if (!metodo) return mostrarErroAprov("Escolha o método.");
+  if (!categoria) return mostrarErroAprov("Escolha a categoria.");
+
+  const params = {
+    chave: g.chave,
+    descricao: desc,
+    valorTotal: valor,
+    dataCompra: dataCompra,
+    primeiroVenc: primeiroVenc,
+    metodo: metodo,
+    categoria: categoria
+  };
+
+  const idx = gruposAprovacao.indexOf(g);
+  fecharModalAprov();
+  if (idx >= 0) removerCardAprovacao(idx);
+
+  mostrarToast("⏳ Aprovando \"" + desc + "\" com as edições...", true);
+  executarAprovacao(params, desc);
+}
+
+function mostrarErroAprov(msg) {
+  const el = document.getElementById("ea-erro");
+  el.textContent = "⚠️ " + msg;
+  el.style.display = "block";
+  setTimeout(function () { el.style.display = "none"; }, 4000);
+}
+
+
+// Busca a contagem de pendentes (para o badge), sem trocar de aba
+async function checarPendentesAprovacao() {
+  try {
+    const r = await chamarServidor("listarAprovacoes");
+    if (r.ok) {
+      gruposAprovacao = r.grupos || [];
+      atualizarBadgeAprovacoes(gruposAprovacao.length);
+    }
+  } catch (e) {
+    // silencioso
   }
 }
