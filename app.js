@@ -497,10 +497,12 @@ window.addEventListener("load", async function () {
     mostrarCarregando("Entrando...");
 
     // Se tem bloqueio configurado, pede a digital/PIN antes de mostrar os dados
+    // Se tem bloqueio configurado, pede a digital/PIN antes de mostrar os dados.
+    // NÃO valida a sessão aqui: isso causaria duas chamadas simultâneas ao
+    // servidor (o Apps Script serializa as execuções e uma trava a outra).
+    // A validação acontece naturalmente no entrarNoApp(), após o desbloqueio.
     if (temDesbloqueioConfigurado()) {
-      // Valida a sessão em segundo plano enquanto pede o desbloqueio
       bloquearApp();
-      validarSessaoSalva();
       return;
     }
 
