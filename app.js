@@ -165,7 +165,20 @@ async function chamarServidor(acao, paramsExtras) {
 // ============================================================================
 // ENTRADA / CARGA DO DASHBOARD
 // ============================================================================
+let entrando = false;   // trava contra chamadas simultâneas ao servidor
+
 async function entrarNoApp() {
+  if (entrando) return;
+  entrando = true;
+
+  try {
+    await executarEntradaNoApp();
+  } finally {
+    entrando = false;
+  }
+}
+
+async function executarEntradaNoApp() {
   // 1. Se houver cache deste mês, mostra IMEDIATAMENTE (sem esperar o servidor)
   const cache = lerCache(mesExibido, anoExibido);
   if (cache) {
@@ -248,7 +261,7 @@ async function recarregarDados() {
 
       const hj = new Date();
       if (mesExibido === hj.getMonth() && anoExibido === hj.getFullYear()) {
-        verificarContasEVNotificar(r);
+        verificarContasEVNotificar(r).catch(function () {});
       } else {
         esconderAvisoVencimento();
       }
@@ -496,10 +509,9 @@ window.addEventListener("load", async function () {
 
     mostrarCarregando("Entrando...");
 
-    // Se tem bloqueio configurado, pede a digital/PIN antes de mostrar os dados
     // Se tem bloqueio configurado, pede a digital/PIN antes de mostrar os dados.
-    // NÃO valida a sessão aqui: isso causaria duas chamadas simultâneas ao
-    // servidor (o Apps Script serializa as execuções e uma trava a outra).
+    // NÃO valida a sessão aqui: causaria duas chamadas simultâneas ao servidor
+    // (o Apps Script serializa execuções e uma travaria a outra).
     // A validação acontece naturalmente no entrarNoApp(), após o desbloqueio.
     if (temDesbloqueioConfigurado()) {
       bloquearApp();
@@ -2384,13 +2396,28 @@ async function verificarPin() {
   }
 }
 
+let desbloqueando = false;   // trava contra desbloqueio duplo (PIN dispara 2x)
+
 function desbloquear() {
+  if (desbloqueando) return;
+  desbloqueando = true;
+
   appBloqueado = false;
   momentoQueSaiu = null;
   document.getElementById("tela-bloqueio").style.display = "none";
   document.getElementById("bl-pin").value = "";
-  // Atualiza os dados ao desbloquear
-  atualizarAoVoltar();
+
+  // Se o app ainda não foi carregado (desbloqueio na abertura), precisa entrar.
+  // Se já estava aberto, só atualiza os dados.
+  const jaAberto = document.getElementById("tela-interna").style.display === "block";
+
+  if (jaAberto) {
+    atualizarAoVoltar();
+  } else {
+    entrarNoApp();
+  }
+
+  setTimeout(function () { desbloqueando = false; }, 2000);
 }
 
 // ============================================================================
@@ -2712,7 +2739,6 @@ async function verificarContasEVNotificar(dadosDashboard) {
   }
 }
 
-// Toda a lógica fica aqui dentro, protegida
 async function executarVerificacaoNotificacao(dadosDashboard) {
   if (!dadosDashboard || !dadosDashboard.contasAVencer) return;
 
