@@ -734,10 +734,18 @@ function atualizarCamposDespesa() {
   document.getElementById("nd-bloco-vencimento").style.display = ehCartao ? "none" : "block";
   document.getElementById("nd-aviso-cartao").style.display = ehCartao ? "block" : "none";
 
-  // Data de pagamento: aparece só se marcado como pago
-  document.getElementById("nd-bloco-datapgto").style.display = jaPago ? "block" : "none";
+  // 👉 Se for cartão, a compra já nasce quitada (quem se paga é a fatura).
+  // Então a caixa "já foi paga" não faz sentido: some.
+  const blocoPago = document.getElementById("nd-toggle-pago");
+  if (ehCartao) {
+    blocoPago.style.display = "none";
+    document.getElementById("nd-chk-pago").checked = false;
+    document.getElementById("nd-bloco-datapgto").style.display = "none";
+  } else {
+    blocoPago.style.display = "flex";
+    document.getElementById("nd-bloco-datapgto").style.display = jaPago ? "block" : "none";
+  }
 
-  // Mostra o valor da parcela em tempo real
   atualizarPreviaParcela();
 }
 
