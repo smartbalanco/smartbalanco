@@ -2384,10 +2384,10 @@ async function verificarPin() {
   }
 }
 
-let desbloqueando = false;   // trava contra desbloqueio duplo
+let desbloqueando = false;   // trava contra desbloqueio duplo (PIN dispara 2x)
 
 function desbloquear() {
-  if (desbloqueando) return;   // 👉 já está desbloqueando, ignora
+  if (desbloqueando) return;
   desbloqueando = true;
 
   appBloqueado = false;
@@ -2395,19 +2395,18 @@ function desbloquear() {
   document.getElementById("tela-bloqueio").style.display = "none";
   document.getElementById("bl-pin").value = "";
 
+  // Se o app ainda não foi carregado (desbloqueio na abertura), precisa entrar.
+  // Se já estava aberto, só atualiza os dados.
+  const jaAberto = document.getElementById("tela-interna").style.display === "block";
+
   if (jaAberto) {
     atualizarAoVoltar();
   } else {
     entrarNoApp();
   }
 
-  // Libera a trava depois de um tempinho
   setTimeout(function () { desbloqueando = false; }, 2000);
 }
-  // Atualiza os dados ao desbloquear
-  atualizarAoVoltar();
-}
-
 // ============================================================================
 // DETECTA SAÍDA/RETORNO DO APP
 // - Se ficou 5+ minutos fora e tem bloqueio configurado -> pede digital/PIN
