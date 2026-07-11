@@ -2,17 +2,18 @@
 // SMARTBALANÇO - LÓGICA DO APP
 // ============================================================================
 
-// URL do seu Web App do Apps Script (termina em /exec)
 const API_URL = "https://script.google.com/macros/s/AKfycbwGBnFvY9FtaNm2AF4gBkgbNf21iYYyyAFIAjqtAlprGXyqaZKZyIidNrzR5UNvhiNA/exec";
-
-// Client ID do login Google
 const GOOGLE_CLIENT_ID = "964045201445-qc96mfjmeghvaknoegpgm5m4esk6ij4g.apps.googleusercontent.com";
 
 let tokenLoginAtual = null;
 let emailUsuarioAtual = null;
 
+// Mês/ano atualmente em exibição (navegável)
+let mesExibido = new Date().getMonth();
+let anoExibido = new Date().getFullYear();
+
 // ============================================================================
-// LOGIN COM GOOGLE
+// LOGIN
 // ============================================================================
 function aoReceberLoginGoogle(resposta) {
   tokenLoginAtual = resposta.credential;
@@ -26,7 +27,7 @@ function aoReceberLoginGoogle(resposta) {
 }
 
 // ============================================================================
-// COMUNICAÇÃO COM O SERVIDOR
+// SERVIDOR
 // ============================================================================
 async function chamarServidor(acao, paramsExtras) {
   paramsExtras = paramsExtras || {};
@@ -39,12 +40,12 @@ async function chamarServidor(acao, paramsExtras) {
 }
 
 // ============================================================================
-// FLUXO PRINCIPAL PÓS-LOGIN
+// ENTRADA / CARGA DO DASHBOARD
 // ============================================================================
 async function entrarNoApp() {
   mostrarCarregando("Carregando seus dados...");
   try {
-    const r = await chamarServidor("dashboard");
+    const r = await chamarServidor("dashboard", { mes: mesExibido, ano: anoExibido });
     if (r.ok) {
       preencherDashboard(r);
       mostrarTelaInterna();
@@ -59,6 +60,37 @@ async function entrarNoApp() {
 }
 
 // ============================================================================
+// NAVEGAÇÃO ENTRE MESES
+// ============================================================================
+async function mudarMes(delta) {
+  mesExibido += delta;
+  if (mesExibido > 11) { mesExibido = 0; anoExibido++; }
+  if (mesExibido < 0) { mesExibido = 11; anoExibido--; }
+  await recarregarDados();
+}
+
+async function irParaMesAtual() {
+  mesExibido = new Date().getMonth();
+  anoExibido = new Date().getFullYear();
+  await recarregarDados();
+}
+
+async function recarregarDados() {
+  const btn = document.getElementById("btn-atualizar");
+  if (btn) btn.classList.add("girando");
+  document.getElementById("conteudo-dash").style.opacity = "0.4";
+  try {
+    const r = await chamarServidor("dashboard", { mes: mesExibido, ano: anoExibido });
+    if (r.ok) preencherDashboard(r);
+  } catch (e) {
+    // mantém dados anteriores
+  } finally {
+    if (btn) btn.classList.remove("girando");
+    document.getElementById("conteudo-dash").style.opacity = "1";
+  }
+}
+
+// ============================================================================
 // FORMATAÇÃO
 // ============================================================================
 function formatarMoeda(valor) {
@@ -68,25 +100,51 @@ function formatarMoeda(valor) {
 
 function corDoScore(classificacao) {
   const c = (classificacao || "").toLowerCase();
-  if (c.includes("excelente")) return "#2e9e6b";
-  if (c.includes("bom")) return "#eab308";
-  if (c.includes("aten")) return "#f97316";
+  if (c.indexOf("excelente") !== -1) return "#2e9e6b";
+  if (c.indexOf("bom") !== -1) return "#eab308";
+  if (c.indexOf("aten") !== -1) return "#f97316";
   return "#dc2626";
 }
 
+function escaparHtml(txt) {
+  const div = document.createElement("div");
+  div.textContent = txt == null ? "" : String(txt);
+  return div.innerHTML;
+}
+
 // ============================================================================
-// PREENCHER O DASHBOARD
+// PREENCHER DASHBOARD
 // ============================================================================
 function preencherDashboard(d) {
   document.getElementById("mes-referencia").textContent = d.mesReferencia || "";
 
+  // Botão "hoje" só aparece se não estiver no mês corrente
+  const hojeM = new Date().getMonth();
+  const hojeA = new Date().getFullYear();
+  const btnHoje = document.getElementById("btn-hoje");
+  btnHoje.style.display = (d.mes === hojeM && d.ano === hojeA) ? "none" : "inline-block";
+
+  // ---- SALDO (base = receita do mês anterior) ----
   const s = d.saldo || {};
   const elSaldo = document.getElementById("saldo-valor");
   elSaldo.textContent = formatarMoeda(s.saldo);
   elSaldo.style.color = (s.saldo >= 0) ? "#2e9e6b" : "#dc2626";
-  document.getElementById("saldo-receitas").textContent = formatarMoeda(s.receitas);
+
+  document.getElementById("receita-base-label").textContent = "Receita de " + (d.mesBaseNome || "-");
+  document.getElementById("saldo-receitas").textContent = formatarMoeda(s.receitaBase);
   document.getElementById("saldo-despesas").textContent = formatarMoeda(s.despesas);
 
+  document.getElementById("aviso-base").textContent =
+    "Base de cálculo: receita de " + (d.mesBaseNome || "-") + " (o que entrou no mês anterior é o que se gasta agora).";
+
+  document.getElementById("receita-mes-atual").textContent =
+    "Receita já recebida em " + (d.mesReferencia || "") + ": " + formatarMoeda(s.receitaDoMes);
+
+  const ds = d.despesasStatus || {};
+  document.getElementById("desp-pagas").textContent = formatarMoeda(ds.pagas);
+  document.getElementById("desp-pendentes").textContent = formatarMoeda(ds.pendentes);
+
+  // ---- SCORE ----
   const sc = d.score || {};
   const cor = corDoScore(sc.classificacao);
   document.getElementById("score-valor").textContent = (sc.valor != null ? sc.valor : "-") + "/100";
@@ -97,10 +155,7 @@ function preencherDashboard(d) {
   document.getElementById("score-barra-preenchida").style.background = cor;
   document.getElementById("score-detalhes").textContent = sc.detalhes || "";
 
-  const ds = d.despesasStatus || {};
-  document.getElementById("desp-pagas").textContent = formatarMoeda(ds.pagas);
-  document.getElementById("desp-pendentes").textContent = formatarMoeda(ds.pendentes);
-
+  // ---- CONTAS A VENCER ----
   const listaVencer = document.getElementById("lista-vencer");
   listaVencer.innerHTML = "";
   if (!d.contasAVencer || d.contasAVencer.length === 0) {
@@ -116,6 +171,7 @@ function preencherDashboard(d) {
     });
   }
 
+  // ---- TOP CATEGORIAS ----
   const listaCat = document.getElementById("lista-categorias");
   listaCat.innerHTML = "";
   if (!d.topCategorias || d.topCategorias.length === 0) {
@@ -134,6 +190,7 @@ function preencherDashboard(d) {
     });
   }
 
+  // ---- FATURAS DE CARTÃO ----
   const listaCartoes = document.getElementById("lista-cartoes");
   listaCartoes.innerHTML = "";
   if (!d.faturasCartao || d.faturasCartao.length === 0) {
@@ -143,39 +200,53 @@ function preencherDashboard(d) {
       const item = document.createElement("div");
       item.className = "cartao-item";
       item.innerHTML =
-        '<div class="cartao-nome">💳 ' + escaparHtml(c.nome) + '</div>' +
+        '<div class="cartao-nome">💳 ' + escaparHtml(c.nome) +
+          '<span class="cartao-venc">vence ' + escaparHtml(c.vencAtual) + '</span></div>' +
         '<div class="cartao-valores">' +
-          '<div><span class="cv-label">Atual</span><span class="cv-num">' + formatarMoeda(c.atual) + '</span></div>' +
-          '<div><span class="cv-label">Próxima</span><span class="cv-num cinza">' + formatarMoeda(c.proxima) + '</span></div>' +
+          '<div><span class="cv-label">Aberta &middot; ' + escaparHtml(c.mesAtual) + '</span>' +
+          '<span class="cv-num">' + formatarMoeda(c.atual) + '</span></div>' +
+          '<div><span class="cv-label">Seguinte &middot; ' + escaparHtml(c.mesProxima) + '</span>' +
+          '<span class="cv-num cinza">' + formatarMoeda(c.proxima) + '</span></div>' +
         '</div>';
       listaCartoes.appendChild(item);
     });
   }
-}
 
-function escaparHtml(txt) {
-  const div = document.createElement("div");
-  div.textContent = txt == null ? "" : String(txt);
-  return div.innerHTML;
-}
+  // ---- OUTRAS DESPESAS (não-cartão) ----
+  const listaOutros = document.getElementById("lista-outros");
+  listaOutros.innerHTML = "";
+  if (!d.outrosMetodos || d.outrosMetodos.length === 0) {
+    listaOutros.innerHTML = '<p class="vazio">Nenhuma despesa fora do cartão neste mês.</p>';
+  } else {
+    let totalOutros = 0;
+    d.outrosMetodos.forEach(function (m) { totalOutros += m.total; });
 
-// ============================================================================
-// ATUALIZAR
-// ============================================================================
-async function atualizarDashboard() {
-  const btn = document.getElementById("btn-atualizar");
-  if (btn) btn.classList.add("girando");
-  try {
-    const r = await chamarServidor("dashboard");
-    if (r.ok) preencherDashboard(r);
-  } catch (e) {
-  } finally {
-    if (btn) btn.classList.remove("girando");
+    d.outrosMetodos.forEach(function (m) {
+      const item = document.createElement("div");
+      item.className = "outro-item";
+      let statusTxt = "";
+      if (m.pendente > 0 && m.pago > 0) {
+        statusTxt = '<span class="om-status">✅ ' + formatarMoeda(m.pago) + ' &middot; ⏳ ' + formatarMoeda(m.pendente) + '</span>';
+      } else if (m.pendente > 0) {
+        statusTxt = '<span class="om-status pend">⏳ pendente</span>';
+      } else {
+        statusTxt = '<span class="om-status pago">✅ pago</span>';
+      }
+      item.innerHTML =
+        '<div class="om-topo"><span class="om-nome">' + escaparHtml(m.metodo) + '</span>' +
+        '<span class="om-valor">' + formatarMoeda(m.total) + '</span></div>' + statusTxt;
+      listaOutros.appendChild(item);
+    });
+
+    const tot = document.createElement("div");
+    tot.className = "outro-total";
+    tot.innerHTML = '<span>Total fora do cartão</span><span>' + formatarMoeda(totalOutros) + '</span>';
+    listaOutros.appendChild(tot);
   }
 }
 
 // ============================================================================
-// CONTROLE DE TELAS
+// TELAS
 // ============================================================================
 function mostrarCarregando(msg) {
   document.getElementById("tela-login").style.display = "none";
@@ -203,9 +274,6 @@ function mostrarTelaInterna() {
   document.getElementById("tela-interna").style.display = "block";
 }
 
-// ============================================================================
-// SAIR
-// ============================================================================
 function sair() {
   tokenLoginAtual = null;
   emailUsuarioAtual = null;
@@ -215,7 +283,7 @@ function sair() {
 }
 
 // ============================================================================
-// INICIALIZAÇÃO + LOGIN SILENCIOSO (Opção A)
+// INICIALIZAÇÃO + LOGIN SILENCIOSO
 // ============================================================================
 window.addEventListener("load", function () {
   if ("serviceWorker" in navigator) {
