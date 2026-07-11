@@ -17,6 +17,59 @@ let lancamentoAtual = null;   // dados da linha sendo liquidada
 let listasValidas = null;     // categorias e métodos (carregado 1x)
 
 // ============================================================================
+// CACHE LOCAL (guarda os dados do dashboard no aparelho)
+// Permite mostrar a tela instantaneamente ao abrir, enquanto busca os novos.
+// Guarda só dados do dashboard (saldos, contas). Nunca token ou senha.
+// ============================================================================
+const CACHE_PREFIXO = "sb_dash_";
+
+function chaveCache(mes, ano) {
+  return CACHE_PREFIXO + ano + "_" + mes;
+}
+
+function salvarCache(mes, ano, dados) {
+  try {
+    const pacote = { quando: Date.now(), dados: dados };
+    localStorage.setItem(chaveCache(mes, ano), JSON.stringify(pacote));
+  } catch (e) {
+    // Se o armazenamento estiver cheio ou bloqueado, apenas ignora.
+  }
+}
+
+function lerCache(mes, ano) {
+  try {
+    const bruto = localStorage.getItem(chaveCache(mes, ano));
+    if (!bruto) return null;
+    const pacote = JSON.parse(bruto);
+    return pacote && pacote.dados ? pacote : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function tempoRelativo(timestamp) {
+  const seg = Math.floor((Date.now() - timestamp) / 1000);
+  if (seg < 60) return "agora há pouco";
+  const min = Math.floor(seg / 60);
+  if (min < 60) return "há " + min + " min";
+  const h = Math.floor(min / 60);
+  if (h < 24) return "há " + h + "h";
+  const dias = Math.floor(h / 24);
+  return "há " + dias + (dias === 1 ? " dia" : " dias");
+}
+
+function mostrarAvisoAtualizando(textoOuNull) {
+  const el = document.getElementById("aviso-cache");
+  if (!el) return;
+  if (textoOuNull) {
+    el.textContent = textoOuNull;
+    el.style.display = "block";
+  } else {
+    el.style.display = "none";
+  }
+}
+
+// ============================================================================
 // LOGIN
 // ============================================================================
 function aoReceberLoginGoogle(resposta) {
@@ -47,19 +100,37 @@ async function chamarServidor(acao, paramsExtras) {
 // ENTRADA / CARGA DO DASHBOARD
 // ============================================================================
 async function entrarNoApp() {
-  mostrarCarregando("Carregando seus dados...");
+  // 1. Se houver cache deste mês, mostra IMEDIATAMENTE (sem esperar o servidor)
+  const cache = lerCache(mesExibido, anoExibido);
+  if (cache) {
+    preencherDashboard(cache.dados);
+    mostrarTelaInterna();
+    mostrarAvisoAtualizando("Dados de " + tempoRelativo(cache.quando) + " · atualizando...");
+  } else {
+    mostrarCarregando("Carregando seus dados...");
+  }
+
+  // 2. Busca os dados frescos (em segundo plano se o cache já apareceu)
   try {
     const r = await chamarServidor("dashboard", { mes: mesExibido, ano: anoExibido });
     if (r.ok) {
+      salvarCache(mesExibido, anoExibido, r);
       preencherDashboard(r);
       mostrarTelaInterna();
+      mostrarAvisoAtualizando(null);
     } else if (r.erro === "NAO_AUTORIZADO") {
       mostrarErroLogin(r.mensagem || "Acesso negado. Este e-mail não está autorizado.");
-    } else {
+    } else if (!cache) {
       mostrarErroLogin(r.mensagem || "Não foi possível carregar os dados.");
+    } else {
+      mostrarAvisoAtualizando("⚠️ Não foi possível atualizar. Mostrando dados salvos.");
     }
   } catch (e) {
-    mostrarErroLogin("Sem conexão com o servidor. Verifique a internet.");
+    if (!cache) {
+      mostrarErroLogin("Sem conexão com o servidor. Verifique a internet.");
+    } else {
+      mostrarAvisoAtualizando("⚠️ Sem conexão. Mostrando dados salvos " + tempoRelativo(cache.quando) + ".");
+    }
   }
 }
 
@@ -82,12 +153,28 @@ async function irParaMesAtual() {
 async function recarregarDados() {
   const btn = document.getElementById("btn-atualizar");
   if (btn) btn.classList.add("girando");
-  document.getElementById("conteudo-dash").style.opacity = "0.4";
+
+  // Se houver cache do mês pedido, mostra na hora enquanto busca o novo
+  const cache = lerCache(mesExibido, anoExibido);
+  if (cache) {
+    preencherDashboard(cache.dados);
+    mostrarAvisoAtualizando("Dados de " + tempoRelativo(cache.quando) + " · atualizando...");
+    document.getElementById("conteudo-dash").style.opacity = "1";
+  } else {
+    document.getElementById("conteudo-dash").style.opacity = "0.4";
+  }
+
   try {
     const r = await chamarServidor("dashboard", { mes: mesExibido, ano: anoExibido });
-    if (r.ok) preencherDashboard(r);
+    if (r.ok) {
+      salvarCache(mesExibido, anoExibido, r);
+      preencherDashboard(r);
+      mostrarAvisoAtualizando(null);
+    } else {
+      mostrarAvisoAtualizando("⚠️ Não foi possível atualizar.");
+    }
   } catch (e) {
-    // mantém dados anteriores
+    mostrarAvisoAtualizando(cache ? "⚠️ Sem conexão. Mostrando dados salvos." : "⚠️ Sem conexão.");
   } finally {
     if (btn) btn.classList.remove("girando");
     document.getElementById("conteudo-dash").style.opacity = "1";
@@ -504,11 +591,7 @@ function voltarDaConfirmacao() {
 }
 
 // ---------- Grava de fato ----------
-async function confirmarLiquidacao() {
-  const btn = document.getElementById("btn-confirmar-final");
-  btn.disabled = true;
-  btn.textContent = "Liquidando...";
-
+function confirmarLiquidacao() {
   const l = lancamentoAtual;
   const editando = document.getElementById("chk-editar").checked;
 
@@ -525,27 +608,63 @@ async function confirmarLiquidacao() {
     params.categoria = document.getElementById("ed-categoria").value;
   }
 
+  // 👉 FECHA O MODAL NA HORA (não trava o usuário esperando)
+  const numMov = l.numMov;
+  fecharModal();
+
+  // Some a linha da lista imediatamente (feedback visual instantâneo)
+  removerLinhaDaLista(numMov);
+
+  // Toast de progresso, fica visível até terminar
+  mostrarToast("⏳ Liquidando MOV-" + numMov + "...", true);
+
+  // Envia em segundo plano
+  enviarLiquidacao(params, numMov);
+}
+
+// Faz o envio de verdade, sem travar a tela
+async function enviarLiquidacao(params, numMov) {
   try {
     const r = await chamarServidor("liquidar", params);
     if (r.ok) {
-      fecharModal();
-      mostrarToast("✅ " + r.mensagem + " Comprovante enviado por e-mail.");
+      mostrarToast("✅ MOV-" + numMov + " liquidado! Comprovante enviado por e-mail.");
       await recarregarDados();
     } else {
-      mostrarErroModal(r.mensagem || "Não foi possível liquidar.");
+      mostrarToast("❌ MOV-" + numMov + ": " + (r.mensagem || "não foi possível liquidar."));
+      await recarregarDados(); // traz a linha de volta se falhou
     }
   } catch (e) {
-    mostrarErroModal("Erro de conexão ao liquidar. Nada foi alterado.");
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Sim, liquidar";
+    mostrarToast("❌ Sem conexão. MOV-" + numMov + " NÃO foi liquidado.");
+    await recarregarDados();
   }
 }
 
+// Remove visualmente a linha da lista (some na hora, antes do servidor responder)
+function removerLinhaDaLista(numMov) {
+  const btn = document.querySelector('.btn-liquidar[onclick="abrirLiquidacao(' + numMov + ')"]');
+  if (!btn) return;
+  const linha = btn.closest(".linha-item");
+  if (!linha) return;
+  linha.style.transition = "opacity 0.3s, transform 0.3s";
+  linha.style.opacity = "0";
+  linha.style.transform = "translateX(30px)";
+  setTimeout(function () {
+    if (linha.parentNode) linha.parentNode.removeChild(linha);
+  }, 300);
+}
+
 // ---------- Aviso flutuante ----------
-function mostrarToast(msg) {
+let toastTimer = null;
+
+function mostrarToast(msg, fixo) {
   const t = document.getElementById("toast");
   t.textContent = msg;
   t.classList.add("visivel");
-  setTimeout(function () { t.classList.remove("visivel"); }, 4500);
+
+  if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+
+  // Se "fixo", não some sozinho (fica até a próxima mensagem substituir)
+  if (!fixo) {
+    toastTimer = setTimeout(function () { t.classList.remove("visivel"); }, 5000);
+  }
 }

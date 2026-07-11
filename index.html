@@ -289,6 +289,13 @@
     .conf-linha.alterado b { color: var(--verde); }
     .conf-nota { font-size: 12px; color: #94a3b8; font-style: italic; padding: 10px 0; text-align: center; }
 
+    /* Aviso de cache/atualizando */
+    #aviso-cache {
+      display: none; background: #eef4fa; color: var(--azul-claro);
+      font-size: 11px; text-align: center; padding: 7px 12px;
+      border-radius: 8px; margin-bottom: 12px; font-weight: 600;
+    }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
@@ -333,6 +340,8 @@
     </div>
 
     <div class="conteudo" id="conteudo-dash">
+
+      <div id="aviso-cache"></div>
 
       <!-- SALDO -->
       <div class="card">
