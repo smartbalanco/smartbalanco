@@ -2407,6 +2407,7 @@ function desbloquear() {
 
   setTimeout(function () { desbloqueando = false; }, 2000);
 }
+
 // ============================================================================
 // DETECTA SAÍDA/RETORNO DO APP
 // - Se ficou 5+ minutos fora e tem bloqueio configurado -> pede digital/PIN
