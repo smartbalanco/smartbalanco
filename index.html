@@ -674,6 +674,81 @@
       }
     }
 
+
+    /* ===================== BLOQUEIO / BIOMETRIA ===================== */
+    #tela-config-bloqueio, #tela-bloqueio {
+      display: none; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100vh; min-height: 100dvh; padding: 28px 24px; text-align: center;
+    }
+    #tela-bloqueio {
+      position: fixed; inset: 0; z-index: 500;
+      background: linear-gradient(160deg, #1a3a5c 0%, #0f2740 100%);
+      color: #fff;
+    }
+    .bl-logo { width: 92px; height: 92px; border-radius: 22px; margin-bottom: 22px; }
+    #tela-bloqueio h2 { font-size: 21px; font-weight: 700; margin-bottom: 6px; }
+    #tela-bloqueio p.bl-sub { font-size: 13px; color: #a9c4dd; margin-bottom: 32px; }
+    .bl-digital {
+      font-size: 58px; margin-bottom: 20px;
+      animation: pulsar 2s ease-in-out infinite;
+    }
+    @keyframes pulsar { 0%,100% { opacity: 0.55; } 50% { opacity: 1; } }
+    .bl-btn {
+      background: rgba(255,255,255,0.14); color: #fff; border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 12px; padding: 14px 26px; font-size: 15px; font-weight: 600;
+      cursor: pointer; font-family: inherit; margin-bottom: 10px; width: 100%; max-width: 280px;
+    }
+    .bl-btn:active { background: rgba(255,255,255,0.25); }
+    .bl-btn.texto { background: none; border: none; color: #a9c4dd; font-size: 13px; }
+
+    #bl-pin-area { display: none; width: 100%; max-width: 280px; }
+    #bl-pin, #cb-pin1, #cb-pin2 {
+      width: 100%; padding: 15px; text-align: center; font-size: 26px;
+      letter-spacing: 12px; border-radius: 12px; font-family: inherit;
+      border: 2px solid var(--borda); margin-bottom: 10px;
+    }
+    #bl-pin {
+      background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.3); color: #fff;
+    }
+    #bl-pin::placeholder { color: rgba(255,255,255,0.35); letter-spacing: 8px; }
+    #bl-pin-erro, #cb-pin-erro {
+      display: none; background: rgba(220,38,38,0.18); color: #fca5a5;
+      border-radius: 8px; padding: 10px; font-size: 13px; margin-bottom: 10px;
+    }
+    #cb-pin-erro { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .bl-confirmar {
+      background: var(--verde); color: #fff; border: none; border-radius: 12px;
+      padding: 14px; font-size: 15px; font-weight: 700; cursor: pointer;
+      width: 100%; font-family: inherit;
+    }
+
+    /* Tela de configuração do bloqueio */
+    #tela-config-bloqueio h1 { font-size: 22px; color: var(--azul); font-weight: 700; margin-bottom: 8px; }
+    #tela-config-bloqueio p.cb-sub {
+      font-size: 14px; color: var(--cinza-texto); margin-bottom: 30px;
+      line-height: 1.5; max-width: 340px;
+    }
+    .cb-icone { font-size: 54px; margin-bottom: 16px; }
+    .cb-btn {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; max-width: 300px; padding: 16px; border-radius: 12px;
+      font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit;
+      border: none; margin-bottom: 10px;
+    }
+    .cb-btn.primario { background: var(--verde); color: #fff; }
+    .cb-btn.secundario { background: #fff; color: var(--azul); border: 1px solid var(--borda); }
+    .cb-btn.texto { background: none; color: var(--cinza-texto); font-size: 13px; font-weight: 500; }
+    #cb-sem-bio {
+      display: none; background: #eef4fa; color: var(--azul-claro); font-size: 12px;
+      padding: 12px 14px; border-radius: 10px; margin-bottom: 14px; max-width: 300px;
+      line-height: 1.5;
+    }
+    #cb-pin { display: none; width: 100%; max-width: 300px; }
+    #cb-pin label {
+      display: block; font-size: 12px; color: var(--cinza-texto); text-align: left;
+      text-transform: uppercase; font-weight: 700; margin-bottom: 6px; margin-top: 12px;
+    }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
@@ -698,6 +773,66 @@
     <div id="botao-google"></div>
     <div id="login-erro"></div>
     <div class="rodape-login">Acesso restrito &middot; Smartbalanço 2.0</div>
+  </div>
+
+
+  <!-- ============ TELA: CONFIGURAR BLOQUEIO (1ª vez) ============ -->
+  <div id="tela-config-bloqueio">
+    <div class="cb-icone">🔐</div>
+    <h1>Proteger o app</h1>
+    <p class="cb-sub">
+      Você ficará conectado por 30 dias. Configure um desbloqueio para proteger
+      seus dados caso alguém acesse seu celular.
+    </p>
+
+    <div id="cb-escolha" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+      <div id="cb-sem-bio">
+        ℹ️ Este aparelho não tem leitor biométrico disponível no navegador.
+        Você pode usar um PIN de 4 dígitos.
+      </div>
+
+      <button class="cb-btn primario" id="cb-btn-biometria" onclick="cadastrarBiometria()">
+        👆 Usar minha digital
+      </button>
+      <button class="cb-btn secundario" onclick="mostrarCadastroPin()">
+        🔢 Usar um PIN de 4 dígitos
+      </button>
+      <button class="cb-btn texto" onclick="pularBloqueio()">
+        Continuar sem bloqueio
+      </button>
+    </div>
+
+    <div id="cb-pin">
+      <div id="cb-pin-erro"></div>
+      <label for="cb-pin1">Escolha um PIN</label>
+      <input type="password" id="cb-pin1" inputmode="numeric" maxlength="4" placeholder="••••" />
+      <label for="cb-pin2">Repita o PIN</label>
+      <input type="password" id="cb-pin2" inputmode="numeric" maxlength="4" placeholder="••••" />
+      <button class="bl-confirmar" onclick="salvarPin()">Salvar PIN</button>
+    </div>
+  </div>
+
+  <!-- ============ TELA: BLOQUEIO (ao voltar) ============ -->
+  <div id="tela-bloqueio">
+    <img src="icon-192.png" class="bl-logo" alt="Smartbalanço" />
+    <h2>Smartbalanço</h2>
+    <p class="bl-sub">Desbloqueie para continuar</p>
+
+    <div class="bl-digital">👆</div>
+
+    <button class="bl-btn" id="bl-btn-bio" onclick="desbloquearComBiometria()">
+      Usar digital
+    </button>
+    <button class="bl-btn texto" id="bl-btn-pin" onclick="mostrarCampoPin()">
+      Usar PIN
+    </button>
+
+    <div id="bl-pin-area">
+      <div id="bl-pin-erro"></div>
+      <input type="password" id="bl-pin" inputmode="numeric" maxlength="4" placeholder="••••"
+             onkeyup="if(event.key==='Enter') verificarPin(); if(this.value.length===4) verificarPin();" />
+      <button class="bl-confirmar" onclick="verificarPin()">Desbloquear</button>
+    </div>
   </div>
 
   <div id="tela-interna">

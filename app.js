@@ -5,8 +5,45 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbwGBnFvY9FtaNm2AF4gBkgbNf21iYYyyAFIAjqtAlprGXyqaZKZyIidNrzR5UNvhiNA/exec";
 const GOOGLE_CLIENT_ID = "964045201445-qc96mfjmeghvaknoegpgm5m4esk6ij4g.apps.googleusercontent.com";
 
-let tokenLoginAtual = null;
+let tokenLoginAtual = null;      // token do Google (só no 1º login)
 let emailUsuarioAtual = null;
+let sessaoAtual = null;          // código de sessão de 30 dias
+
+// ============================================================================
+// SESSÃO DE 30 DIAS + BLOQUEIO POR BIOMETRIA/PIN
+// ============================================================================
+const CHAVE_SESSAO   = "sb_sessao";
+const CHAVE_EMAIL    = "sb_email";
+const CHAVE_PIN      = "sb_pin";           // hash do PIN (nunca o PIN em si)
+const CHAVE_BIOMETRIA = "sb_biometria";    // credencial biométrica cadastrada
+const MINUTOS_BLOQUEIO = 5;                // pede desbloqueio se ficou 5+ min fora
+
+let momentoQueSaiu = null;   // quando o app foi para segundo plano
+let appBloqueado = false;
+
+// ---- Guarda/lê a sessão no aparelho ----
+function salvarSessao(codigo, email) {
+  try {
+    localStorage.setItem(CHAVE_SESSAO, codigo);
+    localStorage.setItem(CHAVE_EMAIL, email);
+  } catch (e) {}
+}
+
+function lerSessaoSalva() {
+  try {
+    return {
+      sessao: localStorage.getItem(CHAVE_SESSAO),
+      email: localStorage.getItem(CHAVE_EMAIL)
+    };
+  } catch (e) { return { sessao: null, email: null }; }
+}
+
+function apagarSessao() {
+  try {
+    localStorage.removeItem(CHAVE_SESSAO);
+    localStorage.removeItem(CHAVE_EMAIL);
+  } catch (e) {}
+}
 
 // Mês/ano atualmente em exibição (navegável)
 let mesExibido = new Date().getMonth();
@@ -72,7 +109,7 @@ function mostrarAvisoAtualizando(textoOuNull) {
 // ============================================================================
 // LOGIN
 // ============================================================================
-function aoReceberLoginGoogle(resposta) {
+async function aoReceberLoginGoogle(resposta) {
   tokenLoginAtual = resposta.credential;
   try {
     const payload = JSON.parse(atob(tokenLoginAtual.split(".")[1]));
@@ -80,7 +117,31 @@ function aoReceberLoginGoogle(resposta) {
   } catch (e) {
     emailUsuarioAtual = "(desconhecido)";
   }
-  entrarNoApp();
+
+  mostrarCarregando("Entrando...");
+
+  // Troca o token do Google por uma sessão de 30 dias
+  try {
+    const r = await chamarServidor("login", { dispositivo: navigator.userAgent || "" });
+    if (r.ok && r.sessao) {
+      sessaoAtual = r.sessao;
+      emailUsuarioAtual = r.usuario || emailUsuarioAtual;
+      salvarSessao(r.sessao, emailUsuarioAtual);
+      tokenLoginAtual = null;   // não precisa mais do token do Google
+
+      // Primeira vez? Oferece cadastrar biometria/PIN
+      if (!temDesbloqueioConfigurado()) {
+        mostrarTelaConfigurarBloqueio();
+        return;
+      }
+
+      entrarNoApp();
+    } else {
+      mostrarErroLogin(r.mensagem || "Não foi possível criar a sessão.");
+    }
+  } catch (e) {
+    mostrarErroLogin("Sem conexão com o servidor.");
+  }
 }
 
 // ============================================================================
@@ -88,7 +149,12 @@ function aoReceberLoginGoogle(resposta) {
 // ============================================================================
 async function chamarServidor(acao, paramsExtras) {
   paramsExtras = paramsExtras || {};
-  const base = { acao: acao, token: tokenLoginAtual || "" };
+
+  // Prioridade: sessão de 30 dias. Token do Google só no 1º login.
+  const base = { acao: acao };
+  if (sessaoAtual) base.sessao = sessaoAtual;
+  else if (tokenLoginAtual) base.token = tokenLoginAtual;
+
   const params = new URLSearchParams(Object.assign(base, paramsExtras));
   const url = API_URL + "?" + params.toString();
   const resp = await fetch(url);
@@ -375,14 +441,24 @@ function mostrarErroLogin(msg) {
 function mostrarTelaInterna() {
   document.getElementById("tela-carregando").style.display = "none";
   document.getElementById("tela-login").style.display = "none";
+  document.getElementById("tela-config-bloqueio").style.display = "none";
   document.getElementById("tela-interna").style.display = "block";
-  document.getElementById("btn-nova-despesa").style.display = "flex";
+  document.getElementById("btn-nova-despesa").style.display = (abaAtiva === "dashboard") ? "flex" : "none";
 }
 
-function sair() {
+async function sair() {
+  if (!confirm("Sair do Smartbalanço?\n\nVocê precisará fazer login com o Google novamente.")) return;
+
+  try { await chamarServidor("logout"); } catch (e) {}
+
+  sessaoAtual = null;
   tokenLoginAtual = null;
   emailUsuarioAtual = null;
-  google.accounts.id.disableAutoSelect();
+  apagarSessao();
+  apagarDesbloqueio();
+
+  try { google.accounts.id.disableAutoSelect(); } catch (e) {}
+
   mostrarTelaLogin();
   document.getElementById("login-erro").style.display = "none";
 }
@@ -390,26 +466,94 @@ function sair() {
 // ============================================================================
 // INICIALIZAÇÃO + LOGIN SILENCIOSO
 // ============================================================================
-window.addEventListener("load", function () {
+window.addEventListener("load", async function () {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./service-worker.js").catch(function () {});
   }
 
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: aoReceberLoginGoogle,
-    auto_select: true,
-    cancel_on_tap_outside: false
-  });
+  // Detecta quando o app sai/volta (para bloqueio e atualização automática)
+  configurarDeteccaoRetorno();
 
-  google.accounts.id.renderButton(
-    document.getElementById("botao-google"),
-    { theme: "outline", size: "large", width: 260, text: "signin_with", locale: "pt-BR" }
-  );
+  // ---------- 1. Já tem sessão salva no aparelho? ----------
+  const salva = lerSessaoSalva();
+
+  if (salva.sessao) {
+    sessaoAtual = salva.sessao;
+    emailUsuarioAtual = salva.email;
+
+    mostrarCarregando("Entrando...");
+
+    // Se tem bloqueio configurado, pede a digital/PIN antes de mostrar os dados
+    if (temDesbloqueioConfigurado()) {
+      // Valida a sessão em segundo plano enquanto pede o desbloqueio
+      bloquearApp();
+      validarSessaoSalva();
+      return;
+    }
+
+    // Sem bloqueio: entra direto
+    const valida = await validarSessaoSalva();
+    if (valida) return;   // entrarNoApp() já foi chamado dentro
+  }
+
+  // ---------- 2. Sem sessão: mostra o login do Google ----------
+  prepararLoginGoogle();
+});
+
+// Confere se a sessão salva ainda é válida no servidor
+async function validarSessaoSalva() {
+  try {
+    const r = await chamarServidor("login");
+    if (r.ok) {
+      emailUsuarioAtual = r.usuario || emailUsuarioAtual;
+      if (!appBloqueado) entrarNoApp();
+      return true;
+    }
+    // Sessão expirou (mais de 30 dias sem usar)
+    apagarSessao();
+    sessaoAtual = null;
+    document.getElementById("tela-bloqueio").style.display = "none";
+    appBloqueado = false;
+    prepararLoginGoogle();
+    mostrarErroLogin("Sua sessão expirou. Faça login novamente.");
+    return false;
+
+  } catch (e) {
+    // Sem internet: se tiver cache, mostra os dados salvos
+    if (!appBloqueado) {
+      const cache = lerCache(mesExibido, anoExibido);
+      if (cache) {
+        preencherDashboard(cache.dados);
+        mostrarTelaInterna();
+        mostrarAvisoAtualizando("⚠️ Sem conexão. Mostrando dados salvos " + tempoRelativo(cache.quando) + ".");
+      } else {
+        mostrarErroLogin("Sem conexão com o servidor.");
+      }
+    }
+    return true;
+  }
+}
+
+// Prepara o botão de login do Google
+function prepararLoginGoogle() {
+  try {
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: aoReceberLoginGoogle,
+      auto_select: false,
+      cancel_on_tap_outside: true
+    });
+
+    google.accounts.id.renderButton(
+      document.getElementById("botao-google"),
+      { theme: "outline", size: "large", width: 260, text: "signin_with", locale: "pt-BR" }
+    );
+  } catch (e) {
+    console.warn("Google Sign-In não carregou:", e);
+  }
 
   mostrarTelaLogin();
-  google.accounts.id.prompt();
-});
+}
 
 // ============================================================================
 // ===================== MODAL DE LIQUIDAÇÃO ==================================
@@ -1910,4 +2054,277 @@ function relatorioParaTexto(r) {
 
   t += "\n――――――――――――――――\n" + r.meta.assinatura;
   return t;
+}
+
+// ============================================================================
+// ===================== BIOMETRIA (DIGITAL) E PIN ============================
+// Usa WebAuthn para a digital do aparelho. Se não houver biometria disponível,
+// cai no PIN de 4 dígitos.
+// ============================================================================
+
+// ---- Verifica se já existe algum método de desbloqueio configurado ----
+function temDesbloqueioConfigurado() {
+  try {
+    return !!(localStorage.getItem(CHAVE_BIOMETRIA) || localStorage.getItem(CHAVE_PIN));
+  } catch (e) { return false; }
+}
+
+function temBiometriaCadastrada() {
+  try { return !!localStorage.getItem(CHAVE_BIOMETRIA); } catch (e) { return false; }
+}
+
+function apagarDesbloqueio() {
+  try {
+    localStorage.removeItem(CHAVE_BIOMETRIA);
+    localStorage.removeItem(CHAVE_PIN);
+  } catch (e) {}
+}
+
+// ---- O aparelho tem leitor biométrico disponível? ----
+async function biometriaDisponivel() {
+  if (!window.PublicKeyCredential) return false;
+  try {
+    return await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+  } catch (e) { return false; }
+}
+
+// ---- Hash simples do PIN (para não guardar o número em texto puro) ----
+async function hashPin(pin) {
+  const dados = new TextEncoder().encode("smartbalanco:" + pin);
+  const buffer = await crypto.subtle.digest("SHA-256", dados);
+  return Array.from(new Uint8Array(buffer))
+    .map(function (b) { return b.toString(16).padStart(2, "0"); })
+    .join("");
+}
+
+// ============================================================================
+// CADASTRO DO DESBLOQUEIO (na 1ª vez que loga)
+// ============================================================================
+async function mostrarTelaConfigurarBloqueio() {
+  document.getElementById("tela-carregando").style.display = "none";
+  document.getElementById("tela-login").style.display = "none";
+  document.getElementById("tela-interna").style.display = "none";
+  document.getElementById("tela-config-bloqueio").style.display = "flex";
+
+  const btnBio = document.getElementById("cb-btn-biometria");
+  const temBio = await biometriaDisponivel();
+
+  if (temBio) {
+    btnBio.style.display = "flex";
+    document.getElementById("cb-sem-bio").style.display = "none";
+  } else {
+    btnBio.style.display = "none";
+    document.getElementById("cb-sem-bio").style.display = "block";
+  }
+}
+
+// ---- Cadastra a digital ----
+async function cadastrarBiometria() {
+  try {
+    const idUsuario = new TextEncoder().encode(emailUsuarioAtual || "smartbalanco");
+    const desafio = crypto.getRandomValues(new Uint8Array(32));
+
+    const credencial = await navigator.credentials.create({
+      publicKey: {
+        challenge: desafio,
+        rp: { name: "Smartbalanço" },
+        user: {
+          id: idUsuario,
+          name: emailUsuarioAtual || "usuario",
+          displayName: "Smartbalanço"
+        },
+        pubKeyCredParams: [
+          { type: "public-key", alg: -7 },    // ES256
+          { type: "public-key", alg: -257 }   // RS256
+        ],
+        authenticatorSelection: {
+          authenticatorAttachment: "platform",   // usa o sensor do próprio aparelho
+          userVerification: "required"           // exige digital/rosto
+        },
+        timeout: 60000
+      }
+    });
+
+    if (!credencial) throw new Error("Cadastro cancelado.");
+
+    // Guarda o ID da credencial (não guarda a digital em si — ela nunca sai do aparelho)
+    const id = btoa(String.fromCharCode.apply(null, new Uint8Array(credencial.rawId)));
+    localStorage.setItem(CHAVE_BIOMETRIA, id);
+
+    mostrarToast("✅ Digital cadastrada!");
+    entrarNoApp();
+
+  } catch (e) {
+    mostrarToast("⚠️ Não foi possível cadastrar a digital. Use um PIN.");
+    mostrarCadastroPin();
+  }
+}
+
+// ---- Cadastro de PIN ----
+function mostrarCadastroPin() {
+  document.getElementById("cb-escolha").style.display = "none";
+  document.getElementById("cb-pin").style.display = "block";
+  document.getElementById("cb-pin1").value = "";
+  document.getElementById("cb-pin2").value = "";
+  document.getElementById("cb-pin-erro").style.display = "none";
+  setTimeout(function () { document.getElementById("cb-pin1").focus(); }, 150);
+}
+
+async function salvarPin() {
+  const p1 = document.getElementById("cb-pin1").value;
+  const p2 = document.getElementById("cb-pin2").value;
+  const erro = document.getElementById("cb-pin-erro");
+
+  if (!/^\d{4}$/.test(p1)) {
+    erro.textContent = "O PIN deve ter exatamente 4 números.";
+    erro.style.display = "block";
+    return;
+  }
+  if (p1 !== p2) {
+    erro.textContent = "Os PINs não coincidem.";
+    erro.style.display = "block";
+    return;
+  }
+
+  const hash = await hashPin(p1);
+  localStorage.setItem(CHAVE_PIN, hash);
+
+  mostrarToast("✅ PIN cadastrado!");
+  entrarNoApp();
+}
+
+// Pula o cadastro (usuário não quer bloqueio)
+function pularBloqueio() {
+  if (!confirm("Continuar sem bloqueio?\n\nQualquer pessoa com acesso ao seu celular desbloqueado poderá abrir o Smartbalanço.")) return;
+  entrarNoApp();
+}
+
+// ============================================================================
+// TELA DE DESBLOQUEIO (quando volta após 5+ min fora)
+// ============================================================================
+async function bloquearApp() {
+  appBloqueado = true;
+
+  document.getElementById("tela-bloqueio").style.display = "flex";
+  document.getElementById("bl-pin-area").style.display = "none";
+  document.getElementById("bl-pin-erro").style.display = "none";
+  document.getElementById("bl-pin").value = "";
+
+  const temBio = temBiometriaCadastrada();
+  const temPin = !!localStorage.getItem(CHAVE_PIN);
+
+  document.getElementById("bl-btn-bio").style.display = temBio ? "block" : "none";
+  document.getElementById("bl-btn-pin").style.display = (temPin && temBio) ? "block" : "none";
+
+  // Se só tem PIN, já mostra o campo direto
+  if (temPin && !temBio) {
+    mostrarCampoPin();
+  }
+
+  // Se tem biometria, tenta pedir a digital automaticamente
+  if (temBio) {
+    setTimeout(desbloquearComBiometria, 400);
+  }
+}
+
+async function desbloquearComBiometria() {
+  try {
+    const idSalvo = localStorage.getItem(CHAVE_BIOMETRIA);
+    if (!idSalvo) throw new Error("Sem biometria.");
+
+    const rawId = Uint8Array.from(atob(idSalvo), function (c) { return c.charCodeAt(0); });
+    const desafio = crypto.getRandomValues(new Uint8Array(32));
+
+    const resultado = await navigator.credentials.get({
+      publicKey: {
+        challenge: desafio,
+        allowCredentials: [{ type: "public-key", id: rawId }],
+        userVerification: "required",
+        timeout: 60000
+      }
+    });
+
+    if (resultado) desbloquear();
+
+  } catch (e) {
+    // Cancelou ou falhou: oferece o PIN se houver
+    if (localStorage.getItem(CHAVE_PIN)) {
+      mostrarCampoPin();
+    }
+  }
+}
+
+function mostrarCampoPin() {
+  document.getElementById("bl-pin-area").style.display = "block";
+  document.getElementById("bl-btn-bio").style.display = "none";
+  document.getElementById("bl-btn-pin").style.display = "none";
+  setTimeout(function () { document.getElementById("bl-pin").focus(); }, 150);
+}
+
+async function verificarPin() {
+  const pin = document.getElementById("bl-pin").value;
+  const erro = document.getElementById("bl-pin-erro");
+
+  if (!/^\d{4}$/.test(pin)) {
+    erro.textContent = "Digite os 4 números.";
+    erro.style.display = "block";
+    return;
+  }
+
+  const hash = await hashPin(pin);
+  if (hash === localStorage.getItem(CHAVE_PIN)) {
+    desbloquear();
+  } else {
+    erro.textContent = "PIN incorreto.";
+    erro.style.display = "block";
+    document.getElementById("bl-pin").value = "";
+  }
+}
+
+function desbloquear() {
+  appBloqueado = false;
+  momentoQueSaiu = null;
+  document.getElementById("tela-bloqueio").style.display = "none";
+  document.getElementById("bl-pin").value = "";
+  // Atualiza os dados ao desbloquear
+  atualizarAoVoltar();
+}
+
+// ============================================================================
+// DETECTA SAÍDA/RETORNO DO APP
+// - Se ficou 5+ minutos fora e tem bloqueio configurado -> pede digital/PIN
+// - Sempre que volta -> atualiza os dados automaticamente
+// ============================================================================
+function configurarDeteccaoRetorno() {
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) {
+      // Saiu do app (trocou de aba, minimizou, bloqueou o celular...)
+      momentoQueSaiu = Date.now();
+    } else {
+      // Voltou para o app
+      if (!sessaoAtual) return;   // não está logado, ignora
+
+      const minutosFora = momentoQueSaiu
+        ? (Date.now() - momentoQueSaiu) / 60000
+        : 0;
+
+      if (minutosFora >= MINUTOS_BLOQUEIO && temDesbloqueioConfigurado()) {
+        bloquearApp();
+      } else {
+        atualizarAoVoltar();
+      }
+    }
+  });
+}
+
+// Atualiza os dados da aba que estiver aberta
+async function atualizarAoVoltar() {
+  if (!sessaoAtual || appBloqueado) return;
+
+  if (abaAtiva === "dashboard") {
+    await recarregarDados();
+    checarPendentesAprovacao();
+  } else if (abaAtiva === "aprovacoes") {
+    await carregarAprovacoes();
+  }
 }
