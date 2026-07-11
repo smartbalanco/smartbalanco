@@ -3202,19 +3202,59 @@ function renderizarChat() {
 }
 
 // Converte a resposta da IA em HTML seguro (negrito, listas, quebras)
+// Converte a resposta da IA em HTML seguro.
+// (A versão anterior usava uma regex gulosa que quebrava o HTML e cortava o texto.)
 function formatarRespostaIA(txt) {
-  let h = escaparHtml(txt);
-  h = h.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-  h = h.replace(/^### (.+)$/gm, "<h4>$1</h4>");
-  h = h.replace(/^## (.+)$/gm, "<h4>$1</h4>");
-  h = h.replace(/^[-•] (.+)$/gm, "<li>$1</li>");
-  h = h.replace(/(<li>.*<\/li>)/s, "<ul>$1</ul>");
-  h = h.replace(/\n/g, "<br>");
-  h = h.replace(/<\/ul><br>/g, "</ul>");
-  h = h.replace(/<br><ul>/g, "<ul>");
-  return h;
+  if (!txt) return "";
+
+  const linhas = String(txt).split("\n");
+  let html = "";
+  let dentroLista = false;
+
+  linhas.forEach(function (linha) {
+    const l = linha.trim();
+
+    // Item de lista?
+    const ehItem = /^[-•*]\s+/.test(l) || /^\d+[.)]\s+/.test(l);
+
+    if (ehItem) {
+      if (!dentroLista) { html += "<ul>"; dentroLista = true; }
+      const conteudo = l.replace(/^[-•*]\s+/, "").replace(/^\d+[.)]\s+/, "");
+      html += "<li>" + aplicarNegrito(conteudo) + "</li>";
+      return;
+    }
+
+    // Saiu da lista
+    if (dentroLista) { html += "</ul>"; dentroLista = false; }
+
+    // Cabeçalho (### ou ##)
+    const cab = l.match(/^#{2,4}\s+(.+)$/);
+    if (cab) {
+      html += "<h4>" + aplicarNegrito(cab[1]) + "</h4>";
+      return;
+    }
+
+    // Linha em branco
+    if (l === "") {
+      html += "<br>";
+      return;
+    }
+
+    // Parágrafo normal
+    html += aplicarNegrito(l) + "<br>";
+  });
+
+  if (dentroLista) html += "</ul>";
+
+  return html;
 }
 
+// Aplica negrito (**texto**) já com o HTML escapado
+function aplicarNegrito(txt) {
+  let t = escaparHtml(txt);
+  t = t.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  return t;
+}
 function usarSugestao(btn) {
   document.getElementById("chat-input").value = btn.textContent;
   enviarPergunta();
