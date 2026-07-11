@@ -993,6 +993,151 @@
       border-radius: 7px; padding: 8px; margin-top: 9px; text-align: center; font-weight: 600;
     }
 
+
+    /* ===================== CHAT COM IA ===================== */
+    #conteudo-chat {
+      display: none; flex-direction: column;
+      height: calc(100dvh - 132px); max-width: 680px; margin: 0 auto; width: 100%;
+    }
+
+    .chat-topo {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--borda);
+      gap: 8px; flex-shrink: 0;
+    }
+    .chat-motor {
+      display: flex; align-items: center; gap: 6px; border: 1px solid var(--borda);
+      background: #fff; border-radius: 20px; padding: 6px 12px;
+      font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .chat-motor.gemini { color: #1a7a52; border-color: #b8e6d0; background: #eef8f3; }
+    .chat-motor.claude { color: #c2410c; border-color: #fed7aa; background: #fff7ed; }
+    .cm-bolinha { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .cm-tag {
+      font-size: 9px; opacity: 0.7; text-transform: uppercase;
+      background: rgba(0,0,0,0.06); padding: 2px 5px; border-radius: 4px;
+    }
+    #chat-gasto {
+      display: none; background: none; border: none; font-size: 12px;
+      color: var(--azul); cursor: pointer; font-family: inherit; padding: 6px 8px;
+      border-radius: 8px;
+    }
+    #chat-gasto:active { background: var(--cinza-fundo); }
+    .chat-limpar {
+      background: none; border: none; font-size: 15px; cursor: pointer;
+      padding: 6px 8px; opacity: 0.55;
+    }
+
+    #chat-scroll { flex: 1; overflow-y: auto; padding: 16px; }
+
+    .chat-vazio { text-align: center; padding: 30px 16px; }
+    .cv-icone { font-size: 44px; margin-bottom: 12px; }
+    .chat-vazio h3 { font-size: 17px; color: var(--azul); margin-bottom: 5px; }
+    .chat-vazio p { font-size: 13px; color: var(--cinza-texto); margin-bottom: 22px; }
+    .cv-sugestoes { display: flex; flex-direction: column; gap: 8px; }
+    .cv-sugestoes button {
+      background: #fff; border: 1px solid var(--borda); border-radius: 12px;
+      padding: 12px 14px; font-size: 13px; color: #334155; cursor: pointer;
+      text-align: left; font-family: inherit; line-height: 1.4;
+    }
+    .cv-sugestoes button:active { background: var(--cinza-fundo); }
+
+    .chat-msg { margin-bottom: 16px; display: flex; flex-direction: column; }
+    .chat-msg.usuario { align-items: flex-end; }
+    .chat-msg.ia { align-items: flex-start; }
+    .cm-bolha {
+      max-width: 86%; padding: 12px 15px; border-radius: 16px;
+      font-size: 14px; line-height: 1.6; word-wrap: break-word;
+    }
+    .chat-msg.usuario .cm-bolha {
+      background: var(--azul); color: #fff; border-bottom-right-radius: 5px;
+    }
+    .chat-msg.ia .cm-bolha {
+      background: #fff; color: #1e293b; border: 1px solid var(--borda);
+      border-bottom-left-radius: 5px;
+    }
+    .cm-bolha h4 { font-size: 14px; color: var(--azul); margin: 10px 0 5px; }
+    .cm-bolha ul { margin: 6px 0 6px 18px; }
+    .cm-bolha li { margin-bottom: 3px; }
+    .cm-bolha b { color: var(--azul); }
+
+    .cm-rodape {
+      display: flex; gap: 8px; margin-top: 5px; padding-left: 4px;
+      font-size: 10px; color: #94a3b8; flex-wrap: wrap; align-items: center;
+    }
+    .cmr-modelo { font-weight: 700; color: var(--azul-claro); }
+    .cmr-custo { color: #c2410c; font-weight: 600; }
+    .cmr-custo.gratis { color: var(--verde); }
+    .cmr-tokens { color: #cbd5e1; }
+
+    #chat-digitando {
+      display: none; align-items: center; gap: 8px;
+      padding: 12px 15px; background: #fff; border: 1px solid var(--borda);
+      border-radius: 16px; border-bottom-left-radius: 5px; width: fit-content;
+    }
+    .cd-ponto {
+      width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1;
+      animation: pular 1.2s infinite;
+    }
+    .cd-ponto:nth-child(2) { animation-delay: 0.15s; }
+    .cd-ponto:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes pular {
+      0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+      30% { transform: translateY(-5px); opacity: 1; }
+    }
+
+    .chat-entrada {
+      display: flex; gap: 8px; padding: 12px 16px;
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      background: #fff; border-top: 1px solid var(--borda); flex-shrink: 0;
+      align-items: flex-end;
+    }
+    #chat-input {
+      flex: 1; padding: 12px 14px; border: 1px solid var(--borda);
+      border-radius: 20px; font-size: 15px; font-family: inherit;
+      resize: none; max-height: 120px; line-height: 1.4;
+    }
+    #chat-input:focus { outline: none; border-color: var(--azul-claro); }
+    #chat-enviar {
+      width: 44px; height: 44px; border-radius: 50%; border: none;
+      background: var(--verde); color: #fff; font-size: 18px; cursor: pointer;
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+    }
+    #chat-enviar:disabled { background: #cbd5e1; }
+
+    /* ---- Modal de uso da IA ---- */
+    #modal-uso-ia .modal-caixa { max-height: 90vh; }
+    #ui-corpo { padding: 18px; overflow-y: auto; }
+    .ui-destaque {
+      background: linear-gradient(160deg, #1a3a5c, #2c5f8a); color: #fff;
+      border-radius: 14px; padding: 22px; text-align: center; margin-bottom: 20px;
+    }
+    .uid-label { font-size: 11px; color: #a9c4dd; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; }
+    .uid-brl { font-size: 34px; font-weight: 800; margin-top: 6px; }
+    .uid-usd { font-size: 12px; color: #a9c4dd; margin-top: 4px; }
+    .uid-cotacao { font-size: 11px; color: #7fa3c4; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.15); }
+
+    .ui-secao { margin-bottom: 22px; }
+    .ui-secao h3 {
+      font-size: 13px; color: var(--cinza-texto); text-transform: uppercase;
+      font-weight: 700; letter-spacing: 0.5px; margin-bottom: 10px;
+    }
+    .ui-hist-lista { max-height: 340px; overflow-y: auto; }
+    .ui-hist { padding: 11px 0; border-bottom: 1px solid #f1f3f4; }
+    .uih-topo { display: flex; justify-content: space-between; gap: 8px; }
+    .uih-data { font-size: 11px; color: var(--azul-claro); font-weight: 700; }
+    .uih-custo { font-size: 12px; font-weight: 700; color: #c2410c; }
+    .uih-pergunta {
+      font-size: 13px; color: #1e293b; margin-top: 4px; line-height: 1.4;
+    }
+    .uih-meta { font-size: 10px; color: #94a3b8; margin-top: 4px; }
+    .ui-total {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--cinza-fundo); border-radius: 12px; padding: 15px;
+      font-size: 14px; font-weight: 700; color: var(--azul);
+    }
+    .ui-total b { font-size: 18px; }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
@@ -1105,6 +1250,9 @@
         <button id="tab-relatorios" onclick="trocarAba('relatorios')">
           📊 Relatórios
         </button>
+        <button id="tab-chat" onclick="trocarAba('chat')">
+          🧠 IA
+        </button>
       </div>
     </div>
 
@@ -1179,6 +1327,33 @@
 
     <!-- ============ CONTEÚDO: RELATÓRIOS ============ -->
     <div id="conteudo-rel"></div>
+
+    <!-- ============ CONTEÚDO: CHAT COM IA ============ -->
+    <div id="conteudo-chat">
+      <div class="chat-topo">
+        <button class="chat-motor gemini" id="chat-motor" onclick="trocarMotorIA()">
+          <span class="cm-bolinha"></span> Gemini <span class="cm-tag">grátis</span>
+        </button>
+        <button id="chat-gasto" onclick="abrirRelatorioUsoIA()">💰 R$ 0,00 este mês ›</button>
+        <button class="chat-limpar" onclick="limparConversa()" title="Limpar conversa">🗑️</button>
+      </div>
+
+      <div id="chat-scroll">
+        <div id="chat-mensagens"></div>
+        <div id="chat-digitando">
+          <span class="cd-ponto"></span>
+          <span class="cd-ponto"></span>
+          <span class="cd-ponto"></span>
+        </div>
+      </div>
+
+      <div class="chat-entrada">
+        <textarea id="chat-input" rows="1" placeholder="Pergunte sobre suas finanças..."
+                  oninput="ajustarAlturaInput(this)"
+                  onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); enviarPergunta(); }"></textarea>
+        <button id="chat-enviar" onclick="enviarPergunta()">➤</button>
+      </div>
+    </div>
 
   </div>
 
@@ -1480,6 +1655,21 @@
           <button class="btn-modal confirmar" onclick="gerarRelatorioAgora()">Gerar relatório</button>
         </div>
       </div>
+    </div>
+  </div>
+
+
+  <!-- ============ MODAL: USO DA IA ============ -->
+  <div class="modal-fundo" id="modal-uso-ia">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">💰 Gastos com IA</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;">Histórico completo de consumo</div>
+        </div>
+        <button class="fechar" onclick="fecharRelatorioUsoIA()">&times;</button>
+      </div>
+      <div id="ui-corpo"></div>
     </div>
   </div>
 

@@ -1054,17 +1054,20 @@ function trocarAba(nome) {
   document.getElementById("conteudo-dash").style.display  = (nome === "dashboard")  ? "block" : "none";
   document.getElementById("conteudo-aprov").style.display = (nome === "aprovacoes") ? "block" : "none";
   document.getElementById("conteudo-rel").style.display   = (nome === "relatorios") ? "block" : "none";
+  document.getElementById("conteudo-chat").style.display  = (nome === "chat")       ? "flex"  : "none";
   document.getElementById("nav-mes-wrap").style.display   = (nome === "dashboard")  ? "flex"  : "none";
 
   document.getElementById("tab-dashboard").classList.toggle("ativa", nome === "dashboard");
   document.getElementById("tab-aprovacoes").classList.toggle("ativa", nome === "aprovacoes");
   document.getElementById("tab-relatorios").classList.toggle("ativa", nome === "relatorios");
+  document.getElementById("tab-chat").classList.toggle("ativa", nome === "chat");
 
   // Botão (+) só faz sentido no dashboard
   document.getElementById("btn-nova-despesa").style.display = (nome === "dashboard") ? "flex" : "none";
 
   if (nome === "aprovacoes") carregarAprovacoes(false);
   if (nome === "relatorios") renderizarTelaRelatorios();
+  if (nome === "chat") abrirChat();
 }
 
 // ---------- Carrega a lista ----------
@@ -3048,4 +3051,406 @@ function alternarDetalhePrev(idx) {
   if (!el) return;
   const aberto = el.classList.contains("aberto");
   el.classList.toggle("aberto", !aberto);
+}
+
+// ============================================================================
+// ===================== CHAT COM IA ==========================================
+// ============================================================================
+
+const CHAVE_CHAT_HIST = "sb_chat_hist";     // histórico salvo por conta
+const CHAVE_CHAT_MOTOR = "sb_chat_motor";   // motor preferido
+
+let motorIA = "gemini";        // "gemini" ou "claude"
+let historicoChat = [];        // [{role, content, uso}]
+let aguardandoIA = false;
+
+// ---------- Persistência do histórico (por conta) ----------
+function chaveHistorico() {
+  return CHAVE_CHAT_HIST + "_" + (emailUsuarioAtual || "anon");
+}
+
+function salvarHistoricoChat() {
+  try {
+    // Guarda no máximo as últimas 60 mensagens
+    const recorte = historicoChat.slice(-60);
+    localStorage.setItem(chaveHistorico(), JSON.stringify(recorte));
+  } catch (e) {}
+}
+
+function carregarHistoricoChat() {
+  try {
+    const b = localStorage.getItem(chaveHistorico());
+    historicoChat = b ? JSON.parse(b) : [];
+  } catch (e) {
+    historicoChat = [];
+  }
+}
+
+function salvarMotorPreferido() {
+  try { localStorage.setItem(CHAVE_CHAT_MOTOR, motorIA); } catch (e) {}
+}
+
+function carregarMotorPreferido() {
+  try {
+    const m = localStorage.getItem(CHAVE_CHAT_MOTOR);
+    motorIA = (m === "claude") ? "claude" : "gemini";
+  } catch (e) { motorIA = "gemini"; }
+}
+
+// ---------- Abrir a aba de chat ----------
+function abrirChat() {
+  carregarMotorPreferido();
+  carregarHistoricoChat();
+  atualizarBotaoMotor();
+  renderizarChat();
+  buscarGastoIA();
+
+  setTimeout(function () { rolarChatParaBaixo(); }, 100);
+}
+
+// ---------- Alterna o motor ----------
+function trocarMotorIA() {
+  motorIA = (motorIA === "gemini") ? "claude" : "gemini";
+  salvarMotorPreferido();
+  atualizarBotaoMotor();
+
+  const nome = motorIA === "claude" ? "Claude Sonnet 5 (pago)" : "Gemini (grátis)";
+  mostrarToast("🔄 Motor: " + nome);
+}
+
+function atualizarBotaoMotor() {
+  const btn = document.getElementById("chat-motor");
+  if (!btn) return;
+
+  if (motorIA === "claude") {
+    btn.className = "chat-motor claude";
+    btn.innerHTML = '<span class="cm-bolinha"></span> Claude <span class="cm-tag">pago</span>';
+  } else {
+    btn.className = "chat-motor gemini";
+    btn.innerHTML = '<span class="cm-bolinha"></span> Gemini <span class="cm-tag">grátis</span>';
+  }
+}
+
+// ---------- Gasto do mês ----------
+async function buscarGastoIA() {
+  try {
+    const r = await chamarServidor("gastoIA");
+    if (r.ok) atualizarGastoIA(r.gastoMes);
+  } catch (e) {}
+}
+
+function atualizarGastoIA(g) {
+  const el = document.getElementById("chat-gasto");
+  if (!el || !g) return;
+
+  if (g.brl > 0) {
+    el.innerHTML = '💰 <b>R$ ' + g.brl.toFixed(2).replace(".", ",") + '</b> este mês ›';
+    el.style.display = "block";
+  } else {
+    el.innerHTML = '💰 <b>R$ 0,00</b> este mês ›';
+    el.style.display = "block";
+  }
+}
+
+// ---------- Renderiza as mensagens ----------
+function renderizarChat() {
+  const wrap = document.getElementById("chat-mensagens");
+  wrap.innerHTML = "";
+
+  if (historicoChat.length === 0) {
+    wrap.innerHTML =
+      '<div class="chat-vazio">' +
+        '<div class="cv-icone">🧠</div>' +
+        '<h3>Converse sobre suas finanças</h3>' +
+        '<p>A IA tem acesso aos seus dados dos últimos 12 meses.</p>' +
+        '<div class="cv-sugestoes">' +
+          '<button onclick="usarSugestao(this)">Quanto gastei em mercado nos últimos 3 meses?</button>' +
+          '<button onclick="usarSugestao(this)">Onde estou gastando mais do que deveria?</button>' +
+          '<button onclick="usarSugestao(this)">Consigo economizar em quê?</button>' +
+          '<button onclick="usarSugestao(this)">Como está minha saúde financeira?</button>' +
+        '</div>' +
+      '</div>';
+    return;
+  }
+
+  historicoChat.forEach(function (m) {
+    const div = document.createElement("div");
+    div.className = "chat-msg " + (m.role === "user" ? "usuario" : "ia");
+
+    if (m.role === "user") {
+      div.innerHTML = '<div class="cm-bolha">' + escaparHtml(m.content) + '</div>';
+    } else {
+      let rodape = "";
+      if (m.uso) {
+        const u = m.uso;
+        rodape =
+          '<div class="cm-rodape">' +
+            '<span class="cmr-modelo">' + escaparHtml(m.modelo || "IA") + '</span>' +
+            (u.custoBRL > 0
+              ? '<span class="cmr-custo">$' + u.custoUSD.toFixed(4) +
+                ' · R$ ' + u.custoBRL.toFixed(3).replace(".", ",") + '</span>'
+              : '<span class="cmr-custo gratis">grátis</span>') +
+            '<span class="cmr-tokens">' + (u.tokensEntrada + u.tokensSaida) + ' tokens</span>' +
+          '</div>';
+      }
+      div.innerHTML =
+        '<div class="cm-bolha">' + formatarRespostaIA(m.content) + '</div>' + rodape;
+    }
+
+    wrap.appendChild(div);
+  });
+}
+
+// Converte a resposta da IA em HTML seguro (negrito, listas, quebras)
+function formatarRespostaIA(txt) {
+  let h = escaparHtml(txt);
+  h = h.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  h = h.replace(/^### (.+)$/gm, "<h4>$1</h4>");
+  h = h.replace(/^## (.+)$/gm, "<h4>$1</h4>");
+  h = h.replace(/^[-•] (.+)$/gm, "<li>$1</li>");
+  h = h.replace(/(<li>.*<\/li>)/s, "<ul>$1</ul>");
+  h = h.replace(/\n/g, "<br>");
+  h = h.replace(/<\/ul><br>/g, "</ul>");
+  h = h.replace(/<br><ul>/g, "<ul>");
+  return h;
+}
+
+function usarSugestao(btn) {
+  document.getElementById("chat-input").value = btn.textContent;
+  enviarPergunta();
+}
+
+// ---------- Enviar pergunta ----------
+async function enviarPergunta() {
+  if (aguardandoIA) return;
+
+  const input = document.getElementById("chat-input");
+  const pergunta = input.value.trim();
+  if (!pergunta) return;
+
+  input.value = "";
+  input.style.height = "auto";
+
+  // Adiciona a pergunta na tela
+  historicoChat.push({ role: "user", content: pergunta });
+  renderizarChat();
+  rolarChatParaBaixo();
+
+  // Mostra o "digitando..."
+  aguardandoIA = true;
+  document.getElementById("chat-enviar").disabled = true;
+  mostrarDigitando(true);
+
+  // Monta o histórico para o servidor (só role e content)
+  const histParaServidor = historicoChat.slice(0, -1).map(function (m) {
+    return { role: m.role, content: m.content };
+  });
+
+  try {
+    const r = await chamarServidor("perguntarIA", {
+      pergunta: pergunta,
+      motor: motorIA,
+      historico: JSON.stringify(histParaServidor)
+    });
+
+    mostrarDigitando(false);
+
+    if (r.ok) {
+      historicoChat.push({
+        role: "assistant",
+        content: r.resposta,
+        modelo: r.modelo,
+        uso: r.uso
+      });
+      salvarHistoricoChat();
+      renderizarChat();
+      if (r.gastoMes) atualizarGastoIA(r.gastoMes);
+    } else {
+      historicoChat.push({
+        role: "assistant",
+        content: "⚠️ " + (r.mensagem || "Não consegui responder."),
+        modelo: "erro"
+      });
+      renderizarChat();
+    }
+  } catch (e) {
+    mostrarDigitando(false);
+    historicoChat.push({
+      role: "assistant",
+      content: "⚠️ Sem conexão com o servidor.",
+      modelo: "erro"
+    });
+    renderizarChat();
+  } finally {
+    aguardandoIA = false;
+    document.getElementById("chat-enviar").disabled = false;
+    rolarChatParaBaixo();
+  }
+}
+
+function mostrarDigitando(mostrar) {
+  const el = document.getElementById("chat-digitando");
+  if (el) el.style.display = mostrar ? "flex" : "none";
+  if (mostrar) rolarChatParaBaixo();
+}
+
+function rolarChatParaBaixo() {
+  const wrap = document.getElementById("chat-scroll");
+  if (wrap) wrap.scrollTop = wrap.scrollHeight;
+}
+
+// Cresce a caixa de texto conforme digita
+function ajustarAlturaInput(el) {
+  el.style.height = "auto";
+  el.style.height = Math.min(el.scrollHeight, 120) + "px";
+}
+
+// ---------- Limpar conversa ----------
+function limparConversa() {
+  if (historicoChat.length === 0) return;
+  if (!confirm("Apagar toda a conversa?\n\nO histórico de custos NÃO será apagado.")) return;
+
+  historicoChat = [];
+  try { localStorage.removeItem(chaveHistorico()); } catch (e) {}
+  renderizarChat();
+  mostrarToast("🗑️ Conversa apagada.");
+}
+
+// ============================================================================
+// RELATÓRIO DE USO DA IA (ao tocar no total)
+// ============================================================================
+async function abrirRelatorioUsoIA() {
+  const modal = document.getElementById("modal-uso-ia");
+  modal.style.display = "flex";
+  document.getElementById("ui-corpo").innerHTML =
+    '<div style="text-align:center; padding:40px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+
+  try {
+    const r = await chamarServidor("relatorioUsoIA");
+    if (r.ok) {
+      renderizarRelatorioUsoIA(r);
+    } else {
+      document.getElementById("ui-corpo").innerHTML =
+        '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro ao carregar.") + '</p>';
+    }
+  } catch (e) {
+    document.getElementById("ui-corpo").innerHTML = '<p class="vazio">⚠️ Sem conexão.</p>';
+  }
+}
+
+function fecharRelatorioUsoIA() {
+  document.getElementById("modal-uso-ia").style.display = "none";
+}
+
+function renderizarRelatorioUsoIA(r) {
+  const mes = r.mesAtual || { usd: 0, brl: 0, chamadas: 0 };
+
+  // --- Destaque do mês ---
+  let html =
+    '<div class="ui-destaque">' +
+      '<div class="uid-label">Gasto neste mês</div>' +
+      '<div class="uid-brl">R$ ' + mes.brl.toFixed(2).replace(".", ",") + '</div>' +
+      '<div class="uid-usd">US$ ' + mes.usd.toFixed(4) + ' · ' + mes.chamadas + ' consultas</div>' +
+      '<div class="uid-cotacao">Dólar: R$ ' + (r.cotacaoAtual || 0).toFixed(2).replace(".", ",") + '</div>' +
+    '</div>';
+
+  // --- Por mês ---
+  if (r.meses && r.meses.length > 0) {
+    let linhas = "";
+    r.meses.forEach(function (m) {
+      linhas +=
+        '<tr>' +
+          '<td>' + escaparHtml(m.nome) + '</td>' +
+          '<td class="num">' + m.chamadas + '</td>' +
+          '<td class="num cinza">$' + m.usd.toFixed(3) + '</td>' +
+          '<td class="num"><b>R$ ' + m.brl.toFixed(2).replace(".", ",") + '</b></td>' +
+        '</tr>';
+    });
+    html +=
+      '<div class="ui-secao">' +
+        '<h3>📅 Por mês</h3>' +
+        '<table class="rel-tabela">' +
+          '<thead><tr><th>Mês</th><th class="num">Consultas</th><th class="num">USD</th><th class="num">BRL</th></tr></thead>' +
+          '<tbody>' + linhas + '</tbody>' +
+        '</table>' +
+      '</div>';
+  }
+
+  // --- Por usuário ---
+  if (r.porUsuario && r.porUsuario.length > 0) {
+    let linhas = "";
+    r.porUsuario.forEach(function (u) {
+      linhas +=
+        '<tr>' +
+          '<td class="cat">' + escaparHtml(u.email) + '</td>' +
+          '<td class="num">' + u.chamadas + '</td>' +
+          '<td class="num"><b>R$ ' + u.brl.toFixed(2).replace(".", ",") + '</b></td>' +
+        '</tr>';
+    });
+    html +=
+      '<div class="ui-secao">' +
+        '<h3>👥 Por pessoa</h3>' +
+        '<table class="rel-tabela">' +
+          '<thead><tr><th>Conta</th><th class="num">Consultas</th><th class="num">Total</th></tr></thead>' +
+          '<tbody>' + linhas + '</tbody>' +
+        '</table>' +
+      '</div>';
+  }
+
+  // --- Por modelo ---
+  if (r.porMotor && r.porMotor.length > 0) {
+    let linhas = "";
+    r.porMotor.forEach(function (m) {
+      linhas +=
+        '<tr>' +
+          '<td>' + escaparHtml(m.modelo) + '</td>' +
+          '<td class="num">' + m.chamadas + '</td>' +
+          '<td class="num"><b>' + (m.brl > 0 ? 'R$ ' + m.brl.toFixed(2).replace(".", ",") : 'grátis') + '</b></td>' +
+        '</tr>';
+    });
+    html +=
+      '<div class="ui-secao">' +
+        '<h3>🤖 Por modelo</h3>' +
+        '<table class="rel-tabela">' +
+          '<thead><tr><th>Modelo</th><th class="num">Consultas</th><th class="num">Total</th></tr></thead>' +
+          '<tbody>' + linhas + '</tbody>' +
+        '</table>' +
+      '</div>';
+  }
+
+  // --- Histórico detalhado ---
+  if (r.historico && r.historico.length > 0) {
+    let itens = "";
+    r.historico.forEach(function (h) {
+      itens +=
+        '<div class="ui-hist">' +
+          '<div class="uih-topo">' +
+            '<span class="uih-data">' + escaparHtml(h.data) + '</span>' +
+            '<span class="uih-custo">' +
+              (h.brl > 0 ? 'R$ ' + h.brl.toFixed(3).replace(".", ",") : 'grátis') +
+            '</span>' +
+          '</div>' +
+          '<div class="uih-pergunta">' + escaparHtml(h.pergunta) + '</div>' +
+          '<div class="uih-meta">' +
+            escaparHtml(h.email.split("@")[0]) + ' · ' + escaparHtml(h.modelo) + ' · ' +
+            (h.tokensEntrada + h.tokensSaida) + ' tokens' +
+          '</div>' +
+        '</div>';
+    });
+    html +=
+      '<div class="ui-secao">' +
+        '<h3>📜 Histórico detalhado</h3>' +
+        '<div class="ui-hist-lista">' + itens + '</div>' +
+      '</div>';
+  }
+
+  // --- Total geral ---
+  const tg = r.totalGeral || { usd: 0, brl: 0, chamadas: 0 };
+  html +=
+    '<div class="ui-total">' +
+      '<span>Total desde o início</span>' +
+      '<b>R$ ' + tg.brl.toFixed(2).replace(".", ",") + '</b>' +
+    '</div>';
+
+  document.getElementById("ui-corpo").innerHTML = html;
 }
