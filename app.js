@@ -2374,8 +2374,16 @@ function desbloquear() {
   momentoQueSaiu = null;
   document.getElementById("tela-bloqueio").style.display = "none";
   document.getElementById("bl-pin").value = "";
-  // Atualiza os dados ao desbloquear
-  atualizarAoVoltar();
+
+  // 👉 CORRIGIDO: se o app ainda não foi carregado (desbloqueio na abertura),
+  // precisa entrar de fato. Se já estava aberto, só atualiza os dados.
+  const jaAberto = document.getElementById("tela-interna").style.display === "block";
+
+  if (jaAberto) {
+    atualizarAoVoltar();
+  } else {
+    entrarNoApp();
+  }
 }
 
 // ============================================================================
