@@ -191,7 +191,7 @@ async function entrarNoApp() {
       // Avisa sobre contas vencendo (só no mês corrente)
       const hj = new Date();
       if (mesExibido === hj.getMonth() && anoExibido === hj.getFullYear()) {
-        verificarContasEVNotificar(r);
+        verificarContasEVNotificar(r).catch(function () {});
       }
     } else if (r.erro === "NAO_AUTORIZADO") {
       mostrarErroLogin(r.mensagem || "Acesso negado. Este e-mail não está autorizado.");
@@ -2703,6 +2703,15 @@ function marcarNotificadoHoje() {
 
 // Checa as contas a vencer e notifica (chamado após carregar o dashboard)
 async function verificarContasEVNotificar(dadosDashboard) {
+  try {
+    await executarVerificacaoNotificacao(dadosDashboard);
+  } catch (e) {
+    console.warn("Notificação falhou (ignorado):", e);
+  }
+}
+
+// Toda a lógica fica aqui dentro, protegida
+async function executarVerificacaoNotificacao(dadosDashboard) {
   if (!dadosDashboard || !dadosDashboard.contasAVencer) return;
 
   const contas = dadosDashboard.contasAVencer;
