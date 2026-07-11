@@ -403,6 +403,53 @@
       padding: 9px; border-radius: 8px; margin-top: 10px;
     }
 
+
+    /* ---------- CAMPO DE CATEGORIA (abre busca) ---------- */
+    .btn-categoria {
+      width: 100%; padding: 12px; border: 1px solid var(--borda); border-radius: 10px;
+      font-size: 15px; font-family: inherit; background: #fff; color: #1e293b;
+      text-align: left; cursor: pointer; display: flex; align-items: center;
+      justify-content: space-between; gap: 8px; min-height: 48px;
+    }
+    .btn-categoria:active { border-color: var(--azul-claro); }
+    .btn-categoria .cat-txt { flex: 1; line-height: 1.35; word-break: break-word; }
+    .btn-categoria .cat-txt.vazio-cat { color: #94a3b8; }
+    .btn-categoria .cat-lupa { color: var(--azul-claro); font-size: 16px; flex-shrink: 0; }
+
+    /* ---------- MODAL SELETOR DE CATEGORIA ---------- */
+    #modal-categoria .modal-caixa { max-height: 88vh; display: flex; flex-direction: column; }
+    .sc-busca-wrap {
+      padding: 14px 16px; background: #fff; border-bottom: 1px solid var(--borda);
+      position: sticky; top: 0; z-index: 2;
+    }
+    #sc-busca {
+      width: 100%; padding: 13px 14px; border: 2px solid var(--azul-claro);
+      border-radius: 10px; font-size: 16px; font-family: inherit;
+    }
+    #sc-busca:focus { outline: none; border-color: var(--azul); }
+    .sc-dica { font-size: 11px; color: var(--cinza-texto); margin-top: 7px; }
+
+    #sc-lista { overflow-y: auto; flex: 1; padding: 8px 0 20px; }
+    .sc-item {
+      display: flex; align-items: baseline; gap: 10px; width: 100%;
+      padding: 13px 18px; background: none; border: none; border-bottom: 1px solid #f1f3f4;
+      text-align: left; cursor: pointer; font-family: inherit;
+    }
+    .sc-item:active { background: var(--cinza-fundo); }
+    .sc-item.atual { background: #eef8f3; }
+    .sc-item.atual .sc-nome { color: var(--verde); font-weight: 700; }
+    .sc-cod {
+      font-size: 11px; color: var(--azul-claro); font-weight: 700;
+      background: #eef4fa; padding: 3px 7px; border-radius: 5px;
+      white-space: nowrap; flex-shrink: 0; min-width: 58px; text-align: center;
+    }
+    .sc-nome { font-size: 14px; color: #1e293b; line-height: 1.35; }
+    .sc-vazio {
+      padding: 40px 24px; text-align: center; color: var(--cinza-texto);
+      font-size: 14px; line-height: 1.6;
+    }
+    .sc-vazio span { font-size: 12px; color: #94a3b8; }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
@@ -585,8 +632,12 @@
             <select id="ed-metodo"></select>
           </div>
           <div class="campo-bloco">
-            <label for="ed-categoria">Categoria</label>
-            <select id="ed-categoria"></select>
+            <label>Categoria</label>
+            <input type="hidden" id="ed-categoria" />
+            <button type="button" class="btn-categoria" onclick="abrirSeletorCategoria('ed-categoria')">
+              <span class="cat-txt" id="ed-categoria-txt"></span>
+              <span class="cat-lupa">🔍</span>
+            </button>
           </div>
         </div>
 
@@ -662,8 +713,12 @@
         </div>
 
         <div class="campo-bloco">
-          <label for="nd-categoria">Categoria</label>
-          <select id="nd-categoria"></select>
+          <label>Categoria</label>
+          <input type="hidden" id="nd-categoria" />
+          <button type="button" class="btn-categoria" onclick="abrirSeletorCategoria('nd-categoria')">
+            <span class="cat-txt vazio-cat" id="nd-categoria-txt">Toque para escolher a categoria</span>
+            <span class="cat-lupa">🔍</span>
+          </button>
         </div>
 
         <div class="campo-bloco">
@@ -755,8 +810,12 @@
         </div>
 
         <div class="campo-bloco">
-          <label for="ea-categoria">Categoria</label>
-          <select id="ea-categoria"></select>
+          <label>Categoria</label>
+          <input type="hidden" id="ea-categoria" />
+          <button type="button" class="btn-categoria" onclick="abrirSeletorCategoria('ea-categoria')">
+            <span class="cat-txt" id="ea-categoria-txt"></span>
+            <span class="cat-lupa">🔍</span>
+          </button>
         </div>
 
         <div class="modal-acoes">
@@ -764,6 +823,30 @@
           <button class="btn-modal confirmar" onclick="salvarEAprovar()">Salvar e aprovar</button>
         </div>
       </div>
+
+    </div>
+  </div>
+
+
+  <!-- ============ MODAL SELETOR DE CATEGORIA ============ -->
+  <div class="modal-fundo" id="modal-categoria">
+    <div class="modal-caixa">
+
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Escolher categoria</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;">Busque pelo nome ou pelo código</div>
+        </div>
+        <button class="fechar" onclick="fecharSeletorCategoria()">&times;</button>
+      </div>
+
+      <div class="sc-busca-wrap">
+        <input type="text" id="sc-busca" placeholder="Ex: mercado, 2.2, aluguel..."
+               oninput="filtrarCategorias()" autocomplete="off" />
+        <div class="sc-dica">Toque numa categoria da lista para selecionar.</div>
+      </div>
+
+      <div id="sc-lista"></div>
 
     </div>
   </div>

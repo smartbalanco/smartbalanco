@@ -478,9 +478,9 @@ function preencherModal(l) {
   document.getElementById("ed-valor").value = l.valorParcela.toFixed(2);
   document.getElementById("ed-vencimento").value = l.vencimento;
 
-  // Menus suspensos
+  // Menus
   montarSelect("ed-metodo", listasValidas ? listasValidas.metodos : [], l.metodo);
-  montarSelect("ed-categoria", listasValidas ? listasValidas.categorias : [], l.categoria);
+  definirCategoriaCampo("ed-categoria", l.categoria);
 
   // Reseta o toggle de edição
   document.getElementById("chk-editar").checked = false;
@@ -701,9 +701,9 @@ async function abrirNovaDespesa() {
     document.getElementById("nd-form").style.opacity = "1";
   }
 
-  // Preenche os selects
+  // Preenche os campos
   montarSelect("nd-metodo", listasValidas ? listasValidas.metodos : [], "");
-  montarSelect("nd-categoria", listasValidas ? listasValidas.categorias : [], "");
+  definirCategoriaCampo("nd-categoria", "");
 
   // Limpa/reseta os campos
   const hoje = dataHojeISO();
@@ -1087,7 +1087,7 @@ async function abrirEdicaoAprovacao(idx) {
   document.getElementById("ea-primeirovenc").value = g.primeiroVenc;
 
   montarSelect("ea-metodo", listasValidas.metodos, g.metodo);
-  montarSelect("ea-categoria", listasValidas.categorias, g.categoria);
+  definirCategoriaCampo("ea-categoria", g.categoria);
 
   // Info de parcelas (travado)
   const infoParc = document.getElementById("ea-info-parcelas");
@@ -1180,5 +1180,121 @@ async function checarPendentesAprovacao() {
     }
   } catch (e) {
     // silencioso
+  }
+}
+
+
+// ============================================================================
+// ===================== SELETOR DE CATEGORIA COM BUSCA =======================
+// Substitui o <select> por um campo que abre uma tela de busca.
+// Só aceita categorias válidas (não permite texto livre).
+// ============================================================================
+
+let seletorCatDestino = null;  // id do campo que está sendo preenchido
+
+// Abre a tela de busca. destinoId = id do input escondido que guarda o valor.
+function abrirSeletorCategoria(destinoId) {
+  seletorCatDestino = destinoId;
+
+  const modal = document.getElementById("modal-categoria");
+  modal.style.display = "flex";
+
+  const busca = document.getElementById("sc-busca");
+  busca.value = "";
+  renderizarListaCategorias("");
+
+  // Foca no campo de busca (com um respiro pro teclado abrir direito)
+  setTimeout(function () { busca.focus(); }, 120);
+}
+
+function fecharSeletorCategoria() {
+  document.getElementById("modal-categoria").style.display = "none";
+  seletorCatDestino = null;
+}
+
+// Remove acentos e deixa minúsculo (para busca tolerante)
+function normalizarBusca(txt) {
+  return (txt || "")
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function filtrarCategorias() {
+  renderizarListaCategorias(document.getElementById("sc-busca").value);
+}
+
+function renderizarListaCategorias(termo) {
+  const lista = document.getElementById("sc-lista");
+  lista.innerHTML = "";
+
+  const todas = (listasValidas && listasValidas.categorias) ? listasValidas.categorias : [];
+  const t = normalizarBusca(termo).trim();
+
+  // Filtra por nome OU número (ex: "merc", "2.2", "2.2.001", "agua")
+  const filtradas = t === ""
+    ? todas
+    : todas.filter(function (c) { return normalizarBusca(c).indexOf(t) !== -1; });
+
+  if (filtradas.length === 0) {
+    lista.innerHTML =
+      '<div class="sc-vazio">Nenhuma categoria encontrada para "' + escaparHtml(termo) + '".<br>' +
+      '<span>Só é possível escolher categorias já cadastradas.</span></div>';
+    return;
+  }
+
+  // Valor atualmente escolhido (para destacar)
+  const atual = seletorCatDestino ? (document.getElementById(seletorCatDestino).value || "") : "";
+
+  filtradas.forEach(function (c) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "sc-item" + (c === atual ? " atual" : "");
+
+    // Separa o código do nome, pra destacar visualmente
+    const m = c.match(/^([\d.]+)\s*\.?\s*(.*)$/);
+    if (m && m[1] && m[2]) {
+      item.innerHTML = '<span class="sc-cod">' + escaparHtml(m[1]) + '</span>' +
+                       '<span class="sc-nome">' + escaparHtml(m[2]) + '</span>';
+    } else {
+      item.innerHTML = '<span class="sc-nome">' + escaparHtml(c) + '</span>';
+    }
+
+    item.onclick = function () { escolherCategoria(c); };
+    lista.appendChild(item);
+  });
+}
+
+// Grava a categoria escolhida no campo de destino
+function escolherCategoria(categoria) {
+  if (!seletorCatDestino) return;
+
+  const hidden = document.getElementById(seletorCatDestino);
+  hidden.value = categoria;
+
+  // Atualiza o texto exibido no botão do formulário
+  const visivel = document.getElementById(seletorCatDestino + "-txt");
+  if (visivel) {
+    visivel.textContent = categoria;
+    visivel.classList.remove("vazio-cat");
+  }
+
+  fecharSeletorCategoria();
+}
+
+// Preenche o campo de categoria (usado ao abrir os modais)
+function definirCategoriaCampo(destinoId, valor) {
+  const hidden = document.getElementById(destinoId);
+  const visivel = document.getElementById(destinoId + "-txt");
+  hidden.value = valor || "";
+  if (visivel) {
+    if (valor) {
+      visivel.textContent = valor;
+      visivel.classList.remove("vazio-cat");
+    } else {
+      visivel.textContent = "Toque para escolher a categoria";
+      visivel.classList.add("vazio-cat");
+    }
   }
 }
