@@ -296,6 +296,42 @@
       border-radius: 8px; margin-bottom: 12px; font-weight: 600;
     }
 
+
+    /* ---------- BOTÃO FLUTUANTE (+) ---------- */
+    #btn-nova-despesa {
+      position: fixed; bottom: 24px; right: 20px; z-index: 50;
+      width: 58px; height: 58px; border-radius: 50%;
+      background: var(--verde); color: #fff; border: none;
+      font-size: 30px; line-height: 1; cursor: pointer;
+      box-shadow: 0 6px 18px rgba(46, 158, 107, 0.45);
+      display: none; align-items: center; justify-content: center;
+      padding-bottom: 3px;
+    }
+    #btn-nova-despesa:active { transform: scale(0.94); }
+
+    /* ---------- MODAL NOVA DESPESA ---------- */
+    .nd-previa {
+      display: none; background: #eef8f3; color: var(--verde);
+      font-size: 13px; font-weight: 700; text-align: center;
+      padding: 9px; border-radius: 8px; margin-top: 10px;
+    }
+    #nd-aviso-cartao {
+      display: none; background: #eef4fa; color: var(--azul-claro);
+      font-size: 11px; padding: 9px 12px; border-radius: 8px;
+      margin-top: 8px; line-height: 1.4; border-left: 3px solid var(--azul-claro);
+    }
+    #nd-erro {
+      display: none; background: #fef2f2; color: #b91c1c;
+      border: 1px solid #fecaca; border-radius: 8px;
+      padding: 11px 14px; font-size: 13px; margin-bottom: 14px;
+    }
+    #nd-bloco-datapgto { display: none; }
+    #nd-confirmacao { display: none; padding: 20px; }
+    .conf-linha b.calc { color: var(--azul-claro); font-style: italic; font-weight: 600; }
+    .conf-linha b.pendente { color: var(--laranja); }
+    .linha-dupla { display: flex; gap: 12px; }
+    .linha-dupla .campo-bloco { flex: 1; }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
@@ -484,6 +520,103 @@
         <div class="modal-acoes">
           <button class="btn-modal voltar" onclick="voltarDaConfirmacao()">Voltar</button>
           <button class="btn-modal confirmar" id="btn-confirmar-final" onclick="confirmarLiquidacao()">Sim, liquidar</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+
+  <!-- BOTÃO FLUTUANTE NOVA DESPESA -->
+  <button id="btn-nova-despesa" onclick="abrirNovaDespesa()" title="Nova despesa">+</button>
+
+  <!-- ============ MODAL NOVA DESPESA ============ -->
+  <div class="modal-fundo" id="modal-despesa">
+    <div class="modal-caixa">
+
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Nova despesa</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;">Lançamento manual</div>
+        </div>
+        <button class="fechar" onclick="fecharModalDespesa()">&times;</button>
+      </div>
+
+      <!-- FORMULÁRIO -->
+      <div id="nd-form" class="modal-conteudo">
+
+        <div id="nd-erro"></div>
+
+        <div class="campo-bloco">
+          <label for="nd-descricao">Descrição</label>
+          <input type="text" id="nd-descricao" placeholder="Ex: Mercado do mês" />
+        </div>
+
+        <div class="linha-dupla">
+          <div class="campo-bloco">
+            <label for="nd-valor">Valor total (R$)</label>
+            <input type="number" id="nd-valor" step="0.01" inputmode="decimal" placeholder="0,00"
+                   oninput="atualizarPreviaParcela()" />
+          </div>
+          <div class="campo-bloco">
+            <label for="nd-parcelas">Parcelas</label>
+            <input type="number" id="nd-parcelas" min="1" max="99" value="1" inputmode="numeric"
+                   oninput="atualizarPreviaParcela()" />
+          </div>
+        </div>
+
+        <div class="nd-previa" id="nd-previa"></div>
+
+        <div class="campo-bloco">
+          <label for="nd-metodo">Método de pagamento</label>
+          <select id="nd-metodo" onchange="atualizarCamposDespesa()"></select>
+          <div id="nd-aviso-cartao">
+            💳 O vencimento será calculado automaticamente conforme o fechamento da fatura deste cartão.
+          </div>
+        </div>
+
+        <div class="campo-bloco">
+          <label for="nd-categoria">Categoria</label>
+          <select id="nd-categoria"></select>
+        </div>
+
+        <div class="campo-bloco">
+          <label for="nd-datacompra">Data da compra</label>
+          <input type="date" id="nd-datacompra" />
+        </div>
+
+        <div class="campo-bloco" id="nd-bloco-vencimento">
+          <label for="nd-vencimento">Vencimento</label>
+          <input type="date" id="nd-vencimento" />
+        </div>
+
+        <div class="toggle-editar" onclick="document.getElementById('nd-chk-pago').click()">
+          <input type="checkbox" id="nd-chk-pago"
+                 onclick="event.stopPropagation(); atualizarCamposDespesa();" />
+          <label for="nd-chk-pago" onclick="event.stopPropagation();">✅ Esta despesa já foi paga</label>
+        </div>
+
+        <div class="campo-bloco campo-data-destaque" id="nd-bloco-datapgto">
+          <label for="nd-datapgto">📅 Data do pagamento</label>
+          <input type="date" id="nd-datapgto" />
+        </div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharModalDespesa()">Cancelar</button>
+          <button class="btn-modal confirmar" onclick="confirmarNovaDespesa()">Continuar</button>
+        </div>
+      </div>
+
+      <!-- CONFIRMAÇÃO -->
+      <div id="nd-confirmacao">
+        <div class="conf-aviso">
+          ⚠️ <b>Confirma o lançamento?</b><br>
+          A despesa será gravada direto na planilha.
+        </div>
+        <div id="nd-conf-resumo"></div>
+        <div class="modal-acoes">
+          <button class="btn-modal voltar" onclick="voltarDoResumoDespesa()">Voltar</button>
+          <button class="btn-modal confirmar" onclick="enviarNovaDespesa()">Sim, lançar</button>
         </div>
       </div>
 

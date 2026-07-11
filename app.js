@@ -350,12 +350,16 @@ function mostrarCarregando(msg) {
   document.getElementById("tela-interna").style.display = "none";
   document.getElementById("tela-carregando").style.display = "flex";
   document.getElementById("carregando-msg").textContent = msg || "Carregando...";
+  const b = document.getElementById("btn-nova-despesa");
+  if (b) b.style.display = "none";
 }
 
 function mostrarTelaLogin() {
   document.getElementById("tela-carregando").style.display = "none";
   document.getElementById("tela-interna").style.display = "none";
   document.getElementById("tela-login").style.display = "flex";
+  const b = document.getElementById("btn-nova-despesa");
+  if (b) b.style.display = "none";
 }
 
 function mostrarErroLogin(msg) {
@@ -369,6 +373,7 @@ function mostrarTelaInterna() {
   document.getElementById("tela-carregando").style.display = "none";
   document.getElementById("tela-login").style.display = "none";
   document.getElementById("tela-interna").style.display = "block";
+  document.getElementById("btn-nova-despesa").style.display = "flex";
 }
 
 function sair() {
@@ -666,5 +671,194 @@ function mostrarToast(msg, fixo) {
   // Se "fixo", não some sozinho (fica até a próxima mensagem substituir)
   if (!fixo) {
     toastTimer = setTimeout(function () { t.classList.remove("visivel"); }, 5000);
+  }
+}
+
+
+// ============================================================================
+// ===================== INCLUSÃO DE DESPESA MANUAL ===========================
+// ============================================================================
+
+async function abrirNovaDespesa() {
+  const modal = document.getElementById("modal-despesa");
+  modal.style.display = "flex";
+  document.getElementById("nd-erro").style.display = "none";
+  document.getElementById("nd-form").style.display = "block";
+  document.getElementById("nd-confirmacao").style.display = "none";
+
+  // Carrega listas (categoria/método) se ainda não tiver
+  if (!listasValidas) {
+    document.getElementById("nd-form").style.opacity = "0.5";
+    try {
+      const rl = await chamarServidor("listasValidas");
+      if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
+    } catch (e) {
+      listasValidas = { categorias: [], metodos: [] };
+    }
+    document.getElementById("nd-form").style.opacity = "1";
+  }
+
+  // Preenche os selects
+  montarSelect("nd-metodo", listasValidas ? listasValidas.metodos : [], "");
+  montarSelect("nd-categoria", listasValidas ? listasValidas.categorias : [], "");
+
+  // Limpa/reseta os campos
+  const hoje = dataHojeISO();
+  document.getElementById("nd-descricao").value = "";
+  document.getElementById("nd-valor").value = "";
+  document.getElementById("nd-datacompra").value = hoje;
+  document.getElementById("nd-parcelas").value = "1";
+  document.getElementById("nd-vencimento").value = hoje;
+  document.getElementById("nd-chk-pago").checked = false;
+  document.getElementById("nd-datapgto").value = hoje;
+
+  atualizarCamposDespesa();
+}
+
+function dataHojeISO() {
+  const h = new Date();
+  return h.getFullYear() + "-" + ("0" + (h.getMonth() + 1)).slice(-2) + "-" + ("0" + h.getDate()).slice(-2);
+}
+
+function fecharModalDespesa() {
+  document.getElementById("modal-despesa").style.display = "none";
+}
+
+// Mostra/esconde campos conforme as escolhas
+function atualizarCamposDespesa() {
+  const metodo = (document.getElementById("nd-metodo").value || "").toLowerCase();
+  const ehCartao = metodo.indexOf("cartão") !== -1 || metodo.indexOf("cartao") !== -1;
+  const jaPago = document.getElementById("nd-chk-pago").checked;
+
+  // Vencimento: some se for cartão (é calculado automaticamente)
+  document.getElementById("nd-bloco-vencimento").style.display = ehCartao ? "none" : "block";
+  document.getElementById("nd-aviso-cartao").style.display = ehCartao ? "block" : "none";
+
+  // Data de pagamento: aparece só se marcado como pago
+  document.getElementById("nd-bloco-datapgto").style.display = jaPago ? "block" : "none";
+
+  // Mostra o valor da parcela em tempo real
+  atualizarPreviaParcela();
+}
+
+function atualizarPreviaParcela() {
+  const valor = parseFloat(document.getElementById("nd-valor").value) || 0;
+  const parc = parseInt(document.getElementById("nd-parcelas").value) || 1;
+  const el = document.getElementById("nd-previa");
+
+  if (valor > 0 && parc > 1) {
+    el.textContent = parc + "x de " + formatarMoeda(valor / parc);
+    el.style.display = "block";
+  } else if (valor > 0) {
+    el.textContent = "À vista: " + formatarMoeda(valor);
+    el.style.display = "block";
+  } else {
+    el.style.display = "none";
+  }
+}
+
+// ---------- Confirmação ----------
+function confirmarNovaDespesa() {
+  const desc = document.getElementById("nd-descricao").value.trim();
+  const valor = parseFloat(document.getElementById("nd-valor").value);
+  const dataCompra = document.getElementById("nd-datacompra").value;
+  const parcelas = parseInt(document.getElementById("nd-parcelas").value) || 1;
+  const metodo = document.getElementById("nd-metodo").value;
+  const categoria = document.getElementById("nd-categoria").value;
+  const jaPago = document.getElementById("nd-chk-pago").checked;
+
+  // Validações
+  if (!desc) return mostrarErroDespesa("Informe a descrição.");
+  if (!valor || valor <= 0) return mostrarErroDespesa("Informe um valor maior que zero.");
+  if (!dataCompra) return mostrarErroDespesa("Informe a data da compra.");
+  if (!metodo) return mostrarErroDespesa("Escolha o método de pagamento.");
+  if (!categoria) return mostrarErroDespesa("Escolha a categoria.");
+  if (jaPago && !document.getElementById("nd-datapgto").value) {
+    return mostrarErroDespesa("Informe a data de pagamento.");
+  }
+
+  const ehCartao = metodo.toLowerCase().indexOf("cart") !== -1;
+
+  // Monta o resumo
+  let resumo = '<div class="conf-linha"><span>Descrição</span><b>' + escaparHtml(desc) + '</b></div>';
+  resumo += '<div class="conf-linha"><span>Valor total</span><b>' + formatarMoeda(valor) + '</b></div>';
+  if (parcelas > 1) {
+    resumo += '<div class="conf-linha"><span>Parcelas</span><b>' + parcelas + 'x de ' + formatarMoeda(valor / parcelas) + '</b></div>';
+  } else {
+    resumo += '<div class="conf-linha"><span>Parcelas</span><b>À vista</b></div>';
+  }
+  resumo += '<div class="conf-linha"><span>Data da compra</span><b>' + formatarDataBr(dataCompra) + '</b></div>';
+  if (ehCartao) {
+    resumo += '<div class="conf-linha"><span>Vencimento</span><b class="calc">calculado pela fatura</b></div>';
+  } else {
+    resumo += '<div class="conf-linha"><span>Vencimento</span><b>' + formatarDataBr(document.getElementById("nd-vencimento").value) + '</b></div>';
+  }
+  resumo += '<div class="conf-linha"><span>Método</span><b>' + escaparHtml(metodo) + '</b></div>';
+  resumo += '<div class="conf-linha"><span>Categoria</span><b>' + escaparHtml(categoria) + '</b></div>';
+
+  if (jaPago) {
+    const dp = document.getElementById("nd-datapgto").value;
+    resumo += '<div class="conf-linha alterado"><span>Status</span><b>✅ Já paga em ' + formatarDataBr(dp) + '</b></div>';
+  } else {
+    resumo += '<div class="conf-linha"><span>Status</span><b class="pendente">⏳ A pagar</b></div>';
+  }
+
+  if (parcelas > 1) {
+    resumo += '<div class="conf-nota">Serão criadas ' + parcelas + ' linhas na planilha (uma por parcela).</div>';
+  }
+
+  document.getElementById("nd-conf-resumo").innerHTML = resumo;
+  document.getElementById("nd-form").style.display = "none";
+  document.getElementById("nd-confirmacao").style.display = "block";
+}
+
+function voltarDoResumoDespesa() {
+  document.getElementById("nd-confirmacao").style.display = "none";
+  document.getElementById("nd-form").style.display = "block";
+}
+
+function mostrarErroDespesa(msg) {
+  const el = document.getElementById("nd-erro");
+  el.textContent = "⚠️ " + msg;
+  el.style.display = "block";
+  setTimeout(function () { el.style.display = "none"; }, 4000);
+}
+
+// ---------- Envio ----------
+function enviarNovaDespesa() {
+  const desc = document.getElementById("nd-descricao").value.trim();
+  const jaPago = document.getElementById("nd-chk-pago").checked;
+
+  const params = {
+    descricao: desc,
+    valorTotal: document.getElementById("nd-valor").value,
+    dataCompra: document.getElementById("nd-datacompra").value,
+    totalParcelas: document.getElementById("nd-parcelas").value,
+    metodo: document.getElementById("nd-metodo").value,
+    categoria: document.getElementById("nd-categoria").value,
+    vencimento: document.getElementById("nd-vencimento").value,
+    jaPago: jaPago ? "true" : "false"
+  };
+
+  if (jaPago) params.dataPagamento = document.getElementById("nd-datapgto").value;
+
+  // Fecha na hora e envia em segundo plano
+  fecharModalDespesa();
+  mostrarToast("⏳ Lançando \"" + desc + "\"...", true);
+
+  gravarNovaDespesa(params, desc);
+}
+
+async function gravarNovaDespesa(params, desc) {
+  try {
+    const r = await chamarServidor("incluirDespesa", params);
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      await recarregarDados();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não foi possível lançar a despesa."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão. \"" + desc + "\" NÃO foi lançada.");
   }
 }
