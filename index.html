@@ -1265,6 +1265,168 @@
     }
     .btn-copiar:active { background: #d7e6f3; }
 
+
+    /* ===================== BUSCA ===================== */
+    #conteudo-busca { display: none; padding: 16px; max-width: 680px; margin: 0 auto; }
+
+    .busca-modos { display: flex; gap: 8px; margin-bottom: 14px; }
+    .busca-modos button {
+      flex: 1; padding: 11px; border: 1px solid var(--borda); background: #fff;
+      border-radius: 10px; font-size: 13px; font-weight: 600; color: var(--cinza-texto);
+      cursor: pointer; font-family: inherit;
+    }
+    .busca-modos button.ativo {
+      background: var(--azul); color: #fff; border-color: var(--azul);
+    }
+
+    .busca-campo {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 10px;
+    }
+    .busca-campo input {
+      flex: 1; padding: 13px 14px; border: 1px solid var(--borda);
+      border-radius: 12px; font-size: 15px; font-family: inherit;
+    }
+    .busca-campo input:focus { outline: none; border-color: var(--azul-claro); }
+
+    #busca-btn-filtros {
+      background: #fff; border: 1px solid var(--borda); border-radius: 10px;
+      padding: 10px 14px; font-size: 12px; font-weight: 600; color: var(--azul);
+      cursor: pointer; font-family: inherit; margin-bottom: 10px;
+    }
+    #busca-filtros-avancados {
+      display: none; background: #fff; border: 1px solid var(--borda);
+      border-radius: 12px; padding: 14px; margin-bottom: 14px;
+    }
+    .bf-linha { display: flex; gap: 10px; }
+    .bf-linha .campo-bloco { flex: 1; }
+    .bf-limpar {
+      width: 100%; padding: 10px; background: var(--cinza-fundo); border: none;
+      border-radius: 8px; font-size: 13px; color: var(--cinza-texto);
+      cursor: pointer; font-family: inherit; margin-top: 10px;
+    }
+
+    .busca-total {
+      font-size: 12px; color: var(--cinza-texto); margin-bottom: 10px;
+      text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px;
+    }
+
+    .br-item {
+      background: #fff; border: 1px solid var(--borda); border-radius: 12px;
+      padding: 13px; margin-bottom: 8px; cursor: pointer;
+    }
+    .br-item:active { background: #fafbfc; }
+    .br-topo {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 10px; margin-bottom: 6px;
+    }
+    .br-desc { font-size: 14px; color: #1e293b; font-weight: 600; flex: 1; line-height: 1.35; }
+    .br-valor { font-size: 15px; font-weight: 700; white-space: nowrap; }
+    .br-meio {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+    .br-data { font-size: 11px; color: var(--azul-claro); font-weight: 700; }
+    .br-mov {
+      font-size: 10px; color: #94a3b8; background: var(--cinza-fundo);
+      padding: 2px 6px; border-radius: 5px; font-weight: 700;
+    }
+    .br-pago, .br-pend, .br-cod { font-size: 11px; }
+    .br-anexo {
+      font-size: 10px; color: var(--azul-claro); background: #eef4fa;
+      padding: 2px 7px; border-radius: 5px; font-weight: 700;
+    }
+    .br-anexo.vazio { color: #94a3b8; background: var(--cinza-fundo); }
+    .br-mais {
+      width: 100%; padding: 13px; background: #fff; border: 1px solid var(--borda);
+      border-radius: 12px; font-size: 14px; font-weight: 600; color: var(--azul);
+      cursor: pointer; font-family: inherit; margin-top: 6px;
+    }
+
+    /* Detalhe */
+    #modal-detalhe .modal-caixa { max-height: 92vh; }
+    #det-corpo { padding: 20px; overflow-y: auto; }
+    .det-valor { font-size: 30px; font-weight: 800; text-align: center; }
+    .det-desc {
+      font-size: 15px; color: #1e293b; text-align: center; margin-top: 6px;
+      line-height: 1.4; padding-bottom: 16px; border-bottom: 1px solid var(--borda);
+    }
+    .det-linhas { margin: 4px 0 16px; }
+    .det-linha {
+      display: flex; justify-content: space-between; padding: 10px 0;
+      border-bottom: 1px solid #f1f3f4; font-size: 14px; gap: 12px;
+    }
+    .det-linha:last-child { border-bottom: none; }
+    .det-linha span { color: var(--cinza-texto); font-size: 12px; text-transform: uppercase; }
+    .det-linha b { color: #1e293b; text-align: right; }
+
+    .det-codigo {
+      background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px;
+      padding: 14px; margin-bottom: 16px;
+    }
+    .dc-titulo {
+      font-size: 11px; font-weight: 700; color: #92400e;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+    .dc-valor {
+      background: #fff; border: 1px dashed #d97706; border-radius: 8px;
+      padding: 10px; font-family: monospace; font-size: 11px; color: #1e293b;
+      word-break: break-all; line-height: 1.6; margin-bottom: 10px;
+    }
+    .dc-copiar {
+      width: 100%; padding: 11px; background: #d97706; color: #fff; border: none;
+      border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer;
+      font-family: inherit;
+    }
+
+    .det-acoes { display: flex; gap: 8px; margin-bottom: 10px; }
+    .det-btn {
+      flex: 1; padding: 13px 8px; border: none; border-radius: 10px;
+      font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .det-btn.doc { background: var(--azul); color: #fff; }
+    .det-btn.email { background: var(--cinza-fundo); color: var(--azul); }
+    .det-btn.liquidar {
+      width: 100%; background: var(--verde); color: #fff; margin-bottom: 10px;
+    }
+
+    .det-buscando { text-align: center; padding: 26px 20px; }
+    .det-buscando p { font-size: 14px; color: var(--cinza-texto); }
+    .det-buscando small { font-size: 11px; color: #94a3b8; display: block; margin-top: 5px; }
+
+    .det-docs-titulo {
+      font-size: 12px; font-weight: 700; color: var(--cinza-texto);
+      text-transform: uppercase; margin: 16px 0 10px; letter-spacing: 0.5px;
+    }
+    .det-doc {
+      background: var(--cinza-fundo); border-radius: 12px; padding: 13px; margin-bottom: 10px;
+    }
+    .dd-assunto { font-size: 13px; color: #1e293b; font-weight: 600; line-height: 1.4; }
+    .dd-data { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+    .dd-anexo {
+      display: flex; align-items: center; gap: 10px; background: #fff;
+      border-radius: 8px; padding: 9px 11px; margin-top: 8px;
+    }
+    .dda-icone { font-size: 18px; }
+    .dda-info { flex: 1; min-width: 0; }
+    .dda-info b {
+      display: block; font-size: 12px; color: #1e293b;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .dda-info span { display: block; font-size: 10px; color: #94a3b8; }
+    .dda-baixar {
+      background: var(--verde); color: #fff; border: none; border-radius: 7px;
+      padding: 7px 11px; font-size: 14px; cursor: pointer; flex-shrink: 0;
+    }
+    .dda-grande {
+      font-size: 10px; color: #c2410c; background: #fff7ed;
+      padding: 4px 8px; border-radius: 5px; font-weight: 600;
+    }
+    .dd-sem-anexo { font-size: 11px; color: #94a3b8; font-style: italic; margin-top: 8px; }
+    .dd-email {
+      display: block; text-align: center; margin-top: 9px; padding: 9px;
+      background: #fff; border-radius: 8px; font-size: 12px; color: var(--azul);
+      text-decoration: none; font-weight: 600;
+    }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
@@ -1380,6 +1542,9 @@
         <button id="tab-chat" onclick="trocarAba('chat')">
           🧠 IA
         </button>
+        <button id="tab-busca" onclick="trocarAba('busca')">
+          🔍 Buscar
+        </button>
       </div>
     </div>
 
@@ -1454,6 +1619,122 @@
 
     <!-- ============ CONTEÚDO: RELATÓRIOS ============ -->
     <div id="conteudo-rel"></div>
+
+    <!-- ============ CONTEÚDO: BUSCA ============ -->
+    <div id="conteudo-busca">
+      <div class="busca-modos">
+        <button id="busca-modo-lanc" class="ativo" onclick="trocarModoBusca('lancamentos')">
+          📋 Lançamentos
+        </button>
+        <button id="busca-modo-doc" onclick="trocarModoBusca('documentos')">
+          📎 Documentos avulsos
+        </button>
+      </div>
+
+      <!-- Filtros: lançamentos -->
+      <div id="busca-filtros-lanc">
+        <div class="busca-campo">
+          <input type="text" id="bl-texto" placeholder="Buscar por descrição..."
+                 oninput="buscarComAtraso()" />
+        </div>
+
+        <button id="busca-btn-filtros" onclick="alternarFiltrosBusca()">⚙️ Filtros</button>
+
+        <div id="busca-filtros-avancados">
+          <div class="campo-bloco">
+            <label for="bl-valor">Valor exato (R$)</label>
+            <input type="number" id="bl-valor" step="0.01" inputmode="decimal"
+                   placeholder="Ex: 173,10" oninput="buscarComAtraso()" />
+          </div>
+
+          <div class="campo-bloco">
+            <label>Categoria</label>
+            <input type="hidden" id="bl-categoria" />
+            <button type="button" class="btn-categoria"
+                    onclick="abrirSeletorCategoria('bl-categoria'); setTimeout(buscarComAtraso, 800);">
+              <span class="cat-txt vazio-cat" id="bl-categoria-txt">Todas as categorias</span>
+              <span class="cat-lupa">🔍</span>
+            </button>
+          </div>
+
+          <div class="campo-bloco">
+            <label for="bl-metodo">Método</label>
+            <select id="bl-metodo" onchange="buscarComAtraso()">
+              <option value="">Todos</option>
+            </select>
+          </div>
+
+          <div class="bf-linha">
+            <div class="campo-bloco">
+              <label for="bl-mes">Mês</label>
+              <select id="bl-mes" onchange="buscarComAtraso()">
+                <option value="">Todos</option>
+                <option value="0">Janeiro</option><option value="1">Fevereiro</option>
+                <option value="2">Março</option><option value="3">Abril</option>
+                <option value="4">Maio</option><option value="5">Junho</option>
+                <option value="6">Julho</option><option value="7">Agosto</option>
+                <option value="8">Setembro</option><option value="9">Outubro</option>
+                <option value="10">Novembro</option><option value="11">Dezembro</option>
+              </select>
+            </div>
+            <div class="campo-bloco">
+              <label for="bl-ano">Ano</label>
+              <select id="bl-ano" onchange="buscarComAtraso()">
+                <option value="">Todos</option>
+                <option value="2026">2026</option>
+                <option value="2025">2025</option>
+                <option value="2024">2024</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="campo-bloco">
+            <label for="bl-status">Status</label>
+            <select id="bl-status" onchange="buscarComAtraso()">
+              <option value="">Todos</option>
+              <option value="pendente">⏳ Pendentes</option>
+              <option value="pago">✅ Pagos</option>
+            </select>
+          </div>
+
+          <button class="bf-limpar" onclick="limparFiltrosBusca()">Limpar filtros</button>
+        </div>
+      </div>
+
+      <!-- Filtros: documentos -->
+      <div id="busca-filtros-doc" style="display:none;">
+        <div class="busca-campo">
+          <input type="text" id="bd-texto" placeholder="Buscar no assunto do documento..."
+                 oninput="buscarComAtraso()" />
+        </div>
+
+        <div class="bf-linha">
+          <div class="campo-bloco">
+            <label for="bd-mes">Mês</label>
+            <select id="bd-mes" onchange="buscarComAtraso()">
+              <option value="">Todos</option>
+              <option value="0">Janeiro</option><option value="1">Fevereiro</option>
+              <option value="2">Março</option><option value="3">Abril</option>
+              <option value="4">Maio</option><option value="5">Junho</option>
+              <option value="6">Julho</option><option value="7">Agosto</option>
+              <option value="8">Setembro</option><option value="9">Outubro</option>
+              <option value="10">Novembro</option><option value="11">Dezembro</option>
+            </select>
+          </div>
+          <div class="campo-bloco">
+            <label for="bd-ano">Ano</label>
+            <select id="bd-ano" onchange="buscarComAtraso()">
+              <option value="">Todos</option>
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div id="busca-resultados"></div>
+    </div>
 
     <!-- ============ CONTEÚDO: CHAT COM IA ============ -->
     <div id="conteudo-chat">
@@ -1988,6 +2269,21 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+
+  <!-- ============ MODAL: DETALHE DO LANÇAMENTO ============ -->
+  <div class="modal-fundo" id="modal-detalhe">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Detalhes</div>
+          <div class="mt-mov" id="det-mov">MOV-</div>
+        </div>
+        <button class="fechar" onclick="fecharDetalhe()">&times;</button>
+      </div>
+      <div id="det-corpo"></div>
     </div>
   </div>
 

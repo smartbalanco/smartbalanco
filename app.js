@@ -1065,12 +1065,14 @@ function trocarAba(nome) {
   document.getElementById("conteudo-aprov").style.display = (nome === "aprovacoes") ? "block" : "none";
   document.getElementById("conteudo-rel").style.display   = (nome === "relatorios") ? "block" : "none";
   document.getElementById("conteudo-chat").style.display  = (nome === "chat")       ? "flex"  : "none";
+  document.getElementById("conteudo-busca").style.display = (nome === "busca")      ? "block" : "none";
   document.getElementById("nav-mes-wrap").style.display   = (nome === "dashboard")  ? "flex"  : "none";
 
   document.getElementById("tab-dashboard").classList.toggle("ativa", nome === "dashboard");
   document.getElementById("tab-aprovacoes").classList.toggle("ativa", nome === "aprovacoes");
   document.getElementById("tab-relatorios").classList.toggle("ativa", nome === "relatorios");
   document.getElementById("tab-chat").classList.toggle("ativa", nome === "chat");
+  document.getElementById("tab-busca").classList.toggle("ativa", nome === "busca");
 
   // Botão (+) só faz sentido no dashboard
   document.getElementById("btn-nova-despesa").style.display = (nome === "dashboard") ? "flex" : "none";
@@ -1078,6 +1080,7 @@ function trocarAba(nome) {
   if (nome === "aprovacoes") carregarAprovacoes(false);
   if (nome === "relatorios") renderizarTelaRelatorios();
   if (nome === "chat") abrirChat();
+  if (nome === "busca") abrirBusca();
 }
 
 // ---------- Carrega a lista ----------
@@ -3863,5 +3866,447 @@ async function copiarCodigo(botao) {
       mostrarToast("❌ Não foi possível copiar.");
     }
     document.body.removeChild(tmp);
+  }
+}
+
+// ============================================================================
+// ===================== BUSCA ================================================
+// ============================================================================
+
+let modoBusca = "lancamentos";     // "lancamentos" ou "documentos"
+let resultadosBusca = [];
+let paginaBusca = 0;
+let temMaisBusca = false;
+let buscaTimer = null;
+let itemDetalhe = null;
+
+async function abrirBusca() {
+  if (!listasValidas) {
+    try {
+      const rl = await chamarServidor("listasValidas");
+      if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
+    } catch (e) {
+      listasValidas = { categorias: [], metodos: [] };
+    }
+  }
+
+  // Preenche o select de métodos
+  const sel = document.getElementById("bl-metodo");
+  if (sel && sel.options.length <= 1 && listasValidas.metodos) {
+    listasValidas.metodos.forEach(function (m) {
+      const opt = document.createElement("option");
+      opt.value = m;
+      opt.textContent = m;
+      sel.appendChild(opt);
+    });
+  }
+
+  renderizarTelaBusca();
+}
+
+function renderizarTelaBusca() {
+  document.getElementById("busca-modo-lanc").classList.toggle("ativo", modoBusca === "lancamentos");
+  document.getElementById("busca-modo-doc").classList.toggle("ativo", modoBusca === "documentos");
+
+  document.getElementById("busca-filtros-lanc").style.display =
+    modoBusca === "lancamentos" ? "block" : "none";
+  document.getElementById("busca-filtros-doc").style.display =
+    modoBusca === "documentos" ? "block" : "none";
+
+  document.getElementById("busca-resultados").innerHTML =
+    '<p class="vazio">' +
+      (modoBusca === "lancamentos"
+        ? "Digite algo ou use os filtros para buscar lançamentos."
+        : "Busque documentos arquivados sem vínculo com lançamento.") +
+    '</p>';
+
+  resultadosBusca = [];
+  paginaBusca = 0;
+}
+
+function trocarModoBusca(modo) {
+  modoBusca = modo;
+  renderizarTelaBusca();
+}
+
+// ---------- Filtros ----------
+function alternarFiltrosBusca() {
+  const el = document.getElementById("busca-filtros-avancados");
+  const aberto = el.style.display === "block";
+  el.style.display = aberto ? "none" : "block";
+  document.getElementById("busca-btn-filtros").textContent =
+    aberto ? "⚙️ Filtros" : "⚙️ Ocultar filtros";
+}
+
+function limparFiltrosBusca() {
+  document.getElementById("bl-texto").value = "";
+  document.getElementById("bl-valor").value = "";
+  definirCategoriaCampo("bl-categoria", "");
+  document.getElementById("bl-metodo").value = "";
+  document.getElementById("bl-mes").value = "";
+  document.getElementById("bl-ano").value = "";
+  document.getElementById("bl-status").value = "";
+  renderizarTelaBusca();
+}
+
+// ---------- Busca com atraso (evita chamar a cada tecla) ----------
+function buscarComAtraso() {
+  clearTimeout(buscaTimer);
+  buscaTimer = setTimeout(function () { executarBusca(true); }, 500);
+}
+
+// ---------- Executa a busca ----------
+async function executarBusca(novaBusca) {
+  if (novaBusca) {
+    paginaBusca = 0;
+    resultadosBusca = [];
+  }
+
+  const wrap = document.getElementById("busca-resultados");
+
+  if (novaBusca) {
+    wrap.innerHTML = '<div style="text-align:center; padding:30px;"><div class="spinner" style="margin:0 auto;"></div></div>';
+  }
+
+  try {
+    if (modoBusca === "lancamentos") {
+      const params = {
+        texto: document.getElementById("bl-texto").value.trim(),
+        valor: document.getElementById("bl-valor").value.trim(),
+        categoria: document.getElementById("bl-categoria").value,
+        metodo: document.getElementById("bl-metodo").value,
+        mes: document.getElementById("bl-mes").value,
+        ano: document.getElementById("bl-ano").value,
+        status: document.getElementById("bl-status").value,
+        pagina: paginaBusca
+      };
+
+      const r = await chamarServidor("buscarLancamentos", params);
+
+      if (r.ok) {
+        resultadosBusca = resultadosBusca.concat(r.itens || []);
+        temMaisBusca = r.temMais;
+        renderizarResultadosLancamentos(r.total);
+      } else {
+        wrap.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro.") + '</p>';
+      }
+
+    } else {
+      // Busca de documentos avulsos
+      const params = {
+        texto: document.getElementById("bd-texto").value.trim(),
+        mes: document.getElementById("bd-mes").value,
+        ano: document.getElementById("bd-ano").value,
+        anexos: "false"
+      };
+
+      const r = await chamarServidor("buscarDocumentosLivre", params);
+
+      if (r.ok) {
+        renderizarResultadosDocumentos(r.documentos, r.total);
+      } else {
+        wrap.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro.") + '</p>';
+      }
+    }
+  } catch (e) {
+    wrap.innerHTML = '<p class="vazio">⚠️ Sem conexão.</p>';
+  }
+}
+
+// ---------- Resultados: lançamentos ----------
+function renderizarResultadosLancamentos(total) {
+  const wrap = document.getElementById("busca-resultados");
+
+  if (resultadosBusca.length === 0) {
+    wrap.innerHTML = '<p class="vazio">Nenhum lançamento encontrado.</p>';
+    return;
+  }
+
+  let html = '<div class="busca-total">' + total + (total === 1 ? ' resultado' : ' resultados') + '</div>';
+
+  resultadosBusca.forEach(function (it, idx) {
+    const cartaoHtml = it.ehCartao
+      ? '<span class="ex-cartao">💳 ' + escaparHtml(it.cartao) + '</span>' : '';
+    const parcHtml = it.parcela
+      ? '<span class="ex-parc">' + escaparHtml(it.parcela) + '</span>' : '';
+    const codHtml = it.codigoPagamento
+      ? '<span class="br-cod">📋</span>' : '';
+    const statusHtml = it.tipo === "despesa"
+      ? (it.pago ? '<span class="br-pago">✅</span>' : '<span class="br-pend">⏳</span>')
+      : '';
+
+    html +=
+      '<div class="br-item" onclick="abrirDetalheBusca(' + idx + ')">' +
+        '<div class="br-topo">' +
+          '<span class="br-desc">' + escaparHtml(it.descricao) + '</span>' +
+          '<span class="br-valor ' + (it.tipo === "receita" ? "verde" : "vermelho") + '">' +
+            (it.tipo === "receita" ? "+" : "−") + formatarMoeda(it.valor).replace("R$ ", "") +
+          '</span>' +
+        '</div>' +
+        '<div class="br-meio">' +
+          '<span class="br-data">' + escaparHtml(it.vencimento) + '</span>' +
+          '<span class="br-mov">MOV-' + it.numMov + '</span>' +
+          statusHtml + codHtml + cartaoHtml + parcHtml +
+        '</div>' +
+      '</div>';
+  });
+
+  if (temMaisBusca) {
+    html += '<button class="br-mais" onclick="carregarMaisBusca()">Carregar mais</button>';
+  }
+
+  wrap.innerHTML = html;
+}
+
+async function carregarMaisBusca() {
+  paginaBusca++;
+  await executarBusca(false);
+}
+
+// ---------- Resultados: documentos avulsos ----------
+function renderizarResultadosDocumentos(docs, total) {
+  const wrap = document.getElementById("busca-resultados");
+
+  if (!docs || docs.length === 0) {
+    wrap.innerHTML = '<p class="vazio">Nenhum documento avulso encontrado.</p>';
+    return;
+  }
+
+  let html = '<div class="busca-total">' + total + (total === 1 ? ' documento' : ' documentos') + '</div>';
+
+  docs.forEach(function (d, idx) {
+    const qtdAnexos = d.anexos ? d.anexos.length : 0;
+    html +=
+      '<div class="br-item" onclick="abrirDocumentoAvulso(' + idx + ')">' +
+        '<div class="br-topo">' +
+          '<span class="br-desc">📎 ' + escaparHtml(d.assuntoLimpo) + '</span>' +
+        '</div>' +
+        '<div class="br-meio">' +
+          '<span class="br-data">' + escaparHtml(d.data) + '</span>' +
+          (qtdAnexos > 0
+            ? '<span class="br-anexo">' + qtdAnexos + (qtdAnexos === 1 ? ' anexo' : ' anexos') + '</span>'
+            : '<span class="br-anexo vazio">sem anexo</span>') +
+        '</div>' +
+      '</div>';
+  });
+
+  wrap.innerHTML = html;
+  documentosAvulsos = docs;
+}
+
+let documentosAvulsos = [];
+
+// ============================================================================
+// DETALHE DO LANÇAMENTO
+// ============================================================================
+function abrirDetalheBusca(idx) {
+  const it = resultadosBusca[idx];
+  if (!it) return;
+  itemDetalhe = it;
+
+  const modal = document.getElementById("modal-detalhe");
+  modal.style.display = "flex";
+
+  document.getElementById("det-mov").textContent = "MOV-" + it.numMov;
+
+  const cartaoHtml = it.ehCartao ? ' <span class="ex-cartao">💳 ' + escaparHtml(it.cartao) + '</span>' : '';
+
+  document.getElementById("det-corpo").innerHTML =
+    '<div class="det-valor ' + (it.tipo === "receita" ? "verde" : "vermelho") + '">' +
+      formatarMoeda(it.valor) +
+    '</div>' +
+    '<div class="det-desc">' + escaparHtml(it.descricao) + cartaoHtml + '</div>' +
+
+    '<div class="det-linhas">' +
+      '<div class="det-linha"><span>Vencimento</span><b>' + escaparHtml(it.vencimento) + '</b></div>' +
+      '<div class="det-linha"><span>Data da compra</span><b>' + escaparHtml(it.dataCompra) + '</b></div>' +
+      (it.parcela ? '<div class="det-linha"><span>Parcela</span><b>' + escaparHtml(it.parcela) + '</b></div>' : '') +
+      '<div class="det-linha"><span>Método</span><b>' + escaparHtml(it.metodo) + '</b></div>' +
+      '<div class="det-linha"><span>Categoria</span><b>' + escaparHtml(it.categoria) + '</b></div>' +
+      '<div class="det-linha"><span>Status</span><b class="' + (it.pago ? "verde" : "laranja") + '">' +
+        (it.pago ? "✅ Pago" + (it.dataPagamento ? " em " + escaparHtml(it.dataPagamento) : "") : "⏳ Pendente") +
+      '</b></div>' +
+    '</div>' +
+
+    (it.codigoPagamento
+      ? '<div class="det-codigo">' +
+          '<div class="dc-titulo">🧾 Código de pagamento</div>' +
+          '<div class="dc-valor">' + escaparHtml(it.codigoPagamento) + '</div>' +
+          '<button class="dc-copiar" data-codigo="' + escaparHtml(it.codigoPagamento) + '" ' +
+                  'onclick="copiarCodigo(this)">📋 Copiar código</button>' +
+        '</div>'
+      : '') +
+
+    '<div class="det-acoes">' +
+      '<button class="det-btn doc" onclick="buscarDocsDoMov(' + it.numMov + ', true)">' +
+        '📎 Buscar documentos' +
+      '</button>' +
+      '<button class="det-btn email" onclick="buscarDocsDoMov(' + it.numMov + ', false)">' +
+        '✉️ Ver e-mails' +
+      '</button>' +
+    '</div>' +
+
+    (!it.pago && it.tipo === "despesa"
+      ? '<button class="det-btn liquidar" onclick="fecharDetalhe(); abrirLiquidacao(' + it.numMov + ');">' +
+          '✅ Liquidar esta despesa' +
+        '</button>'
+      : '') +
+
+    '<div id="det-documentos"></div>';
+}
+
+function fecharDetalhe() {
+  document.getElementById("modal-detalhe").style.display = "none";
+  itemDetalhe = null;
+}
+
+// ---------- Busca os documentos daquele MOV ----------
+async function buscarDocsDoMov(numMov, comAnexos) {
+  const wrap = document.getElementById("det-documentos");
+  wrap.innerHTML =
+    '<div class="det-buscando">' +
+      '<div class="spinner" style="margin:0 auto 12px;"></div>' +
+      '<p>' + (comAnexos ? "Buscando documentos no e-mail..." : "Buscando e-mails...") + '</p>' +
+      (comAnexos ? '<small>Pode demorar alguns segundos</small>' : '') +
+    '</div>';
+
+  try {
+    const r = await chamarServidor("buscarDocumentosPorMov", {
+      numMov: numMov,
+      anexos: comAnexos ? "true" : "false"
+    });
+
+    if (!r.ok) {
+      wrap.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro.") + '</p>';
+      return;
+    }
+
+    if (!r.documentos || r.documentos.length === 0) {
+      wrap.innerHTML = '<p class="vazio">📭 Nenhum documento encontrado para MOV-' + numMov + '.</p>';
+      return;
+    }
+
+    renderizarDocumentosEncontrados(r.documentos, comAnexos, wrap);
+
+  } catch (e) {
+    wrap.innerHTML = '<p class="vazio">⚠️ Erro ao buscar. Tente novamente.</p>';
+  }
+}
+
+function renderizarDocumentosEncontrados(docs, comAnexos, wrap) {
+  let html = '<div class="det-docs-titulo">📎 ' + docs.length +
+             (docs.length === 1 ? ' documento encontrado' : ' documentos encontrados') + '</div>';
+
+  docs.forEach(function (d, i) {
+    html += '<div class="det-doc">';
+    html += '<div class="dd-assunto">' + escaparHtml(d.assuntoLimpo) + '</div>';
+    html += '<div class="dd-data">' + escaparHtml(d.data) + '</div>';
+
+    if (d.anexos && d.anexos.length > 0) {
+      d.anexos.forEach(function (a, j) {
+        html += '<div class="dd-anexo">';
+        html += '<span class="dda-icone">' + iconeArquivo(a.tipo) + '</span>';
+        html += '<span class="dda-info">' +
+                  '<b>' + escaparHtml(a.nome) + '</b>' +
+                  '<span>' + escaparHtml(a.tamanhoTxt) + '</span>' +
+                '</span>';
+
+        if (a.muitoGrande) {
+          html += '<span class="dda-grande">muito grande</span>';
+        } else if (a.conteudo) {
+          html += '<button class="dda-baixar" onclick="baixarAnexo(' + i + ',' + j + ')">⬇️</button>';
+        }
+        html += '</div>';
+      });
+    } else {
+      html += '<div class="dd-sem-anexo">Sem anexos neste e-mail.</div>';
+    }
+
+    html += '<a class="dd-email" href="' + escaparHtml(d.link) + '" target="_blank">✉️ Abrir e-mail no Gmail</a>';
+    html += '</div>';
+  });
+
+  wrap.innerHTML = html;
+  documentosEncontrados = docs;
+}
+
+let documentosEncontrados = [];
+
+function iconeArquivo(tipo) {
+  const t = (tipo || "").toLowerCase();
+  if (t.indexOf("pdf") !== -1) return "📄";
+  if (t.indexOf("image") !== -1) return "🖼️";
+  return "📎";
+}
+
+// ---------- Baixar o anexo ----------
+function baixarAnexo(iDoc, iAnexo) {
+  try {
+    const doc = documentosEncontrados[iDoc];
+    if (!doc) return;
+    const anexo = doc.anexos[iAnexo];
+    if (!anexo || !anexo.conteudo) return;
+
+    // Converte base64 em arquivo e dispara o download
+    const bin = atob(anexo.conteudo);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+    const blob = new Blob([bytes], { type: anexo.tipo || "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = anexo.nome || "documento";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+
+    mostrarToast("⬇️ Baixando " + anexo.nome);
+
+  } catch (e) {
+    mostrarToast("❌ Não foi possível baixar.");
+  }
+}
+
+// ---------- Documento avulso ----------
+async function abrirDocumentoAvulso(idx) {
+  const d = documentosAvulsos[idx];
+  if (!d) return;
+
+  const modal = document.getElementById("modal-detalhe");
+  modal.style.display = "flex";
+  document.getElementById("det-mov").textContent = "Documento";
+
+  document.getElementById("det-corpo").innerHTML =
+    '<div class="det-desc">📎 ' + escaparHtml(d.assuntoLimpo) + '</div>' +
+    '<div class="det-linhas">' +
+      '<div class="det-linha"><span>Arquivado em</span><b>' + escaparHtml(d.data) + '</b></div>' +
+    '</div>' +
+    '<div class="det-buscando">' +
+      '<div class="spinner" style="margin:0 auto 12px;"></div>' +
+      '<p>Buscando anexos...</p>' +
+    '</div>' +
+    '<div id="det-documentos"></div>';
+
+  // Busca de novo, agora com os anexos
+  try {
+    const r = await chamarServidor("buscarDocumentosLivre", {
+      texto: d.assuntoLimpo.substring(0, 40),
+      anexos: "true"
+    });
+
+    const wrap = document.getElementById("det-documentos");
+    document.querySelector("#det-corpo .det-buscando").style.display = "none";
+
+    if (r.ok && r.documentos && r.documentos.length > 0) {
+      renderizarDocumentosEncontrados(r.documentos, true, wrap);
+    } else {
+      wrap.innerHTML = '<p class="vazio">Nenhum anexo encontrado.</p>';
+    }
+  } catch (e) {
+    document.getElementById("det-documentos").innerHTML =
+      '<p class="vazio">⚠️ Erro ao buscar anexos.</p>';
   }
 }
