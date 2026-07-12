@@ -3361,12 +3361,16 @@ async function enviarPergunta() {
     }
   } catch (e) {
     mostrarDigitando(false);
+
+    // Mostra o erro REAL, não uma mensagem genérica
+    let detalhe = e && e.message ? e.message : String(e);
     historicoChat.push({
       role: "assistant",
-      content: "⚠️ Sem conexão com o servidor.",
+      content: "⚠️ Falha ao chamar o servidor.\n\nDetalhe técnico: " + detalhe,
       modelo: "erro"
     });
     renderizarChat();
+    console.error("Erro no chat:", e);
   } finally {
     aguardandoIA = false;
     document.getElementById("chat-enviar").disabled = false;
