@@ -3333,7 +3333,9 @@ async function enviarPergunta() {
   });
 
   try {
-    const r = await chamarServidor("perguntarIA", {
+    // 👉 POST em vez de GET: o histórico da conversa cresce a cada troca e
+    // estoura o limite de tamanho da URL a partir da 2ª pergunta.
+    const r = await chamarServidorPost("perguntarIA", {
       pergunta: pergunta,
       motor: motorIA,
       historico: JSON.stringify(histParaServidor)
