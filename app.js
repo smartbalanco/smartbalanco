@@ -1067,15 +1067,27 @@ function trocarAba(nome) {
   document.getElementById("conteudo-chat").style.display  = (nome === "chat")       ? "flex"  : "none";
   document.getElementById("conteudo-busca").style.display = (nome === "busca")      ? "block" : "none";
   document.getElementById("nav-mes-wrap").style.display   = (nome === "dashboard")  ? "flex"  : "none";
+  document.getElementById("abas-principais").style.display =
+    (nome === "chat" || nome === "busca") ? "none" : "flex";
 
   document.getElementById("tab-dashboard").classList.toggle("ativa", nome === "dashboard");
   document.getElementById("tab-aprovacoes").classList.toggle("ativa", nome === "aprovacoes");
   document.getElementById("tab-relatorios").classList.toggle("ativa", nome === "relatorios");
-  document.getElementById("tab-chat").classList.toggle("ativa", nome === "chat");
-  document.getElementById("tab-busca").classList.toggle("ativa", nome === "busca");
 
-  // Botão (+) só faz sentido no dashboard
-  document.getElementById("btn-nova-despesa").style.display = (nome === "dashboard") ? "flex" : "none";
+  // Botões flutuantes: só no dashboard
+  const noDash = (nome === "dashboard");
+  document.getElementById("btn-nova-despesa").style.display = noDash ? "flex" : "none";
+  document.getElementById("btn-chat-ia").style.display = noDash ? "flex" : "none";
+
+  // Botão voltar (no chat e na busca)
+  document.getElementById("btn-voltar").style.display =
+    (nome === "chat" || nome === "busca") ? "inline-block" : "none";
+
+  // Título do topo
+  const titulo = document.getElementById("titulo-topo");
+  if (nome === "chat") titulo.textContent = "🧠 Assistente IA";
+  else if (nome === "busca") titulo.textContent = "🔍 Buscar";
+  else titulo.textContent = "Smartbalanço";
 
   if (nome === "aprovacoes") carregarAprovacoes(false);
   if (nome === "relatorios") renderizarTelaRelatorios();
@@ -1562,6 +1574,12 @@ const RELATORIOS = {
     icone: "🧠",
     desc: "Quanto você vai gastar no mês que vem",
     periodo: "janela"
+  },
+  gastosCategoria: {
+    nome: "Gastos por Categoria",
+    icone: "🗂️",
+    desc: "Todos os gastos de categorias num período",
+    periodo: "intervaloCategorias"
   }
 };
 
@@ -1619,9 +1637,17 @@ function renderizarTelaRelatorios() {
 // ---------- Seletor de período ----------
 let relTipoEscolhido = null;
 
-function abrirPeriodo(tipo) {
+async function abrirPeriodo(tipo) {
   relTipoEscolhido = tipo;
   const r = RELATORIOS[tipo];
+
+  // Se o relatório usa categorias, garante que as listas estão carregadas
+  if (r.periodo === "intervaloCategorias" && !listasValidas) {
+    try {
+      const rl = await chamarServidor("listasValidas");
+      if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
+    } catch (e) { listasValidas = { categorias: [], metodos: [] }; }
+  }
 
   document.getElementById("modal-periodo").style.display = "flex";
   document.getElementById("mp-titulo").textContent = r.icone + " " + r.nome;
@@ -1691,6 +1717,30 @@ function abrirPeriodo(tipo) {
         '</select>' +
       '</div>';
 
+  } else if (r.periodo === "intervaloCategorias") {
+    catsRelatorio = [];
+    const hojeISO = dataHojeISO();
+    const inicioAno = anoAtual + "-01-01";
+
+    corpo.innerHTML =
+      '<div class="linha-dupla">' +
+        '<div class="campo-bloco">' +
+          '<label for="mp-inicio">De</label>' +
+          '<input type="date" id="mp-inicio" value="' + inicioAno + '" />' +
+        '</div>' +
+        '<div class="campo-bloco">' +
+          '<label for="mp-fim">Até</label>' +
+          '<input type="date" id="mp-fim" value="' + hojeISO + '" />' +
+        '</div>' +
+      '</div>' +
+      '<div class="campo-bloco">' +
+        '<label>Categorias</label>' +
+        '<button type="button" class="btn-categoria" onclick="abrirMultiCategorias(\'relatorio\')">' +
+          '<span class="cat-txt vazio-cat" id="mp-categorias-txt">Todas as categorias</span>' +
+          '<span class="cat-lupa">🔍</span>' +
+        '</button>' +
+      '</div>';
+
   } else if (r.periodo === "doisMeses") {
     let mesB = mesAtual - 1, anoB = anoAtual;
     if (mesB < 0) { mesB = 11; anoB--; }
@@ -1757,6 +1807,10 @@ async function gerarRelatorioAgora() {
     params.ano = document.getElementById("mp-ano").value;
   } else if (r.periodo === "meses" || r.periodo === "janela") {
     params.meses = document.getElementById("mp-meses").value;
+  } else if (r.periodo === "intervaloCategorias") {
+    params.dataInicio = document.getElementById("mp-inicio").value;
+    params.dataFim = document.getElementById("mp-fim").value;
+    params.categorias = catsRelatorio.join("|");
   } else if (r.periodo === "nenhum") {
     // sem parâmetros
   } else if (r.periodo === "doisMeses") {
@@ -1804,6 +1858,7 @@ function renderizarRelatorio(res, ehSalvo) {
   else if (res.tipo === "projecao")       corpo = htmlProjecao(res);
   else if (res.tipo === "extrato")        corpo = htmlExtrato(res);
   else if (res.tipo === "previsao")       corpo = htmlPrevisao(res);
+  else if (res.tipo === "gastosCategoria") corpo = htmlGastosCategoria(res);
 
   const jaSalvo = ehSalvo || relatorioJaSalvo(res);
 
@@ -2208,6 +2263,18 @@ function relatorioParaTexto(r) {
       if (p.previsto > 0) {
         t += "  " + p.categoria + ": " + formatarMoeda(p.previsto) + "\n";
       }
+    });
+
+  } else if (r.tipo === "gastosCategoria") {
+    t += "Total: " + formatarMoeda(r.resumo.total) + "\n";
+    t += "Média mensal: " + formatarMoeda(r.resumo.mediaMensal) + "\n";
+    t += r.resumo.quantidade + " lançamentos\n\n";
+    r.grupos.forEach(function (g) {
+      t += g.categoria + ": " + formatarMoeda(g.total) + " (" + g.quantidade + ")\n";
+      g.itens.forEach(function (it) {
+        t += "   " + it.data + " " + it.descricao + " - " + formatarMoeda(it.valor) + "\n";
+      });
+      t += "\n";
     });
 
   } else if (r.tipo === "extrato") {
@@ -3874,11 +3941,13 @@ async function copiarCodigo(botao) {
 // ============================================================================
 
 let modoBusca = "lancamentos";     // "lancamentos" ou "documentos"
+let categoriasSelecionadas = [];   // filtro de múltiplas categorias
 let resultadosBusca = [];
 let paginaBusca = 0;
 let temMaisBusca = false;
 let buscaTimer = null;
 let itemDetalhe = null;
+let somaBusca = { despesas: 0, receitas: 0, saldo: 0 };
 
 async function abrirBusca() {
   if (!listasValidas) {
@@ -3940,12 +4009,14 @@ function alternarFiltrosBusca() {
 
 function limparFiltrosBusca() {
   document.getElementById("bl-texto").value = "";
+  document.getElementById("bl-nummov").value = "";
   document.getElementById("bl-valor").value = "";
-  definirCategoriaCampo("bl-categoria", "");
   document.getElementById("bl-metodo").value = "";
   document.getElementById("bl-mes").value = "";
   document.getElementById("bl-ano").value = "";
   document.getElementById("bl-status").value = "";
+  categoriasSelecionadas = [];
+  atualizarBotaoCategorias();
   renderizarTelaBusca();
 }
 
@@ -3972,8 +4043,9 @@ async function executarBusca(novaBusca) {
     if (modoBusca === "lancamentos") {
       const params = {
         texto: document.getElementById("bl-texto").value.trim(),
+        numMov: document.getElementById("bl-nummov").value.trim(),
         valor: document.getElementById("bl-valor").value.trim(),
-        categoria: document.getElementById("bl-categoria").value,
+        categorias: categoriasSelecionadas.join("|"),
         metodo: document.getElementById("bl-metodo").value,
         mes: document.getElementById("bl-mes").value,
         ano: document.getElementById("bl-ano").value,
@@ -3986,6 +4058,7 @@ async function executarBusca(novaBusca) {
       if (r.ok) {
         resultadosBusca = resultadosBusca.concat(r.itens || []);
         temMaisBusca = r.temMais;
+        somaBusca = r.soma || { despesas: 0, receitas: 0, saldo: 0 };
         renderizarResultadosLancamentos(r.total);
       } else {
         wrap.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro.") + '</p>';
@@ -4022,7 +4095,25 @@ function renderizarResultadosLancamentos(total) {
     return;
   }
 
-  let html = '<div class="busca-total">' + total + (total === 1 ? ' resultado' : ' resultados') + '</div>';
+  // Somador
+  let somaHtml = '';
+  if (somaBusca.despesas > 0 || somaBusca.receitas > 0) {
+    somaHtml = '<div class="busca-soma">';
+    if (somaBusca.despesas > 0) {
+      somaHtml += '<div><span>Despesas</span><b class="vermelho">' + formatarMoeda(somaBusca.despesas) + '</b></div>';
+    }
+    if (somaBusca.receitas > 0) {
+      somaHtml += '<div><span>Receitas</span><b class="verde">' + formatarMoeda(somaBusca.receitas) + '</b></div>';
+    }
+    if (somaBusca.despesas > 0 && somaBusca.receitas > 0) {
+      somaHtml += '<div><span>Saldo</span><b class="' + (somaBusca.saldo >= 0 ? "verde" : "vermelho") + '">' +
+                  formatarMoeda(somaBusca.saldo) + '</b></div>';
+    }
+    somaHtml += '</div>';
+  }
+
+  let html = somaHtml +
+    '<div class="busca-total">' + total + (total === 1 ? ' resultado' : ' resultados') + '</div>';
 
   resultadosBusca.forEach(function (it, idx) {
     const cartaoHtml = it.ehCartao
@@ -4309,4 +4400,230 @@ async function abrirDocumentoAvulso(idx) {
     document.getElementById("det-documentos").innerHTML =
       '<p class="vazio">⚠️ Erro ao buscar anexos.</p>';
   }
+}
+
+
+function voltarAoDashboard() {
+  trocarAba("dashboard");
+}
+
+
+// ============================================================================
+// SELETOR DE MÚLTIPLAS CATEGORIAS
+// ============================================================================
+let destinoMultiCat = null;   // "busca" ou "relatorio"
+
+function abrirMultiCategorias(destino) {
+  destinoMultiCat = destino;
+  const modal = document.getElementById("modal-multicat");
+  modal.style.display = "flex";
+
+  document.getElementById("mc-busca").value = "";
+  renderizarMultiCategorias("");
+
+  setTimeout(function () { document.getElementById("mc-busca").focus(); }, 120);
+}
+
+function fecharMultiCategorias() {
+  document.getElementById("modal-multicat").style.display = "none";
+}
+
+function filtrarMultiCategorias() {
+  renderizarMultiCategorias(document.getElementById("mc-busca").value);
+}
+
+function renderizarMultiCategorias(termo) {
+  const lista = document.getElementById("mc-lista");
+  lista.innerHTML = "";
+
+  const todas = (listasValidas && listasValidas.categorias) ? listasValidas.categorias : [];
+  const t = normalizarBusca(termo).trim();
+
+  const filtradas = t === "" ? todas
+    : todas.filter(function (c) { return normalizarBusca(c).indexOf(t) !== -1; });
+
+  const selecionadas = (destinoMultiCat === "relatorio") ? catsRelatorio : categoriasSelecionadas;
+
+  if (filtradas.length === 0) {
+    lista.innerHTML = '<div class="sc-vazio">Nenhuma categoria encontrada.</div>';
+    return;
+  }
+
+  filtradas.forEach(function (c) {
+    const marcada = selecionadas.indexOf(c) !== -1;
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "mc-item" + (marcada ? " marcada" : "");
+
+    const m = c.match(/^([\d.]+)\s*\.?\s*(.*)$/);
+    const cod = (m && m[1]) ? m[1] : "";
+    const nome = (m && m[2]) ? m[2] : c;
+
+    item.innerHTML =
+      '<span class="mc-check">' + (marcada ? "☑️" : "⬜") + '</span>' +
+      (cod ? '<span class="sc-cod">' + escaparHtml(cod) + '</span>' : '') +
+      '<span class="sc-nome">' + escaparHtml(nome) + '</span>';
+
+    item.onclick = function () { alternarCategoria(c); };
+    lista.appendChild(item);
+  });
+
+  atualizarContadorMultiCat();
+}
+
+function alternarCategoria(cat) {
+  const lista = (destinoMultiCat === "relatorio") ? catsRelatorio : categoriasSelecionadas;
+  const idx = lista.indexOf(cat);
+  if (idx === -1) lista.push(cat);
+  else lista.splice(idx, 1);
+
+  renderizarMultiCategorias(document.getElementById("mc-busca").value);
+}
+
+function atualizarContadorMultiCat() {
+  const lista = (destinoMultiCat === "relatorio") ? catsRelatorio : categoriasSelecionadas;
+  const el = document.getElementById("mc-contador");
+  if (!el) return;
+  el.textContent = lista.length === 0 ? "Nenhuma selecionada (= todas)"
+    : lista.length + (lista.length === 1 ? " categoria" : " categorias");
+}
+
+function limparMultiCategorias() {
+  if (destinoMultiCat === "relatorio") catsRelatorio = [];
+  else categoriasSelecionadas = [];
+  renderizarMultiCategorias(document.getElementById("mc-busca").value);
+}
+
+function confirmarMultiCategorias() {
+  fecharMultiCategorias();
+
+  if (destinoMultiCat === "relatorio") {
+    atualizarBotaoCategoriasRelatorio();
+  } else {
+    atualizarBotaoCategorias();
+    buscarComAtraso();
+  }
+}
+
+function atualizarBotaoCategorias() {
+  const el = document.getElementById("bl-categorias-txt");
+  if (!el) return;
+  if (categoriasSelecionadas.length === 0) {
+    el.textContent = "Todas as categorias";
+    el.classList.add("vazio-cat");
+  } else if (categoriasSelecionadas.length === 1) {
+    el.textContent = categoriasSelecionadas[0];
+    el.classList.remove("vazio-cat");
+  } else {
+    el.textContent = categoriasSelecionadas.length + " categorias selecionadas";
+    el.classList.remove("vazio-cat");
+  }
+}
+
+// ============================================================================
+// RELATÓRIO: GASTOS POR CATEGORIA
+// ============================================================================
+let catsRelatorio = [];   // categorias selecionadas para o relatório
+
+function atualizarBotaoCategoriasRelatorio() {
+  const el = document.getElementById("mp-categorias-txt");
+  if (!el) return;
+  if (catsRelatorio.length === 0) {
+    el.textContent = "Todas as categorias";
+    el.classList.add("vazio-cat");
+  } else if (catsRelatorio.length === 1) {
+    el.textContent = catsRelatorio[0];
+    el.classList.remove("vazio-cat");
+  } else {
+    el.textContent = catsRelatorio.length + " categorias selecionadas";
+    el.classList.remove("vazio-cat");
+  }
+}
+
+function htmlGastosCategoria(r) {
+  const res = r.resumo;
+
+  if (!r.grupos || r.grupos.length === 0) {
+    return '<div class="card"><p class="vazio">Nenhum gasto encontrado neste período.</p></div>';
+  }
+
+  let grupos = "";
+  r.grupos.forEach(function (g, idx) {
+    let itens = "";
+    g.itens.forEach(function (it) {
+      const cartao = iconeCartao(it.metodo);
+      const parc = it.parcela ? '<span class="ex-parc">' + escaparHtml(it.parcela) + '</span>' : '';
+      const pend = !it.pago ? '<span class="gc-pend">⏳</span>' : '';
+
+      itens +=
+        '<div class="gc-item">' +
+          '<div class="gc-i-esq">' +
+            '<div class="gc-i-desc">' + escaparHtml(it.descricao) + pend + '</div>' +
+            '<div class="gc-i-meta">' +
+              '<span class="gc-i-data">' + escaparHtml(it.data) + '</span>' +
+              '<span class="gc-i-mov">MOV-' + it.numMov + '</span>' +
+              '<span class="gc-i-met">' + escaparHtml(it.metodo) + '</span>' +
+              cartao + parc +
+            '</div>' +
+          '</div>' +
+          '<div class="gc-i-valor">' + formatarMoeda(it.valor) + '</div>' +
+        '</div>';
+    });
+
+    grupos +=
+      '<div class="gc-grupo">' +
+        '<div class="gc-g-topo" onclick="alternarGrupoGC(' + idx + ')">' +
+          '<div class="gc-g-esq">' +
+            '<div class="gc-g-nome">' + escaparHtml(g.categoria) + '</div>' +
+            '<div class="gc-g-qtd">' + g.quantidade +
+              (g.quantidade === 1 ? ' lançamento' : ' lançamentos') +
+              ' · ' + g.percentual.toFixed(1) + '% do total' +
+            '</div>' +
+          '</div>' +
+          '<div class="gc-g-dir">' +
+            '<b>' + formatarMoeda(g.total) + '</b>' +
+            '<span class="gc-seta" id="gc-seta-' + idx + '">▾</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gc-g-barra">' +
+          '<div class="gc-g-preench" style="width:' + g.percentual + '%"></div>' +
+        '</div>' +
+        '<div class="gc-itens" id="gc-itens-' + idx + '">' + itens + '</div>' +
+      '</div>';
+  });
+
+  return (
+    '<div class="card">' +
+      '<div class="gc-resumo">' +
+        '<div class="gcr-box">' +
+          '<span>Total gasto</span>' +
+          '<b class="vermelho">' + formatarMoeda(res.total) + '</b>' +
+        '</div>' +
+        '<div class="gcr-box">' +
+          '<span>Média mensal</span>' +
+          '<b>' + formatarMoeda(res.mediaMensal) + '</b>' +
+        '</div>' +
+      '</div>' +
+      '<div class="rel-nota">' +
+        res.quantidade + ' lançamentos em ' + res.categorias +
+        (res.categorias === 1 ? ' categoria' : ' categorias') +
+        ' · período de ' + res.meses + (res.meses === 1 ? ' mês' : ' meses') +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card">' +
+      '<h2>Detalhamento</h2>' +
+      '<p class="pv-intro">Toque numa categoria para ver ou ocultar os lançamentos.</p>' +
+      grupos +
+    '</div>'
+  );
+}
+
+function alternarGrupoGC(idx) {
+  const el = document.getElementById("gc-itens-" + idx);
+  const seta = document.getElementById("gc-seta-" + idx);
+  if (!el) return;
+  const aberto = el.classList.contains("aberto");
+  el.classList.toggle("aberto", !aberto);
+  if (seta) seta.textContent = aberto ? "▾" : "▴";
 }

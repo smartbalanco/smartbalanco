@@ -1427,6 +1427,121 @@
       text-decoration: none; font-weight: 600;
     }
 
+
+    /* ---------- BOTÕES DO TOPO ---------- */
+    #btn-voltar {
+      background: rgba(255,255,255,0.15); color: #fff; border: none;
+      font-size: 22px; line-height: 1; padding: 4px 12px; border-radius: 8px;
+      cursor: pointer;
+    }
+    #btn-buscar { font-size: 15px; padding: 7px 11px; }
+
+    /* ---------- BOTÃO FLUTUANTE DO CHAT ---------- */
+    #btn-chat-ia {
+      position: fixed; bottom: 92px; right: 20px; z-index: 50;
+      width: 54px; height: 54px; border-radius: 50%;
+      background: linear-gradient(135deg, #8b5cf6, #6366f1);
+      color: #fff; border: none; font-size: 24px; cursor: pointer;
+      box-shadow: 0 6px 18px rgba(99, 102, 241, 0.45);
+      display: none; align-items: center; justify-content: center;
+    }
+    #btn-chat-ia:active { transform: scale(0.94); }
+
+    /* ---------- BUSCA: dica e somador ---------- */
+    .busca-dica {
+      font-size: 11px; color: var(--cinza-texto); margin-bottom: 10px;
+      padding: 8px 11px; background: #eef4fa; border-radius: 8px; line-height: 1.5;
+    }
+    .busca-dica b { color: var(--azul-claro); }
+    .busca-soma {
+      display: flex; gap: 8px; margin-bottom: 12px;
+    }
+    .busca-soma div {
+      flex: 1; text-align: center; background: #fff; border: 1px solid var(--borda);
+      border-radius: 10px; padding: 11px 6px;
+    }
+    .busca-soma span {
+      display: block; font-size: 10px; color: var(--cinza-texto); text-transform: uppercase;
+    }
+    .busca-soma b { display: block; font-size: 15px; margin-top: 3px; }
+
+    /* ---------- MULTI-CATEGORIAS ---------- */
+    #modal-multicat .modal-caixa { max-height: 88vh; display: flex; flex-direction: column; }
+    #mc-lista { overflow-y: auto; flex: 1; padding: 8px 0; }
+    .mc-item {
+      display: flex; align-items: center; gap: 9px; width: 100%;
+      padding: 12px 16px; background: none; border: none; border-bottom: 1px solid #f1f3f4;
+      text-align: left; cursor: pointer; font-family: inherit;
+    }
+    .mc-item:active { background: var(--cinza-fundo); }
+    .mc-item.marcada { background: #eef8f3; }
+    .mc-check { font-size: 15px; flex-shrink: 0; }
+    .mc-rodape {
+      padding: 14px 16px; border-top: 1px solid var(--borda); background: #fff;
+      display: flex; gap: 8px; align-items: center;
+    }
+    #mc-contador { flex: 1; font-size: 12px; color: var(--cinza-texto); }
+    .mc-btn {
+      padding: 11px 16px; border: none; border-radius: 9px;
+      font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .mc-btn.limpar { background: var(--cinza-fundo); color: var(--cinza-texto); }
+    .mc-btn.ok { background: var(--verde); color: #fff; }
+
+    /* ---------- GASTOS POR CATEGORIA ---------- */
+    .gc-resumo { display: flex; gap: 10px; }
+    .gcr-box {
+      flex: 1; text-align: center; background: var(--cinza-fundo);
+      border-radius: 10px; padding: 14px;
+    }
+    .gcr-box span { display: block; font-size: 11px; color: var(--cinza-texto); text-transform: uppercase; }
+    .gcr-box b { display: block; font-size: 19px; margin-top: 4px; }
+
+    .gc-grupo { margin-bottom: 16px; }
+    .gc-g-topo {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 10px; cursor: pointer; padding: 4px 0;
+    }
+    .gc-g-esq { flex: 1; min-width: 0; }
+    .gc-g-nome { font-size: 14px; font-weight: 700; color: #1e293b; line-height: 1.35; }
+    .gc-g-qtd { font-size: 11px; color: var(--cinza-texto); margin-top: 2px; }
+    .gc-g-dir { display: flex; align-items: center; gap: 8px; }
+    .gc-g-dir b { font-size: 15px; color: var(--vermelho); white-space: nowrap; }
+    .gc-seta { color: #cbd5e1; font-size: 12px; }
+    .gc-g-barra {
+      background: var(--borda); border-radius: 5px; height: 6px;
+      overflow: hidden; margin-top: 7px;
+    }
+    .gc-g-preench { background: var(--azul-claro); height: 6px; border-radius: 5px; }
+
+    .gc-itens {
+      max-height: 0; overflow: hidden; transition: max-height 0.35s ease;
+    }
+    .gc-itens.aberto { max-height: 3000px; margin-top: 10px; }
+    .gc-item {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 10px; padding: 9px 0 9px 12px; border-left: 2px solid var(--borda);
+      border-bottom: 1px solid #f8fafc;
+    }
+    .gc-i-esq { flex: 1; min-width: 0; }
+    .gc-i-desc {
+      font-size: 13px; color: #1e293b; line-height: 1.35;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .gc-pend { font-size: 11px; }
+    .gc-i-meta {
+      display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; align-items: center;
+    }
+    .gc-i-data { font-size: 10px; color: var(--azul-claro); font-weight: 700; }
+    .gc-i-mov {
+      font-size: 9px; color: #94a3b8; background: var(--cinza-fundo);
+      padding: 2px 5px; border-radius: 4px; font-weight: 700;
+    }
+    .gc-i-met { font-size: 10px; color: var(--cinza-texto); }
+    .gc-i-valor {
+      font-size: 13px; font-weight: 700; color: var(--vermelho); white-space: nowrap;
+    }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
@@ -1516,9 +1631,13 @@
   <div id="tela-interna">
     <div class="topo">
       <div class="topo-linha1">
-        <span class="nome-app">Smartbalanço</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button id="btn-voltar" onclick="voltarAoDashboard()" style="display:none;">‹</button>
+          <span class="nome-app" id="titulo-topo">Smartbalanço</span>
+        </div>
         <div class="acoes">
           <button id="btn-hoje" onclick="irParaMesAtual()">Hoje</button>
+          <button id="btn-buscar" onclick="trocarAba('busca')" title="Buscar">🔍</button>
           <button id="btn-atualizar" onclick="recarregarDados()" title="Atualizar">&#8635;</button>
           <button onclick="sair()">Sair</button>
         </div>
@@ -1529,7 +1648,7 @@
         <button class="seta" onclick="mudarMes(1)">&#8250;</button>
       </div>
 
-      <div class="abas">
+      <div class="abas" id="abas-principais">
         <button id="tab-dashboard" class="ativa" onclick="trocarAba('dashboard')">
           📊 Dashboard
         </button>
@@ -1537,13 +1656,7 @@
           📥 Aprovações <span id="badge-aprov"></span>
         </button>
         <button id="tab-relatorios" onclick="trocarAba('relatorios')">
-          📊 Relatórios
-        </button>
-        <button id="tab-chat" onclick="trocarAba('chat')">
-          🧠 IA
-        </button>
-        <button id="tab-busca" onclick="trocarAba('busca')">
-          🔍 Buscar
+          📈 Relatórios
         </button>
       </div>
     </div>
@@ -1637,22 +1750,28 @@
           <input type="text" id="bl-texto" placeholder="Buscar por descrição..."
                  oninput="buscarComAtraso()" />
         </div>
+        <div class="busca-dica">💡 Busque vários de uma vez separando por <b>;</b> — ex: <i>aluguel;netflix;hunter</i></div>
 
         <button id="busca-btn-filtros" onclick="alternarFiltrosBusca()">⚙️ Filtros</button>
 
         <div id="busca-filtros-avancados">
-          <div class="campo-bloco">
-            <label for="bl-valor">Valor exato (R$)</label>
-            <input type="number" id="bl-valor" step="0.01" inputmode="decimal"
-                   placeholder="Ex: 173,10" oninput="buscarComAtraso()" />
+          <div class="bf-linha">
+            <div class="campo-bloco">
+              <label for="bl-nummov">Nº Mov</label>
+              <input type="number" id="bl-nummov" inputmode="numeric"
+                     placeholder="Ex: 630" oninput="buscarComAtraso()" />
+            </div>
+            <div class="campo-bloco">
+              <label for="bl-valor">Valor exato (R$)</label>
+              <input type="number" id="bl-valor" step="0.01" inputmode="decimal"
+                     placeholder="173,10" oninput="buscarComAtraso()" />
+            </div>
           </div>
 
           <div class="campo-bloco">
-            <label>Categoria</label>
-            <input type="hidden" id="bl-categoria" />
-            <button type="button" class="btn-categoria"
-                    onclick="abrirSeletorCategoria('bl-categoria'); setTimeout(buscarComAtraso, 800);">
-              <span class="cat-txt vazio-cat" id="bl-categoria-txt">Todas as categorias</span>
+            <label>Categorias</label>
+            <button type="button" class="btn-categoria" onclick="abrirMultiCategorias('busca')">
+              <span class="cat-txt vazio-cat" id="bl-categorias-txt">Todas as categorias</span>
               <span class="cat-lupa">🔍</span>
             </button>
           </div>
@@ -1858,6 +1977,7 @@
 
 
   <!-- BOTÃO FLUTUANTE NOVA DESPESA -->
+  <button id="btn-chat-ia" onclick="trocarAba('chat')" title="Assistente IA">✨</button>
   <button id="btn-nova-despesa" onclick="abrirMenuAdicionar()" title="Adicionar">+</button>
 
   <!-- ============ MODAL NOVA DESPESA ============ -->
@@ -2284,6 +2404,33 @@
         <button class="fechar" onclick="fecharDetalhe()">&times;</button>
       </div>
       <div id="det-corpo"></div>
+    </div>
+  </div>
+
+
+  <!-- ============ MODAL: MÚLTIPLAS CATEGORIAS ============ -->
+  <div class="modal-fundo" id="modal-multicat">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Escolher categorias</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;">Selecione uma ou mais</div>
+        </div>
+        <button class="fechar" onclick="fecharMultiCategorias()">&times;</button>
+      </div>
+
+      <div class="sc-busca-wrap">
+        <input type="text" id="mc-busca" placeholder="Buscar categoria..."
+               oninput="filtrarMultiCategorias()" autocomplete="off" />
+      </div>
+
+      <div id="mc-lista"></div>
+
+      <div class="mc-rodape">
+        <span id="mc-contador">Nenhuma selecionada (= todas)</span>
+        <button class="mc-btn limpar" onclick="limparMultiCategorias()">Limpar</button>
+        <button class="mc-btn ok" onclick="confirmarMultiCategorias()">Aplicar</button>
+      </div>
     </div>
   </div>
 
