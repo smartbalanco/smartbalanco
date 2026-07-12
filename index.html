@@ -1138,6 +1138,133 @@
     }
     .ui-total b { font-size: 18px; }
 
+
+    /* ===================== MENU DO BOTÃO (+) ===================== */
+    #menu-adicionar {
+      display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.55);
+      z-index: 90; align-items: flex-end; justify-content: center;
+      backdrop-filter: blur(2px);
+    }
+    .ma-caixa {
+      background: #fff; width: 100%; max-width: 480px;
+      border-radius: 20px 20px 0 0; padding: 10px 0 max(20px, env(safe-area-inset-bottom));
+      animation: subir 0.22s ease-out;
+    }
+    @media (min-width: 560px) {
+      #menu-adicionar { align-items: center; padding: 20px; }
+      .ma-caixa { border-radius: 20px; }
+    }
+    .ma-alca {
+      width: 40px; height: 4px; background: var(--borda); border-radius: 3px;
+      margin: 6px auto 14px;
+    }
+    .ma-opcao {
+      display: flex; align-items: center; gap: 14px; width: 100%;
+      padding: 16px 22px; background: none; border: none; text-align: left;
+      cursor: pointer; font-family: inherit;
+    }
+    .ma-opcao:active { background: var(--cinza-fundo); }
+    .ma-icone {
+      width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 21px;
+    }
+    .ma-icone.manual { background: #eef8f3; }
+    .ma-icone.lancar { background: #eff6ff; }
+    .ma-icone.arquivar { background: #fef3c7; }
+    .ma-txt b { display: block; font-size: 15px; color: #1e293b; }
+    .ma-txt span { display: block; font-size: 12px; color: var(--cinza-texto); margin-top: 2px; }
+    .ma-cancelar {
+      width: calc(100% - 44px); margin: 10px 22px 0; padding: 14px;
+      background: var(--cinza-fundo); border: none; border-radius: 12px;
+      font-size: 15px; font-weight: 700; color: var(--cinza-texto); cursor: pointer;
+      font-family: inherit;
+    }
+
+    /* ===================== MODAL DOCUMENTO ===================== */
+    .doc-botoes { display: flex; gap: 10px; margin-bottom: 16px; }
+    .doc-btn-arq {
+      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 22px 10px; background: var(--cinza-fundo); border: 2px dashed var(--borda);
+      border-radius: 14px; cursor: pointer; font-family: inherit;
+    }
+    .doc-btn-arq:active { border-color: var(--azul-claro); background: #eef4fa; }
+    .dba-icone { font-size: 26px; }
+    .dba-txt { font-size: 13px; font-weight: 600; color: #334155; }
+
+    #doc-preview {
+      display: none; margin-bottom: 16px; text-align: center;
+      background: var(--cinza-fundo); border-radius: 12px; padding: 12px;
+    }
+    #doc-preview img { max-width: 100%; max-height: 200px; border-radius: 8px; }
+    .dp-pdf { font-size: 46px; }
+    .dp-nome { font-size: 12px; color: var(--cinza-texto); margin-top: 8px; word-break: break-all; }
+
+    #doc-erro {
+      display: none; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+      border-radius: 8px; padding: 11px 14px; font-size: 13px; margin-bottom: 14px;
+    }
+
+    #doc-etapa-lendo { display: none; text-align: center; padding: 44px 20px; }
+    #doc-etapa-lendo p { color: var(--cinza-texto); font-size: 14px; margin-top: 16px; }
+    #doc-etapa-lendo small { color: #94a3b8; font-size: 12px; display: block; margin-top: 6px; }
+
+    #doc-etapa-revisar { display: none; }
+    .dr-tipo-badge {
+      display: inline-block; background: #eef4fa; color: var(--azul-claro);
+      padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+      margin-bottom: 16px;
+    }
+
+    /* Código detectado */
+    #dr-bloco-codigo {
+      display: none; background: #fffbeb; border: 1px solid #fde68a;
+      border-radius: 12px; padding: 14px; margin-bottom: 18px;
+    }
+    #dr-cod-titulo {
+      font-size: 12px; font-weight: 700; color: #92400e;
+      text-transform: uppercase; margin-bottom: 8px;
+    }
+    #dr-cod-valor {
+      background: #fff; border: 1px dashed #d97706; border-radius: 8px;
+      padding: 11px; font-family: monospace; font-size: 12px; color: #1e293b;
+      word-break: break-all; line-height: 1.6;
+    }
+    #dr-cod-aviso {
+      display: none; font-size: 11px; color: #b45309; margin-top: 8px; line-height: 1.5;
+    }
+
+    /* Vínculo */
+    #dr-bloco-vinculo { display: none; }
+    #dr-area-vinculo { display: none; margin-top: 10px; }
+    .dv-box {
+      border-radius: 10px; padding: 13px; margin-top: 10px; font-size: 13px;
+    }
+    .dv-box.buscando { background: var(--cinza-fundo); color: var(--cinza-texto); }
+    .dv-box.encontrada { background: #eef8f3; border: 1px solid #b8e6d0; }
+    .dv-box.erro { background: #fef2f2; border: 1px solid #fecaca; color: #b91c1c; }
+    .dv-titulo { font-weight: 700; font-size: 13px; margin-bottom: 6px; }
+    .dv-box.encontrada .dv-titulo { color: #1a7a52; }
+    .dv-desc { font-size: 14px; color: #1e293b; font-weight: 600; }
+    .dv-info {
+      display: flex; gap: 12px; margin-top: 5px; font-size: 12px;
+      color: var(--cinza-texto); flex-wrap: wrap;
+    }
+    .dv-cat { font-size: 11px; color: #64748b; margin-top: 5px; }
+    .dv-alerta {
+      font-size: 11px; color: #c2410c; background: #fff7ed;
+      border-radius: 6px; padding: 7px 9px; margin-top: 8px;
+    }
+    .dv-buscando { text-align: center; }
+
+    /* Botão copiar nas contas a vencer */
+    .li-botoes { display: flex; gap: 6px; align-items: center; }
+    .btn-copiar {
+      background: #eef4fa; color: var(--azul-claro); border: 1px solid #c7ddf0;
+      border-radius: 7px; padding: 5px 9px; font-size: 13px; cursor: pointer;
+      line-height: 1;
+    }
+    .btn-copiar:active { background: #d7e6f3; }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(120px);
@@ -1450,7 +1577,7 @@
 
 
   <!-- BOTÃO FLUTUANTE NOVA DESPESA -->
-  <button id="btn-nova-despesa" onclick="abrirNovaDespesa()" title="Nova despesa">+</button>
+  <button id="btn-nova-despesa" onclick="abrirMenuAdicionar()" title="Adicionar">+</button>
 
   <!-- ============ MODAL NOVA DESPESA ============ -->
   <div class="modal-fundo" id="modal-despesa">
@@ -1670,6 +1797,197 @@
         <button class="fechar" onclick="fecharRelatorioUsoIA()">&times;</button>
       </div>
       <div id="ui-corpo"></div>
+    </div>
+  </div>
+
+
+  <!-- ============ MENU DO BOTÃO (+) ============ -->
+  <div id="menu-adicionar" onclick="if(event.target===this) fecharMenuAdicionar()">
+    <div class="ma-caixa">
+      <div class="ma-alca"></div>
+
+      <button class="ma-opcao" onclick="escolherAcao('manual')">
+        <span class="ma-icone manual">✍️</span>
+        <span class="ma-txt">
+          <b>Lançar manual</b>
+          <span>Digitar os dados da despesa</span>
+        </span>
+      </button>
+
+      <button class="ma-opcao" onclick="escolherAcao('lancar')">
+        <span class="ma-icone lancar">📷</span>
+        <span class="ma-txt">
+          <b>Lançar por documento</b>
+          <span>Boleto, PIX, nota, comprovante → Aprovações</span>
+        </span>
+      </button>
+
+      <button class="ma-opcao" onclick="escolherAcao('arquivar')">
+        <span class="ma-icone arquivar">📎</span>
+        <span class="ma-txt">
+          <b>Arquivar documento</b>
+          <span>Salvar no e-mail, sem lançar</span>
+        </span>
+      </button>
+
+      <button class="ma-cancelar" onclick="fecharMenuAdicionar()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- ============ MODAL DOCUMENTO ============ -->
+  <div class="modal-fundo" id="modal-doc">
+    <div class="modal-caixa">
+
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo" id="doc-titulo">Documento</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;" id="doc-sub"></div>
+        </div>
+        <button class="fechar" onclick="fecharModalDoc()">&times;</button>
+      </div>
+
+      <!-- ETAPA 1: escolher arquivo -->
+      <div id="doc-etapa-arquivo" class="modal-conteudo">
+        <div id="doc-erro"></div>
+
+        <div class="doc-botoes">
+          <label class="doc-btn-arq">
+            <span class="dba-icone">📷</span>
+            <span class="dba-txt">Tirar foto</span>
+            <input type="file" id="doc-input-camera" accept="image/*" capture="environment"
+                   style="display:none" onchange="aoEscolherArquivo(this)" />
+          </label>
+
+          <label class="doc-btn-arq">
+            <span class="dba-icone">📁</span>
+            <span class="dba-txt">Escolher arquivo</span>
+            <input type="file" id="doc-input-arquivo" accept="image/*,application/pdf"
+                   style="display:none" onchange="aoEscolherArquivo(this)" />
+          </label>
+        </div>
+
+        <div id="doc-preview"></div>
+
+        <div class="campo-bloco">
+          <label for="doc-observacao">Observação (opcional)</label>
+          <input type="text" id="doc-observacao"
+                 placeholder="Ex: 12x cartão XP, mercado do mês..." />
+        </div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharModalDoc()">Cancelar</button>
+          <button class="btn-modal confirmar" id="doc-btn-analisar"
+                  onclick="analisarDocumento()" disabled>🧠 Analisar</button>
+        </div>
+      </div>
+
+      <!-- ETAPA 2: lendo -->
+      <div id="doc-etapa-lendo">
+        <div class="spinner" style="margin:0 auto;"></div>
+        <p>Lendo o documento...</p>
+        <small>Extraindo valor, vencimento e código de pagamento</small>
+      </div>
+
+      <!-- ETAPA 3: revisar -->
+      <div id="doc-etapa-revisar" class="modal-conteudo">
+        <span class="dr-tipo-badge" id="dr-tipo">Documento</span>
+
+        <!-- Código detectado -->
+        <div id="dr-bloco-codigo">
+          <div id="dr-cod-titulo">Código detectado</div>
+          <div id="dr-cod-valor"></div>
+          <div id="dr-cod-aviso"></div>
+        </div>
+        <input type="hidden" id="dr-codigo" />
+        <input type="hidden" id="dr-tipocodigo" />
+
+        <div class="campo-bloco">
+          <label for="dr-descricao">Descrição</label>
+          <input type="text" id="dr-descricao" />
+        </div>
+
+        <div class="campo-bloco">
+          <label for="dr-beneficiario">Beneficiário</label>
+          <input type="text" id="dr-beneficiario" />
+        </div>
+
+        <div class="linha-dupla">
+          <div class="campo-bloco">
+            <label for="dr-valor">Valor (R$)</label>
+            <input type="number" id="dr-valor" step="0.01" inputmode="decimal" />
+          </div>
+          <div class="campo-bloco">
+            <label for="dr-datacompra">Data</label>
+            <input type="date" id="dr-datacompra" />
+          </div>
+        </div>
+
+        <!-- Campos só do modo LANÇAR -->
+        <div id="dr-campos-lancamento">
+          <div class="linha-dupla">
+            <div class="campo-bloco">
+              <label for="dr-vencimento">Vencimento</label>
+              <input type="date" id="dr-vencimento" />
+            </div>
+            <div class="campo-bloco">
+              <label for="dr-parcelas">Parcelas</label>
+              <input type="number" id="dr-parcelas" min="1" max="99" value="1" inputmode="numeric" />
+            </div>
+          </div>
+
+          <div class="campo-bloco">
+            <label for="dr-metodo">Método de pagamento</label>
+            <select id="dr-metodo"></select>
+          </div>
+
+          <div class="campo-bloco">
+            <label>Categoria</label>
+            <input type="hidden" id="dr-categoria" />
+            <button type="button" class="btn-categoria" onclick="abrirSeletorCategoria('dr-categoria')">
+              <span class="cat-txt" id="dr-categoria-txt"></span>
+              <span class="cat-lupa">🔍</span>
+            </button>
+          </div>
+
+          <div class="toggle-editar" onclick="document.getElementById('dr-chk-pago').click()">
+            <input type="checkbox" id="dr-chk-pago"
+                   onclick="event.stopPropagation(); alternarPagoDoc();" />
+            <label for="dr-chk-pago" onclick="event.stopPropagation();">✅ Já foi paga</label>
+          </div>
+
+          <div class="campo-bloco campo-data-destaque" id="dr-bloco-datapgto" style="display:none;">
+            <label for="dr-datapgto">📅 Data do pagamento</label>
+            <input type="date" id="dr-datapgto" />
+          </div>
+        </div>
+
+        <!-- Vínculo (só do modo ARQUIVAR) -->
+        <div id="dr-bloco-vinculo">
+          <div class="toggle-editar" onclick="document.getElementById('dr-chk-vincular').click()">
+            <input type="checkbox" id="dr-chk-vincular"
+                   onclick="event.stopPropagation(); alternarVinculo();" />
+            <label for="dr-chk-vincular" onclick="event.stopPropagation();">
+              🔗 Vincular a uma despesa existente
+            </label>
+          </div>
+
+          <div id="dr-area-vinculo">
+            <div class="campo-bloco">
+              <label for="dr-nummov">Nº de movimentação (MOV)</label>
+              <input type="number" id="dr-nummov" inputmode="numeric"
+                     placeholder="Ex: 630" oninput="buscarDespesaPorMov()" />
+            </div>
+            <div id="dr-despesa-encontrada" class="dv-box" style="display:none;"></div>
+          </div>
+        </div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharModalDoc()">Cancelar</button>
+          <button class="btn-modal confirmar" id="dr-btn-confirmar"
+                  onclick="confirmarDocumento()">Confirmar</button>
+        </div>
+      </div>
+
     </div>
   </div>
 

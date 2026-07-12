@@ -350,6 +350,13 @@ function preencherDashboard(d) {
     d.contasAVencer.forEach(function (c) {
       const item = document.createElement("div");
       item.className = "linha-item";
+
+      // Botão de copiar código (só se a despesa tiver boleto/PIX salvo)
+      const btnCopiar = c.codigoPagamento
+        ? '<button class="btn-copiar" data-codigo="' + escaparHtml(c.codigoPagamento) +
+          '" onclick="copiarCodigo(this)" title="Copiar código de pagamento">📋</button>'
+        : '';
+
       item.innerHTML =
         '<div class="li-esq">' +
           '<div><b class="li-data">' + c.data + '</b> ' + escaparHtml(c.descricao) + '</div>' +
@@ -357,7 +364,10 @@ function preencherDashboard(d) {
         '</div>' +
         '<div class="li-dir">' +
           '<span class="li-valor vermelho">' + formatarMoeda(c.valor) + '</span>' +
-          '<button class="btn-liquidar" onclick="abrirLiquidacao(' + c.numMov + ')">Liquidar</button>' +
+          '<div class="li-botoes">' +
+            btnCopiar +
+            '<button class="btn-liquidar" onclick="abrirLiquidacao(' + c.numMov + ')">Liquidar</button>' +
+          '</div>' +
         '</div>';
       listaVencer.appendChild(item);
     });
@@ -3202,59 +3212,19 @@ function renderizarChat() {
 }
 
 // Converte a resposta da IA em HTML seguro (negrito, listas, quebras)
-// Converte a resposta da IA em HTML seguro.
-// (A versão anterior usava uma regex gulosa que quebrava o HTML e cortava o texto.)
 function formatarRespostaIA(txt) {
-  if (!txt) return "";
-
-  const linhas = String(txt).split("\n");
-  let html = "";
-  let dentroLista = false;
-
-  linhas.forEach(function (linha) {
-    const l = linha.trim();
-
-    // Item de lista?
-    const ehItem = /^[-•*]\s+/.test(l) || /^\d+[.)]\s+/.test(l);
-
-    if (ehItem) {
-      if (!dentroLista) { html += "<ul>"; dentroLista = true; }
-      const conteudo = l.replace(/^[-•*]\s+/, "").replace(/^\d+[.)]\s+/, "");
-      html += "<li>" + aplicarNegrito(conteudo) + "</li>";
-      return;
-    }
-
-    // Saiu da lista
-    if (dentroLista) { html += "</ul>"; dentroLista = false; }
-
-    // Cabeçalho (### ou ##)
-    const cab = l.match(/^#{2,4}\s+(.+)$/);
-    if (cab) {
-      html += "<h4>" + aplicarNegrito(cab[1]) + "</h4>";
-      return;
-    }
-
-    // Linha em branco
-    if (l === "") {
-      html += "<br>";
-      return;
-    }
-
-    // Parágrafo normal
-    html += aplicarNegrito(l) + "<br>";
-  });
-
-  if (dentroLista) html += "</ul>";
-
-  return html;
+  let h = escaparHtml(txt);
+  h = h.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  h = h.replace(/^### (.+)$/gm, "<h4>$1</h4>");
+  h = h.replace(/^## (.+)$/gm, "<h4>$1</h4>");
+  h = h.replace(/^[-•] (.+)$/gm, "<li>$1</li>");
+  h = h.replace(/(<li>.*<\/li>)/s, "<ul>$1</ul>");
+  h = h.replace(/\n/g, "<br>");
+  h = h.replace(/<\/ul><br>/g, "</ul>");
+  h = h.replace(/<br><ul>/g, "<ul>");
+  return h;
 }
 
-// Aplica negrito (**texto**) já com o HTML escapado
-function aplicarNegrito(txt) {
-  let t = escaparHtml(txt);
-  t = t.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
-  return t;
-}
 function usarSugestao(btn) {
   document.getElementById("chat-input").value = btn.textContent;
   enviarPergunta();
@@ -3493,4 +3463,405 @@ function renderizarRelatorioUsoIA(r) {
     '</div>';
 
   document.getElementById("ui-corpo").innerHTML = html;
+}
+
+// ============================================================================
+// ===================== DOCUMENTOS (foto / PDF) ==============================
+// ============================================================================
+
+let arquivoAtual = null;      // { base64, mimeType, nome, previewUrl }
+let dadosExtraidos = null;    // o que a IA leu
+let modoDocumento = null;     // "lancar" ou "arquivar"
+
+// ---------- Chamada POST (para enviar arquivos grandes) ----------
+async function chamarServidorPost(acao, dados) {
+  const corpo = Object.assign({ acao: acao }, dados);
+  if (sessaoAtual) corpo.sessao = sessaoAtual;
+  else if (tokenLoginAtual) corpo.token = tokenLoginAtual;
+
+  const resp = await fetch(API_URL, {
+    method: "POST",
+    // text/plain evita o "preflight" do CORS, que o Apps Script não suporta
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
+    body: JSON.stringify(corpo)
+  });
+
+  if (!resp.ok) throw new Error("Falha na conexão (HTTP " + resp.status + ").");
+  return await resp.json();
+}
+
+// ============================================================================
+// MENU DO BOTÃO (+)
+// ============================================================================
+function abrirMenuAdicionar() {
+  document.getElementById("menu-adicionar").style.display = "flex";
+}
+
+function fecharMenuAdicionar() {
+  document.getElementById("menu-adicionar").style.display = "none";
+}
+
+function escolherAcao(acao) {
+  fecharMenuAdicionar();
+
+  if (acao === "manual") {
+    abrirNovaDespesa();
+  } else if (acao === "lancar") {
+    modoDocumento = "lancar";
+    abrirSeletorArquivo();
+  } else if (acao === "arquivar") {
+    modoDocumento = "arquivar";
+    abrirSeletorArquivo();
+  }
+}
+
+// ============================================================================
+// SELEÇÃO DO ARQUIVO
+// ============================================================================
+function abrirSeletorArquivo() {
+  arquivoAtual = null;
+  dadosExtraidos = null;
+
+  const modal = document.getElementById("modal-doc");
+  modal.style.display = "flex";
+
+  document.getElementById("doc-titulo").textContent =
+    modoDocumento === "lancar" ? "📷 Lançar por documento" : "📎 Arquivar documento";
+  document.getElementById("doc-sub").textContent =
+    modoDocumento === "lancar" ? "Boleto, PIX, nota, comprovante..." : "Salvar no e-mail";
+
+  // Reseta as etapas
+  document.getElementById("doc-etapa-arquivo").style.display = "block";
+  document.getElementById("doc-etapa-lendo").style.display = "none";
+  document.getElementById("doc-etapa-revisar").style.display = "none";
+  document.getElementById("doc-erro").style.display = "none";
+  document.getElementById("doc-preview").style.display = "none";
+  document.getElementById("doc-observacao").value = "";
+  document.getElementById("doc-btn-analisar").disabled = true;
+
+  document.getElementById("doc-input-camera").value = "";
+  document.getElementById("doc-input-arquivo").value = "";
+}
+
+function fecharModalDoc() {
+  document.getElementById("modal-doc").style.display = "none";
+  arquivoAtual = null;
+  dadosExtraidos = null;
+}
+
+// Quando escolhe um arquivo (câmera ou galeria)
+function aoEscolherArquivo(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+
+  // Limite de tamanho (o Apps Script tem limite de payload)
+  if (file.size > 8 * 1024 * 1024) {
+    mostrarErroDoc("Arquivo muito grande (máx. 8 MB). Tente uma foto menor.");
+    return;
+  }
+
+  const leitor = new FileReader();
+  leitor.onload = function (ev) {
+    const resultado = ev.target.result;
+    const base64 = resultado.split(",")[1];
+
+    arquivoAtual = {
+      base64: base64,
+      mimeType: file.type || "image/jpeg",
+      nome: file.name || "documento",
+      preview: resultado
+    };
+
+    // Mostra a prévia
+    const prev = document.getElementById("doc-preview");
+    if (file.type.indexOf("image") === 0) {
+      prev.innerHTML = '<img src="' + resultado + '" alt="prévia" />' +
+                       '<div class="dp-nome">' + escaparHtml(file.name) + '</div>';
+    } else {
+      prev.innerHTML = '<div class="dp-pdf">📄</div>' +
+                       '<div class="dp-nome">' + escaparHtml(file.name) + '</div>';
+    }
+    prev.style.display = "block";
+
+    document.getElementById("doc-btn-analisar").disabled = false;
+  };
+  leitor.readAsDataURL(file);
+}
+
+function mostrarErroDoc(msg) {
+  const el = document.getElementById("doc-erro");
+  el.textContent = "⚠️ " + msg;
+  el.style.display = "block";
+  setTimeout(function () { el.style.display = "none"; }, 5000);
+}
+
+// ============================================================================
+// ANALISAR COM A IA
+// ============================================================================
+async function analisarDocumento() {
+  if (!arquivoAtual) return;
+
+  document.getElementById("doc-etapa-arquivo").style.display = "none";
+  document.getElementById("doc-etapa-lendo").style.display = "block";
+
+  try {
+    const r = await chamarServidorPost("analisarDocumento", {
+      arquivo: arquivoAtual.base64,
+      mimeType: arquivoAtual.mimeType,
+      observacao: document.getElementById("doc-observacao").value.trim()
+    });
+
+    if (r.ok) {
+      dadosExtraidos = r.dados;
+      mostrarRevisao(r.dados, r.avisoCodigo);
+    } else {
+      document.getElementById("doc-etapa-lendo").style.display = "none";
+      document.getElementById("doc-etapa-arquivo").style.display = "block";
+      mostrarErroDoc(r.mensagem || "Não consegui ler o documento.");
+    }
+  } catch (e) {
+    document.getElementById("doc-etapa-lendo").style.display = "none";
+    document.getElementById("doc-etapa-arquivo").style.display = "block";
+    mostrarErroDoc("Erro de conexão. Tente novamente.");
+  }
+}
+
+// ============================================================================
+// REVISÃO DOS DADOS EXTRAÍDOS
+// ============================================================================
+async function mostrarRevisao(d, avisoCodigo) {
+  document.getElementById("doc-etapa-lendo").style.display = "none";
+  document.getElementById("doc-etapa-revisar").style.display = "block";
+
+  // Carrega listas se preciso
+  if (!listasValidas) {
+    try {
+      const rl = await chamarServidor("listasValidas");
+      if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
+    } catch (e) { listasValidas = { categorias: [], metodos: [] }; }
+  }
+
+  // Tipo do documento
+  document.getElementById("dr-tipo").textContent = d.tipo_documento || "Documento";
+
+  // Código de pagamento
+  const blocoCod = document.getElementById("dr-bloco-codigo");
+  if (d.codigo_pagamento) {
+    const ehPix = d.tipo_codigo === "pix";
+    document.getElementById("dr-cod-titulo").textContent =
+      ehPix ? "🔷 Código PIX detectado" : "🧾 Código de barras detectado";
+    document.getElementById("dr-cod-valor").textContent = d.codigo_pagamento;
+    document.getElementById("dr-codigo").value = d.codigo_pagamento;
+    document.getElementById("dr-tipocodigo").value = d.tipo_codigo || "";
+
+    const aviso = document.getElementById("dr-cod-aviso");
+    if (avisoCodigo) {
+      aviso.textContent = avisoCodigo;
+      aviso.style.display = "block";
+    } else {
+      aviso.style.display = "none";
+    }
+    blocoCod.style.display = "block";
+  } else {
+    blocoCod.style.display = "none";
+    document.getElementById("dr-codigo").value = "";
+    document.getElementById("dr-tipocodigo").value = "";
+  }
+
+  // Campos
+  document.getElementById("dr-descricao").value = d.descricao || "";
+  document.getElementById("dr-beneficiario").value = d.beneficiario || "";
+  document.getElementById("dr-valor").value = (parseFloat(d.valor_total) || 0).toFixed(2);
+  document.getElementById("dr-parcelas").value = parseInt(d.total_parcelas) || 1;
+  document.getElementById("dr-datacompra").value = converterDataParaISO(d.data_compra) || dataHojeISO();
+  document.getElementById("dr-vencimento").value = converterDataParaISO(d.data_vencimento) || dataHojeISO();
+
+  montarSelect("dr-metodo", listasValidas.metodos, d.metodo || "");
+  definirCategoriaCampo("dr-categoria", d.categoria || "");
+
+  // Já pago?
+  document.getElementById("dr-chk-pago").checked = !!d.ja_pago;
+  document.getElementById("dr-bloco-datapgto").style.display = d.ja_pago ? "block" : "none";
+  document.getElementById("dr-datapgto").value = converterDataParaISO(d.data_pagamento) || dataHojeISO();
+
+  // Modo ARQUIVAR: esconde os campos de lançamento e mostra o vínculo
+  const ehArquivar = (modoDocumento === "arquivar");
+  document.getElementById("dr-campos-lancamento").style.display = ehArquivar ? "none" : "block";
+  document.getElementById("dr-bloco-vinculo").style.display = ehArquivar ? "block" : "none";
+
+  document.getElementById("dr-btn-confirmar").textContent =
+    ehArquivar ? "📎 Arquivar no e-mail" : "📥 Enviar para aprovação";
+
+  // Reseta o vínculo
+  document.getElementById("dr-chk-vincular").checked = false;
+  document.getElementById("dr-area-vinculo").style.display = "none";
+  document.getElementById("dr-nummov").value = "";
+  document.getElementById("dr-despesa-encontrada").style.display = "none";
+}
+
+// Converte "DD/MM/AAAA" para "yyyy-MM-dd"
+function converterDataParaISO(br) {
+  if (!br) return "";
+  const p = br.toString().split("/");
+  if (p.length !== 3) return "";
+  return p[2] + "-" + ("0" + p[1]).slice(-2) + "-" + ("0" + p[0]).slice(-2);
+}
+
+function alternarPagoDoc() {
+  const pago = document.getElementById("dr-chk-pago").checked;
+  document.getElementById("dr-bloco-datapgto").style.display = pago ? "block" : "none";
+}
+
+// ---------- Vínculo com despesa existente ----------
+function alternarVinculo() {
+  const marcado = document.getElementById("dr-chk-vincular").checked;
+  document.getElementById("dr-area-vinculo").style.display = marcado ? "block" : "none";
+  if (!marcado) {
+    document.getElementById("dr-nummov").value = "";
+    document.getElementById("dr-despesa-encontrada").style.display = "none";
+  }
+}
+
+let buscaMovTimer = null;
+
+function buscarDespesaPorMov() {
+  clearTimeout(buscaMovTimer);
+  const num = document.getElementById("dr-nummov").value.trim();
+  const box = document.getElementById("dr-despesa-encontrada");
+
+  if (!num) {
+    box.style.display = "none";
+    return;
+  }
+
+  buscaMovTimer = setTimeout(async function () {
+    box.innerHTML = '<div class="dv-buscando">Buscando MOV-' + escaparHtml(num) + '...</div>';
+    box.className = "dv-box buscando";
+    box.style.display = "block";
+
+    try {
+      const r = await chamarServidor("buscarPorNumMov", { numMov: num });
+
+      if (r.ok) {
+        const d = r.despesa;
+        box.className = "dv-box encontrada";
+        box.innerHTML =
+          '<div class="dv-titulo">✅ Despesa encontrada</div>' +
+          '<div class="dv-desc">' + escaparHtml(d.descricao) + '</div>' +
+          '<div class="dv-info">' +
+            '<span>' + formatarMoeda(d.valor) + '</span>' +
+            '<span>vence ' + escaparHtml(d.vencimento) + '</span>' +
+            '<span>' + escaparHtml(d.parcela) + '</span>' +
+          '</div>' +
+          '<div class="dv-cat">' + escaparHtml(d.categoria) + '</div>' +
+          (d.pago ? '<div class="dv-alerta">⚠️ Esta despesa já consta como paga.</div>' : '') +
+          (d.codigoAtual ? '<div class="dv-alerta">⚠️ Esta despesa já tem um código salvo. Ele será substituído.</div>' : '');
+      } else {
+        box.className = "dv-box erro";
+        box.innerHTML = '<div class="dv-titulo">❌ ' + escaparHtml(r.mensagem || "Não encontrado") + '</div>';
+      }
+    } catch (e) {
+      box.className = "dv-box erro";
+      box.innerHTML = '<div class="dv-titulo">⚠️ Erro de conexão</div>';
+    }
+  }, 600);
+}
+
+// ============================================================================
+// CONFIRMAR (lançar ou arquivar)
+// ============================================================================
+async function confirmarDocumento() {
+  const btn = document.getElementById("dr-btn-confirmar");
+  btn.disabled = true;
+  btn.textContent = "Enviando...";
+
+  const ehArquivar = (modoDocumento === "arquivar");
+
+  const dados = {
+    arquivo: arquivoAtual.base64,
+    mimeType: arquivoAtual.mimeType,
+    tipoDocumento: document.getElementById("dr-tipo").textContent,
+    descricao: document.getElementById("dr-descricao").value.trim(),
+    beneficiario: document.getElementById("dr-beneficiario").value.trim(),
+    valorTotal: document.getElementById("dr-valor").value,
+    dataCompra: document.getElementById("dr-datacompra").value,
+    vencimento: document.getElementById("dr-vencimento").value,
+    categoria: document.getElementById("dr-categoria").value,
+    codigoPagamento: document.getElementById("dr-codigo").value.trim(),
+    tipoCodigo: document.getElementById("dr-tipocodigo").value
+  };
+
+  if (ehArquivar) {
+    if (document.getElementById("dr-chk-vincular").checked) {
+      const num = document.getElementById("dr-nummov").value.trim();
+      if (!num) {
+        mostrarErroDoc("Informe o Nº de movimentação.");
+        btn.disabled = false;
+        btn.textContent = "📎 Arquivar no e-mail";
+        return;
+      }
+      dados.numMovVinculo = num;
+    }
+  } else {
+    // Modo lançar: valida os campos
+    if (!dados.descricao) { mostrarErroDoc("Informe a descrição."); btn.disabled = false; btn.textContent = "📥 Enviar para aprovação"; return; }
+    if (!dados.categoria) { mostrarErroDoc("Escolha a categoria."); btn.disabled = false; btn.textContent = "📥 Enviar para aprovação"; return; }
+
+    dados.metodo = document.getElementById("dr-metodo").value;
+    dados.totalParcelas = document.getElementById("dr-parcelas").value;
+
+    const jaPago = document.getElementById("dr-chk-pago").checked;
+    dados.jaPago = jaPago ? "true" : "false";
+    if (jaPago) dados.dataPagamento = document.getElementById("dr-datapgto").value;
+
+    if (!dados.metodo) { mostrarErroDoc("Escolha o método."); btn.disabled = false; btn.textContent = "📥 Enviar para aprovação"; return; }
+  }
+
+  const desc = dados.descricao || "documento";
+  fecharModalDoc();
+  mostrarToast("⏳ " + (ehArquivar ? "Arquivando" : "Enviando") + ' "' + desc + '"...', true);
+
+  try {
+    const acao = ehArquivar ? "arquivarDocumento" : "lancarPorDocumento";
+    const r = await chamarServidorPost(acao, dados);
+
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      limparTodoCache();
+      if (!ehArquivar) checarPendentesAprovacao();
+      else await recarregarDados();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Falhou."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão. Nada foi enviado.");
+  }
+}
+
+// ============================================================================
+// COPIAR CÓDIGO DE PAGAMENTO (nas contas a vencer)
+// ============================================================================
+async function copiarCodigo(botao) {
+  const codigo = botao.getAttribute("data-codigo");
+  if (!codigo) return;
+
+  try {
+    await navigator.clipboard.writeText(codigo);
+    mostrarToast("📋 Código copiado! Cole no app do banco.");
+    botao.textContent = "✅";
+    setTimeout(function () { botao.textContent = "📋"; }, 2000);
+  } catch (e) {
+    // Fallback para navegadores antigos
+    const tmp = document.createElement("textarea");
+    tmp.value = codigo;
+    document.body.appendChild(tmp);
+    tmp.select();
+    try {
+      document.execCommand("copy");
+      mostrarToast("📋 Código copiado!");
+    } catch (e2) {
+      mostrarToast("❌ Não foi possível copiar.");
+    }
+    document.body.removeChild(tmp);
+  }
 }
