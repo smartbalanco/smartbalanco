@@ -479,7 +479,13 @@ function mostrarTelaInterna() {
   document.getElementById("tela-login").style.display = "none";
   document.getElementById("tela-config-bloqueio").style.display = "none";
   document.getElementById("tela-interna").style.display = "block";
-  document.getElementById("btn-nova-despesa").style.display = (abaAtiva === "dashboard") ? "flex" : "none";
+
+  // 👉 Os dois botões flutuantes só aparecem no dashboard
+  const noDash = (abaAtiva === "dashboard");
+  document.getElementById("btn-nova-despesa").style.display = noDash ? "flex" : "none";
+
+  const btnIA = document.getElementById("btn-chat-ia");
+  if (btnIA) btnIA.style.display = noDash ? "flex" : "none";
 }
 
 async function sair() {
