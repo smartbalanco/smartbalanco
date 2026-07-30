@@ -3621,6 +3621,14 @@ function abrirSeletorArquivo() {
   document.getElementById("doc-observacao").value = "";
   document.getElementById("doc-btn-analisar").disabled = true;
 
+  // O botão de confirmar fica desabilitado durante o envio e o modal fecha
+  // antes da resposta chegar. Sem religar aqui, o 2º lançamento pegava o
+  // botão cinza e travado em "Enviando...".
+  const btnConfirmar = document.getElementById("dr-btn-confirmar");
+  btnConfirmar.disabled = false;
+  btnConfirmar.textContent =
+    modoDocumento === "lancar" ? "📥 Enviar para aprovação" : "📎 Arquivar no e-mail";
+
   document.getElementById("doc-input-camera").value = "";
   document.getElementById("doc-input-arquivo").value = "";
 }
