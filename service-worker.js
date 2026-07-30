@@ -5,7 +5,7 @@
 // os celulares a baixarem a versão nova.
 // ============================================================================
 
-const CACHE_NOME = "smartbalanco-v8";
+const CACHE_NOME = "smartbalanco-v9";
 
 // Arquivos que fazem o "esqueleto" do app funcionar mesmo offline.
 const ARQUIVOS_ESSENCIAIS = [
@@ -48,9 +48,11 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // ignoreSearch: o index pede "app.js?v=9", mas no cache ele está como
+  // "app.js". Sem isso, o app não abriria offline depois de uma publicação.
   event.respondWith(
     fetch(event.request)
       .then((resposta) => resposta)
-      .catch(() => caches.match(event.request))
+      .catch(() => caches.match(event.request, { ignoreSearch: true }))
   );
 });
