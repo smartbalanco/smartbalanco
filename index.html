@@ -180,6 +180,15 @@
     /* ---------- BOTÃO LIQUIDAR + LINHA COM MOV ---------- */
     .linha-item { align-items: flex-start; }
     .li-mov { font-size: 10px; color: #94a3b8; margin-top: 2px; letter-spacing: 0.3px; }
+
+    /* ---------- FATURA DE CARTÃO (compras agrupadas) ---------- */
+    .fatura-toggle { cursor: pointer; color: var(--azul-claro); text-decoration: underline; }
+    .fatura-itens { display: none; margin-top: 6px; padding-left: 8px; border-left: 2px solid var(--borda); }
+    .fatura-itens.aberto { display: block; }
+    .fi-linha {
+      display: flex; justify-content: space-between; gap: 10px;
+      font-size: 11px; color: #64748b; padding: 3px 0;
+    }
     .li-dir { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
     .btn-liquidar {
       background: var(--verde); color: #fff; border: none; border-radius: 7px;
@@ -314,6 +323,11 @@
       display: none; background: #eef8f3; color: var(--verde);
       font-size: 13px; font-weight: 700; text-align: center;
       padding: 9px; border-radius: 8px; margin-top: 10px;
+    }
+    /* Campo preenchido pelo sistema (ex.: vencimento vindo da fatura) */
+    input.campo-automatico {
+      background: #f1f5f9; color: var(--azul-claro); font-weight: 600;
+      border-style: dashed;
     }
     #nd-aviso-cartao {
       display: none; background: #eef4fa; color: var(--azul-claro);
@@ -2024,7 +2038,7 @@
           <label for="nd-metodo">Método de pagamento</label>
           <select id="nd-metodo" onchange="atualizarCamposDespesa()"></select>
           <div id="nd-aviso-cartao">
-            💳 O vencimento será calculado automaticamente conforme o fechamento da fatura deste cartão.
+            💳 Vencimento definido pela fatura deste cartão, que fecha 8 dias antes.
           </div>
         </div>
 
@@ -2039,7 +2053,7 @@
 
         <div class="campo-bloco">
           <label for="nd-datacompra">Data da compra</label>
-          <input type="date" id="nd-datacompra" />
+          <input type="date" id="nd-datacompra" onchange="preencherVencimentoCartao('nd')" />
         </div>
 
         <div class="campo-bloco" id="nd-bloco-vencimento">
@@ -2322,7 +2336,7 @@
           </div>
           <div class="campo-bloco">
             <label for="dr-datacompra">Data</label>
-            <input type="date" id="dr-datacompra" />
+            <input type="date" id="dr-datacompra" onchange="preencherVencimentoCartao('dr')" />
           </div>
         </div>
 
@@ -2341,7 +2355,7 @@
 
           <div class="campo-bloco">
             <label for="dr-metodo">Método de pagamento</label>
-            <select id="dr-metodo"></select>
+            <select id="dr-metodo" onchange="preencherVencimentoCartao('dr')"></select>
           </div>
 
           <div class="campo-bloco">

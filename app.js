@@ -51,7 +51,32 @@ let anoExibido = new Date().getFullYear();
 
 // Estado do modal de liquidação
 let lancamentoAtual = null;   // dados da linha sendo liquidada
-let listasValidas = null;     // categorias e métodos (carregado 1x)
+let listasValidas = null;     // categorias e métodos (vindos da aba "Dados fcnmt")
+let listasValidasEm = 0;      // quando foram carregadas (para revalidar)
+const LISTAS_TTL_MS = 5 * 60 * 1000;
+
+// As categorias são digitadas direto na planilha, então a lista pode mudar
+// sem o app saber. Em vez de segurar o que foi carregado no primeiro uso,
+// mostra a lista atual na hora e confere com o servidor em segundo plano;
+// se tiver mudado, chama aoAtualizar() para redesenhar.
+function revalidarListasValidas(aoAtualizar) {
+  if (Date.now() - listasValidasEm < LISTAS_TTL_MS) return;
+
+  chamarServidor("listasValidas").then(function (rl) {
+    if (!rl || !rl.ok) return;
+
+    const antes = listasValidas
+      ? listasValidas.categorias.join("|") + "##" + listasValidas.metodos.join("|")
+      : "";
+    listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
+    listasValidasEm = Date.now();
+
+    const depois = rl.categorias.join("|") + "##" + rl.metodos.join("|");
+    if (antes !== depois && typeof aoAtualizar === "function") aoAtualizar();
+  }).catch(function () {
+    // Sem conexão: segue com a lista que já estava em mãos.
+  });
+}
 
 // ============================================================================
 // CACHE LOCAL (guarda os dados do dashboard no aparelho)
@@ -160,6 +185,59 @@ async function chamarServidor(acao, paramsExtras) {
   const resp = await fetch(url);
   if (!resp.ok) throw new Error("Falha na conexão (HTTP " + resp.status + ").");
   return await resp.json();
+}
+
+// ============================================================================
+// FATURAS DE CARTÃO NA LISTA DE CONTAS A VENCER
+// A compra no cartão não é uma conta a pagar sozinha: o servidor manda as
+// compras já somadas por cartão + vencimento, e o que se liquida é a fatura
+// inteira, carimbando a data em todas as compras dela de uma vez.
+// ============================================================================
+let faturasNaTela = [];
+
+function alternarItensFatura(idLista, botao) {
+  const el = document.getElementById(idLista);
+  if (!el) return;
+
+  const aberto = el.classList.toggle("aberto");
+  if (botao) {
+    botao.textContent = botao.textContent.replace(
+      aberto ? "· ver" : "· ocultar",
+      aberto ? "· ocultar" : "· ver"
+    );
+  }
+}
+
+async function liquidarFaturaNaTela(indice) {
+  const f = faturasNaTela[indice];
+  if (!f) return;
+
+  const confirmou = confirm(
+    "Liquidar a " + f.descricao + "?\n\n" +
+    formatarMoeda(f.valor) + " em " + f.qtd + " compra(s).\n\n" +
+    "Todas ficarão com a data de pagamento de hoje."
+  );
+  if (!confirmou) return;
+
+  mostrarToast("⏳ Liquidando " + f.descricao + "...", true);
+
+  try {
+    const r = await chamarServidor("liquidarFatura", {
+      cartao: f.cartao,
+      vencimento: f.vencimento,
+      dataPagamento: dataHojeISO()
+    });
+
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      limparTodoCache();
+      await recarregarDados();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não foi possível liquidar."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão. Nada foi alterado.");
+  }
 }
 
 // ============================================================================
@@ -347,9 +425,47 @@ function preencherDashboard(d) {
   if (!d.contasAVencer || d.contasAVencer.length === 0) {
     listaVencer.innerHTML = '<p class="vazio">✅ Nenhuma conta a vencer nos próximos 15 dias.</p>';
   } else {
+    faturasNaTela = [];
+
     d.contasAVencer.forEach(function (c) {
       const item = document.createElement("div");
       item.className = "linha-item";
+
+      // ---- Fatura de cartão: as compras vêm somadas numa linha só ----
+      if (c.ehFatura) {
+        const iFatura = faturasNaTela.push({
+          cartao: c.cartao,
+          vencimento: c.vencimento,
+          descricao: c.descricao,
+          valor: c.valor,
+          qtd: (c.itens || []).length
+        }) - 1;
+
+        const idItens = "fatura-itens-" + iFatura;
+        const htmlItens = (c.itens || []).map(function (it) {
+          return '<div class="fi-linha">' +
+                   '<span>' + escaparHtml(it.descricao) + '</span>' +
+                   '<span>' + formatarMoeda(it.valor) + '</span>' +
+                 '</div>';
+        }).join("");
+
+        item.innerHTML =
+          '<div class="li-esq">' +
+            '<div><b class="li-data">' + c.data + '</b> 💳 ' + escaparHtml(c.descricao) + '</div>' +
+            '<div class="li-mov fatura-toggle" onclick="alternarItensFatura(\'' + idItens + '\', this)">' +
+              (c.itens || []).length + ' compras · ver' +
+            '</div>' +
+            '<div class="fatura-itens" id="' + idItens + '">' + htmlItens + '</div>' +
+          '</div>' +
+          '<div class="li-dir">' +
+            '<span class="li-valor vermelho">' + formatarMoeda(c.valor) + '</span>' +
+            '<div class="li-botoes">' +
+              '<button class="btn-liquidar" onclick="liquidarFaturaNaTela(' + iFatura + ')">Liquidar fatura</button>' +
+            '</div>' +
+          '</div>';
+        listaVencer.appendChild(item);
+        return;
+      }
 
       // Botão de copiar código (só se a despesa tiver boleto/PIX salvo)
       const btnCopiar = c.codigoPagamento
@@ -920,15 +1036,62 @@ function atualizarCamposDespesa() {
   const ehCartao = metodo.indexOf("cartão") !== -1 || metodo.indexOf("cartao") !== -1;
   const jaPago = document.getElementById("nd-chk-pago").checked;
 
-  // Vencimento: some se for cartão (é calculado automaticamente)
-  document.getElementById("nd-bloco-vencimento").style.display = ehCartao ? "none" : "block";
+  // Vencimento: no cartão ele continua à vista, mas preenchido pela fatura
+  document.getElementById("nd-bloco-vencimento").style.display = "block";
   document.getElementById("nd-aviso-cartao").style.display = ehCartao ? "block" : "none";
+  preencherVencimentoCartao("nd");
 
   // Data de pagamento: aparece só se marcado como pago
   document.getElementById("nd-bloco-datapgto").style.display = jaPago ? "block" : "none";
 
   // Mostra o valor da parcela em tempo real
   atualizarPreviaParcela();
+}
+
+// ---------------------------------------------------------------------------
+// VENCIMENTO PELA FATURA DO CARTÃO
+// Quem calcula é o servidor — a mesma função que grava a despesa. Assim a data
+// que aparece na tela é exatamente a que vai para a planilha, em vez de uma
+// conta repetida aqui que pode divergir com o tempo.
+// Vale para os formulários "nd" (nova despesa) e "dr" (revisão do scanner).
+// ---------------------------------------------------------------------------
+async function preencherVencimentoCartao(prefixo) {
+  const selMetodo = document.getElementById(prefixo + "-metodo");
+  const campoVenc = document.getElementById(prefixo + "-vencimento");
+  const campoCompra = document.getElementById(prefixo + "-datacompra");
+  if (!selMetodo || !campoVenc) return;
+
+  const metodo = selMetodo.value || "";
+  const ehCartao = normalizarBusca(metodo).indexOf("cart") !== -1;
+
+  // Não é cartão: a data volta a ser escolha de quem lança.
+  if (!ehCartao) {
+    campoVenc.readOnly = false;
+    campoVenc.classList.remove("campo-automatico");
+    return;
+  }
+
+  campoVenc.readOnly = true;
+  campoVenc.classList.add("campo-automatico");
+
+  try {
+    const r = await chamarServidor("vencimentoCartao", {
+      metodo: metodo,
+      dataCompra: campoCompra ? campoCompra.value : ""
+    });
+
+    if (r && r.ok && r.ehCartao && r.vencimento) {
+      campoVenc.value = r.vencimento;
+      return;
+    }
+  } catch (e) {
+    // Cai no destravamento abaixo.
+  }
+
+  // Cartão sem dia de vencimento na aba 'Config Cartões', ou sem conexão:
+  // devolve o campo para o usuário em vez de deixá-lo travado e vazio.
+  campoVenc.readOnly = false;
+  campoVenc.classList.remove("campo-automatico");
 }
 
 function atualizarPreviaParcela() {
@@ -1426,6 +1589,11 @@ function abrirSeletorCategoria(destinoId) {
   const busca = document.getElementById("sc-busca");
   busca.value = "";
   renderizarListaCategorias("");
+
+  // Pega categorias criadas na planilha depois que o app abriu
+  revalidarListasValidas(function () {
+    if (modal.style.display === "flex") renderizarListaCategorias(busca.value);
+  });
 
   // Foca no campo de busca (com um respiro pro teclado abrir direito)
   setTimeout(function () { busca.focus(); }, 120);
@@ -3769,6 +3937,10 @@ async function mostrarRevisao(d, avisoCodigo) {
   montarSelect("dr-metodo", listasValidas.metodos, d.metodo || "");
   definirCategoriaCampo("dr-categoria", d.categoria || "");
 
+  // Se a IA identificou um cartão, a fatura decide o vencimento — não o
+  // que estava escrito no comprovante.
+  preencherVencimentoCartao("dr");
+
   // Já pago?
   document.getElementById("dr-chk-pago").checked = !!d.ja_pago;
   document.getElementById("dr-bloco-datapgto").style.display = d.ja_pago ? "block" : "none";
@@ -4440,6 +4612,12 @@ function abrirMultiCategorias(destino) {
 
   document.getElementById("mc-busca").value = "";
   renderizarMultiCategorias("");
+
+  revalidarListasValidas(function () {
+    if (modal.style.display === "flex") {
+      renderizarMultiCategorias(document.getElementById("mc-busca").value);
+    }
+  });
 
   setTimeout(function () { document.getElementById("mc-busca").focus(); }, 120);
 }
