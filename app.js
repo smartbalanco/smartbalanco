@@ -241,6 +241,186 @@ async function liquidarFaturaNaTela(indice) {
 }
 
 // ============================================================================
+// PREVISÃO DE CONTAS ("Ver tudo" das contas a vencer)
+// O dashboard mostra só 15 dias à frente. Aqui o período é escolhido: um mês
+// ou um intervalo livre, para dar previsibilidade do que ainda vai vencer.
+// ============================================================================
+let faturasPrevisao = [];   // faturas exibidas na previsão (para expandir)
+
+function abrirPrevisao() {
+  document.getElementById("modal-previsao").style.display = "flex";
+
+  const hoje = new Date();
+
+  // Preenche os seletores de mês/ano na primeira abertura
+  const selMes = document.getElementById("pv-mes");
+  if (!selMes.options.length) {
+    selMes.innerHTML = opcoesMeses(hoje.getMonth());
+    document.getElementById("pv-ano").innerHTML = opcoesAnos(hoje.getFullYear());
+  }
+
+  // Período personalizado começa em hoje -> fim do mês que vem
+  if (!document.getElementById("pv-de").value) {
+    const fimProximo = new Date(hoje.getFullYear(), hoje.getMonth() + 2, 0);
+    document.getElementById("pv-de").value = dataHojeISO();
+    document.getElementById("pv-ate").value = dataParaISO(fimProximo);
+  }
+
+  // Abre já mostrando o mês corrente
+  previsaoAtalho("mes");
+}
+
+function fecharPrevisao() {
+  document.getElementById("modal-previsao").style.display = "none";
+}
+
+function dataParaISO(d) {
+  return d.getFullYear() + "-" +
+         ("0" + (d.getMonth() + 1)).slice(-2) + "-" +
+         ("0" + d.getDate()).slice(-2);
+}
+
+function marcarChipPrevisao(qual) {
+  const chips = document.querySelectorAll("#modal-previsao .pv-chip");
+  for (let i = 0; i < chips.length; i++) chips[i].classList.remove("ativo");
+  if (qual != null && chips[qual]) chips[qual].classList.add("ativo");
+}
+
+function previsaoAtalho(qual) {
+  const hoje = new Date();
+  let de, ate, indice;
+
+  if (qual === "mes") {
+    de = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    ate = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    indice = 0;
+  } else if (qual === "proximo") {
+    de = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 1);
+    ate = new Date(hoje.getFullYear(), hoje.getMonth() + 2, 0);
+    indice = 1;
+  } else if (qual === "3meses") {
+    de = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    ate = new Date(hoje.getFullYear(), hoje.getMonth() + 3, 0);
+    indice = 2;
+  } else {
+    de = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    ate = new Date(hoje.getFullYear(), hoje.getMonth() + 6, 0);
+    indice = 3;
+  }
+
+  marcarChipPrevisao(indice);
+  carregarPrevisao({ de: dataParaISO(de), ate: dataParaISO(ate) });
+}
+
+function verPrevisaoMes() {
+  marcarChipPrevisao(null);
+  carregarPrevisao({
+    mes: document.getElementById("pv-mes").value,
+    ano: document.getElementById("pv-ano").value
+  });
+}
+
+function verPrevisaoPeriodo() {
+  const de = document.getElementById("pv-de").value;
+  const ate = document.getElementById("pv-ate").value;
+
+  if (!de || !ate) {
+    document.getElementById("pv-resultado").innerHTML =
+      '<p class="vazio">Preencha as duas datas.</p>';
+    return;
+  }
+
+  marcarChipPrevisao(null);
+  carregarPrevisao({ de: de, ate: ate });
+}
+
+async function carregarPrevisao(params) {
+  const alvo = document.getElementById("pv-resultado");
+  alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+
+  try {
+    const r = await chamarServidor("previsaoContas", params);
+
+    if (!r.ok) {
+      alvo.innerHTML = '<p class="vazio">' + escaparHtml(r.mensagem || "Não foi possível carregar.") + '</p>';
+      return;
+    }
+
+    renderizarPrevisao(r);
+  } catch (e) {
+    alvo.innerHTML = '<p class="vazio">Sem conexão. Tente de novo.</p>';
+  }
+}
+
+function renderizarPrevisao(r) {
+  const alvo = document.getElementById("pv-resultado");
+  faturasPrevisao = [];
+
+  if (!r.meses || r.meses.length === 0) {
+    alvo.innerHTML =
+      '<div class="pv-total">' +
+        '<div class="pv-total-valor">' + formatarMoeda(0) + '</div>' +
+        '<div class="pv-total-info">Nada em aberto de ' + r.de + ' a ' + r.ate + '</div>' +
+      '</div>';
+    return;
+  }
+
+  let html =
+    '<div class="pv-total">' +
+      '<div class="pv-total-valor">' + formatarMoeda(r.total) + '</div>' +
+      '<div class="pv-total-info">' + r.quantidade + ' lançamento(s) · ' + r.de + ' a ' + r.ate + '</div>' +
+    '</div>';
+
+  r.meses.forEach(function (m) {
+    html +=
+      '<div class="pv-mes">' +
+        '<div class="pv-mes-topo">' +
+          '<span class="pv-mes-nome">' + escaparHtml(m.rotulo) + '</span>' +
+          '<span class="pv-mes-total">' + formatarMoeda(m.total) + '</span>' +
+        '</div>';
+
+    m.itens.forEach(function (it) {
+      if (it.ehFatura) {
+        const iF = faturasPrevisao.push(it) - 1;
+        const idItens = "pv-fatura-" + iF;
+        const htmlItens = (it.itens || []).map(function (c) {
+          return '<div class="fi-linha">' +
+                   '<span>' + escaparHtml(c.descricao) + '</span>' +
+                   '<span>' + formatarMoeda(c.valor) + '</span>' +
+                 '</div>';
+        }).join("");
+
+        html +=
+          '<div class="pv-item">' +
+            '<div>' +
+              '<span class="pv-item-data">' + it.data + '</span>' +
+              '💳 ' + escaparHtml(it.descricao) +
+              '<div class="li-mov fatura-toggle" onclick="alternarItensFatura(\'' + idItens + '\', this)">' +
+                (it.itens || []).length + ' compras · ver' +
+              '</div>' +
+              '<div class="fatura-itens" id="' + idItens + '">' + htmlItens + '</div>' +
+            '</div>' +
+            '<span class="pv-item-valor vermelho">' + formatarMoeda(it.valor) + '</span>' +
+          '</div>';
+      } else {
+        html +=
+          '<div class="pv-item">' +
+            '<div>' +
+              '<span class="pv-item-data">' + it.data + '</span>' +
+              escaparHtml(it.descricao) +
+            '</div>' +
+            '<span class="pv-item-valor vermelho">' + formatarMoeda(it.valor) + '</span>' +
+          '</div>';
+      }
+    });
+
+    html += '</div>';
+  });
+
+  alvo.innerHTML = html;
+}
+
+// ============================================================================
 // ENTRADA / CARGA DO DASHBOARD
 // ============================================================================
 let entrando = false;   // trava contra chamadas simultâneas ao servidor

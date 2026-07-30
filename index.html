@@ -96,6 +96,14 @@
       font-size: 13px; color: var(--cinza-texto); margin-bottom: 12px;
       text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;
     }
+    /* Cabeçalho de card com ação à direita (ex.: "Ver tudo") */
+    .card-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .card-topo h2 { margin-bottom: 12px; }
+    .btn-ver-tudo {
+      background: none; border: none; color: var(--azul-claro);
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      padding: 0 0 12px 0; white-space: nowrap;
+    }
     .vazio { font-size: 13px; color: #94a3b8; font-style: italic; text-align: center; padding: 8px 0; }
 
     /* SALDO */
@@ -345,6 +353,46 @@
     .conf-linha b.pendente { color: var(--laranja); }
     .linha-dupla { display: flex; gap: 12px; }
     .linha-dupla .campo-bloco { flex: 1; }
+
+    /* ---------- PREVISÃO DE CONTAS ---------- */
+    .linha-tripla { display: flex; gap: 10px; align-items: flex-end; }
+    .linha-tripla .campo-bloco { flex: 1; margin-bottom: 0; }
+    .pv-btn-ver { flex: 0 0 auto; padding: 11px 18px; }
+
+    .pv-atalhos { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+    .pv-chip {
+      background: var(--cinza-fundo); border: 1px solid var(--borda); color: var(--azul);
+      border-radius: 20px; padding: 8px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .pv-chip.ativo { background: var(--azul); color: #fff; border-color: var(--azul); }
+
+    .pv-filtro { margin-bottom: 14px; }
+    .pv-filtro-titulo {
+      font-size: 11px; color: var(--cinza-texto); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+    }
+
+    .pv-total {
+      background: var(--cinza-fundo); border-radius: 10px; padding: 14px;
+      text-align: center; margin: 16px 0 12px;
+    }
+    .pv-total-valor { font-size: 22px; font-weight: 700; color: var(--vermelho); }
+    .pv-total-info { font-size: 11px; color: var(--cinza-texto); margin-top: 3px; }
+
+    .pv-mes { margin-bottom: 14px; }
+    .pv-mes-topo {
+      display: flex; justify-content: space-between; align-items: baseline;
+      border-bottom: 2px solid var(--borda); padding-bottom: 5px; margin-bottom: 6px;
+    }
+    .pv-mes-nome { font-size: 13px; font-weight: 700; color: var(--azul); }
+    .pv-mes-total { font-size: 13px; font-weight: 700; color: var(--vermelho); }
+    .pv-item {
+      display: flex; justify-content: space-between; gap: 10px;
+      padding: 7px 0; border-bottom: 1px solid var(--borda); font-size: 13px;
+    }
+    .pv-item:last-child { border-bottom: none; }
+    .pv-item-data { color: var(--cinza-texto); font-size: 11px; font-weight: 700; margin-right: 6px; }
+    .pv-item-valor { white-space: nowrap; font-weight: 600; }
 
 
     /* ---------- ABAS (Dashboard / Aprovações) ---------- */
@@ -1718,7 +1766,10 @@
 
       <!-- CONTAS A VENCER -->
       <div class="card">
-        <h2>Contas a vencer (15 dias)</h2>
+        <div class="card-topo">
+          <h2>Contas a vencer (15 dias)</h2>
+          <button class="btn-ver-tudo" onclick="abrirPrevisao()">Ver tudo →</button>
+        </div>
         <div id="lista-vencer"></div>
       </div>
 
@@ -2203,6 +2254,60 @@
     </div>
   </div>
 
+
+  <!-- ============ MODAL: PREVISÃO DE CONTAS ============ -->
+  <div class="modal-fundo" id="modal-previsao">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">📅 Previsão de contas</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;">Tudo que ainda está em aberto</div>
+        </div>
+        <button class="fechar" onclick="fecharPrevisao()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <div class="pv-atalhos">
+          <button class="pv-chip" onclick="previsaoAtalho('mes')">Este mês</button>
+          <button class="pv-chip" onclick="previsaoAtalho('proximo')">Próximo mês</button>
+          <button class="pv-chip" onclick="previsaoAtalho('3meses')">3 meses</button>
+          <button class="pv-chip" onclick="previsaoAtalho('6meses')">6 meses</button>
+        </div>
+
+        <div class="pv-filtro">
+          <div class="pv-filtro-titulo">Escolher um mês</div>
+          <div class="linha-tripla">
+            <div class="campo-bloco">
+              <label for="pv-mes">Mês</label>
+              <select id="pv-mes"></select>
+            </div>
+            <div class="campo-bloco">
+              <label for="pv-ano">Ano</label>
+              <select id="pv-ano"></select>
+            </div>
+            <button class="btn-modal confirmar pv-btn-ver" onclick="verPrevisaoMes()">Ver</button>
+          </div>
+        </div>
+
+        <div class="pv-filtro">
+          <div class="pv-filtro-titulo">Ou um período</div>
+          <div class="linha-tripla">
+            <div class="campo-bloco">
+              <label for="pv-de">De</label>
+              <input type="date" id="pv-de" />
+            </div>
+            <div class="campo-bloco">
+              <label for="pv-ate">Até</label>
+              <input type="date" id="pv-ate" />
+            </div>
+            <button class="btn-modal confirmar pv-btn-ver" onclick="verPrevisaoPeriodo()">Ver</button>
+          </div>
+        </div>
+
+        <div id="pv-resultado"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- ============ MODAL: USO DA IA ============ -->
   <div class="modal-fundo" id="modal-uso-ia">
