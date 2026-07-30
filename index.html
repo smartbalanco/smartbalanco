@@ -354,6 +354,30 @@
     .linha-dupla { display: flex; gap: 12px; }
     .linha-dupla .campo-bloco { flex: 1; }
 
+    /* ---------- CONFIGURAÇÕES ---------- */
+    .cfg-nova {
+      display: none; background: var(--cinza-fundo); border-radius: 10px;
+      padding: 14px; margin: 12px 0;
+    }
+    .cfg-nova.aberto { display: block; }
+    .cfg-aviso { font-size: 11px; color: var(--cinza-texto); margin: 6px 0 4px; min-height: 15px; }
+    .cfg-grupo-titulo {
+      font-size: 11px; color: var(--cinza-texto); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      margin: 16px 0 4px; padding-bottom: 4px; border-bottom: 2px solid var(--borda);
+    }
+    .cfg-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 9px 0; border-bottom: 1px solid var(--borda); font-size: 13px;
+    }
+    .cfg-item:last-child { border-bottom: none; }
+    .cfg-item-nome { flex: 1; word-break: break-word; }
+    .cfg-item-cod { font-size: 10px; color: #94a3b8; display: block; }
+    .cfg-btn {
+      background: none; border: 1px solid var(--borda); border-radius: 8px;
+      padding: 5px 9px; font-size: 13px; cursor: pointer; flex-shrink: 0;
+    }
+
     /* ---------- PREVISÃO DE CONTAS ---------- */
     .linha-tripla { display: flex; gap: 10px; align-items: flex-end; }
     .linha-tripla .campo-bloco { flex: 1; margin-bottom: 0; }
@@ -1704,6 +1728,7 @@
           <button id="btn-hoje" onclick="irParaMesAtual()">Hoje</button>
           <button id="btn-buscar" onclick="trocarAba('busca')" title="Buscar">🔍</button>
           <button id="btn-atualizar" onclick="recarregarDados()" title="Atualizar">&#8635;</button>
+          <button id="btn-config" onclick="abrirConfig()" title="Configurações">&#9881;</button>
           <button onclick="sair()">Sair</button>
         </div>
       </div>
@@ -2255,6 +2280,43 @@
   </div>
 
 
+  <!-- ============ MODAL: CONFIGURAÇÕES ============ -->
+  <div class="modal-fundo" id="modal-config">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">&#9881; Configurações</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;">Categorias do plano de contas</div>
+        </div>
+        <button class="fechar" onclick="fecharConfig()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <button class="btn-modal confirmar" style="width:100%;" onclick="alternarNovaCategoria()">
+          + Nova categoria
+        </button>
+
+        <div id="cfg-nova" class="cfg-nova">
+          <div class="campo-bloco">
+            <label for="cfg-grupo">Grupo</label>
+            <select id="cfg-grupo"></select>
+          </div>
+          <div class="campo-bloco">
+            <label for="cfg-nome">Nome</label>
+            <input type="text" id="cfg-nome" maxlength="60" placeholder="Ex.: Padaria" />
+          </div>
+          <div class="cfg-aviso" id="cfg-previa"></div>
+          <div class="modal-acoes">
+            <button class="btn-modal cancelar" onclick="alternarNovaCategoria()">Cancelar</button>
+            <button class="btn-modal confirmar" onclick="salvarNovaCategoria()">Criar</button>
+          </div>
+        </div>
+
+        <div id="cfg-categorias"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: PREVISÃO DE CONTAS ============ -->
   <div class="modal-fundo" id="modal-previsao">
     <div class="modal-caixa">
@@ -2563,6 +2625,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

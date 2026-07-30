@@ -241,6 +241,192 @@ async function liquidarFaturaNaTela(indice) {
 }
 
 // ============================================================================
+// CONFIGURAÇÕES — CATEGORIAS
+// As categorias vivem na planilha no formato "2.2.004. Padaria", e é o código
+// que decide se algo é receita ou despesa. Por isso aqui se escolhe o GRUPO e
+// se digita só o nome: quem gera o número é o servidor. Deixar o código livre
+// seria o jeito mais fácil de criar uma categoria que não entra em conta
+// nenhuma.
+// ============================================================================
+async function abrirConfig() {
+  document.getElementById("modal-config").style.display = "flex";
+  document.getElementById("cfg-nova").classList.remove("aberto");
+
+  const alvo = document.getElementById("cfg-categorias");
+  alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+
+  // Sempre busca do servidor: aqui a lista precisa estar exata.
+  try {
+    const rl = await chamarServidor("listasValidas");
+    if (rl.ok) {
+      listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
+      listasValidasEm = Date.now();
+    }
+  } catch (e) {
+    alvo.innerHTML = '<p class="vazio">Sem conexão.</p>';
+    return;
+  }
+
+  renderizarCategoriasConfig();
+}
+
+function fecharConfig() {
+  document.getElementById("modal-config").style.display = "none";
+}
+
+// Separa "2.2.004. Padaria" em código e nome
+function partirCategoria(texto) {
+  const m = (texto || "").toString().trim().match(/^(\d+\.\d+)\.(\d+)\.?\s*(.*)$/);
+  if (!m) return null;
+  return { grupo: m[1], sequencial: m[2], nome: m[3] || "", completo: texto.trim() };
+}
+
+function renderizarCategoriasConfig() {
+  const alvo = document.getElementById("cfg-categorias");
+  const todas = (listasValidas && listasValidas.categorias) ? listasValidas.categorias : [];
+
+  // Agrupa por prefixo (2.1, 2.2, ...) para a lista não virar um paredão
+  const grupos = {};
+  const foraDoPadrao = [];
+
+  todas.forEach(function (c) {
+    const p = partirCategoria(c);
+    if (!p) { foraDoPadrao.push(c); return; }
+    if (!grupos[p.grupo]) grupos[p.grupo] = [];
+    grupos[p.grupo].push(p);
+  });
+
+  // Alimenta o seletor de grupo do formulário de criação
+  const selGrupo = document.getElementById("cfg-grupo");
+  const chaves = Object.keys(grupos).sort();
+  selGrupo.innerHTML = chaves.map(function (g) {
+    const exemplos = grupos[g].slice(0, 2).map(function (p) { return p.nome; }).join(", ");
+    return '<option value="' + g + '">' + g + (exemplos ? " — " + escaparHtml(exemplos) : "") + '</option>';
+  }).join("");
+
+  let html = "";
+  chaves.forEach(function (g) {
+    html += '<div class="cfg-grupo-titulo">Grupo ' + g + '</div>';
+    grupos[g].sort(function (a, b) { return a.sequencial.localeCompare(b.sequencial); });
+
+    grupos[g].forEach(function (p) {
+      const seguro = escaparHtml(p.completo).replace(/'/g, "&#39;");
+      html +=
+        '<div class="cfg-item">' +
+          '<span class="cfg-item-nome">' + escaparHtml(p.nome) +
+            '<span class="cfg-item-cod">' + p.grupo + '.' + p.sequencial + '</span>' +
+          '</span>' +
+          '<button class="cfg-btn" title="Renomear" onclick="renomearCategoriaApp(\'' + seguro + '\')">✏️</button>' +
+          '<button class="cfg-btn" title="Excluir" onclick="excluirCategoriaApp(\'' + seguro + '\')">🗑️</button>' +
+        '</div>';
+    });
+  });
+
+  if (foraDoPadrao.length > 0) {
+    html += '<div class="cfg-grupo-titulo">Fora do padrão</div>';
+    foraDoPadrao.forEach(function (c) {
+      html += '<div class="cfg-item"><span class="cfg-item-nome">' + escaparHtml(c) +
+              '<span class="cfg-item-cod">sem código — não dá para renomear por aqui</span></span></div>';
+    });
+  }
+
+  alvo.innerHTML = html || '<p class="vazio">Nenhuma categoria cadastrada.</p>';
+}
+
+function alternarNovaCategoria() {
+  const box = document.getElementById("cfg-nova");
+  const abriu = box.classList.toggle("aberto");
+  if (abriu) {
+    document.getElementById("cfg-nome").value = "";
+    document.getElementById("cfg-previa").textContent =
+      "O código é gerado automaticamente dentro do grupo escolhido.";
+    document.getElementById("cfg-nome").focus();
+  }
+}
+
+async function salvarNovaCategoria() {
+  const grupo = document.getElementById("cfg-grupo").value;
+  const nome = document.getElementById("cfg-nome").value.trim();
+  const aviso = document.getElementById("cfg-previa");
+
+  if (!nome) {
+    aviso.textContent = "Digite um nome para a categoria.";
+    return;
+  }
+
+  aviso.textContent = "Criando...";
+
+  try {
+    const r = await chamarServidor("criarCategoria", { grupo: grupo, nome: nome });
+
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      document.getElementById("cfg-nova").classList.remove("aberto");
+      listasValidasEm = 0;          // força a próxima revalidação
+      await abrirConfig();
+    } else {
+      aviso.textContent = r.mensagem || "Não foi possível criar.";
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão.";
+  }
+}
+
+async function renomearCategoriaApp(categoria) {
+  const p = partirCategoria(categoria);
+  if (!p) return;
+
+  const novo = prompt(
+    "Novo nome para a categoria:\n\n" + categoria +
+    "\n\nO código " + p.grupo + "." + p.sequencial + " é mantido, e os lançamentos " +
+    "que já usam essa categoria são atualizados junto.",
+    p.nome
+  );
+  if (novo === null) return;
+
+  const nome = novo.trim();
+  if (!nome || nome === p.nome) return;
+
+  mostrarToast("⏳ Renomeando...", true);
+
+  try {
+    const r = await chamarServidor("renomearCategoria", { categoria: categoria, nome: nome });
+
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      listasValidasEm = 0;
+      limparTodoCache();
+      await abrirConfig();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não foi possível renomear."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão. Nada foi alterado.");
+  }
+}
+
+async function excluirCategoriaApp(categoria) {
+  if (!confirm("Excluir a categoria?\n\n" + categoria +
+               "\n\nSó é possível se nenhum lançamento estiver usando ela.")) return;
+
+  mostrarToast("⏳ Excluindo...", true);
+
+  try {
+    const r = await chamarServidor("excluirCategoria", { categoria: categoria });
+
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      listasValidasEm = 0;
+      await abrirConfig();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não foi possível excluir."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão. Nada foi alterado.");
+  }
+}
+
+// ============================================================================
 // PREVISÃO DE CONTAS ("Ver tudo" das contas a vencer)
 // O dashboard mostra só 15 dias à frente. Aqui o período é escolhido: um mês
 // ou um intervalo livre, para dar previsibilidade do que ainda vai vencer.
