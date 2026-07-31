@@ -532,18 +532,30 @@ async function atualizarWidget(dashboard) {
     if (!P) return;
 
     const contas = (dashboard && dashboard.contasAVencer) ? dashboard.contasAVencer : [];
-    const proxima = contas[0] || null;
+
+    // O widget mostra UM dia: o próximo que tem conta a vencer, com tudo que
+    // vence nele. A lista já vem ordenada por vencimento, então o dia do
+    // primeiro item é esse dia.
+    const dia = contas.length > 0 ? contas[0].data : "";
+    const doDia = contas.filter(function (c) { return c.data === dia; });
 
     let total = 0;
-    contas.forEach(function (c) { total += (parseFloat(c.valor) || 0); });
+    const lista = doDia.map(function (c) {
+      total += (parseFloat(c.valor) || 0);
+      return {
+        descricao: (c.ehFatura ? "💳 " : "") + c.descricao,
+        valor: formatarMoeda(c.valor)
+      };
+    });
 
     const agora = new Date();
     const hora = ("0" + agora.getHours()).slice(-2) + ":" + ("0" + agora.getMinutes()).slice(-2);
+    const qtd = lista.length === 1 ? "1 conta" : lista.length + " contas";
 
-    await P.set({ key: "widget_proxima_desc", value: proxima ? proxima.descricao : "" });
-    await P.set({ key: "widget_proxima_valor", value: proxima ? formatarMoeda(proxima.valor) : "" });
-    await P.set({ key: "widget_proxima_data", value: proxima ? proxima.data : "" });
-    await P.set({ key: "widget_total", value: formatarMoeda(total) });
+    await P.set({ key: "widget_lista", value: JSON.stringify(lista) });
+    await P.set({ key: "widget_dia", value: dia });
+    await P.set({ key: "widget_dia_total", value: lista.length > 0 ? formatarMoeda(total) : "" });
+    await P.set({ key: "widget_dia_qtd", value: lista.length > 0 ? qtd : "" });
     await P.set({ key: "widget_atualizado", value: "às " + hora });
 
     const W = window.Capacitor.Plugins.Widget;
@@ -1325,6 +1337,13 @@ function escutarVoltaDoLogin() {
 
     A.addListener("appUrlOpen", async function (evento) {
       const url = (evento && evento.url) ? evento.url : "";
+
+      // Atalho "+" da tela inicial: abre direto o menu de lançamento
+      if (url.indexOf(ESQUEMA_APP + "://novo") === 0) {
+        abrirMenuAdicionarQuandoPronto();
+        return;
+      }
+
       if (url.indexOf(ESQUEMA_APP + "://login") !== 0) return;
 
       let codigo = "";
@@ -1346,6 +1365,38 @@ function escutarVoltaDoLogin() {
   } catch (e) {
     console.warn("Não foi possível escutar a volta do login:", e);
   }
+}
+
+// O atalho "+" pode chegar antes de o app terminar de entrar (ou com o app
+// fechado). Espera a tela ficar pronta antes de abrir o menu, em vez de
+// piscar um menu sobre a tela de carregamento.
+function abrirMenuAdicionarQuandoPronto(tentativa) {
+  tentativa = tentativa || 0;
+  if (tentativa > 40) return;   // ~20s: desiste em silêncio
+
+  const tela = document.getElementById("tela-interna");
+  const pronto = tela && tela.style.display !== "none" && sessaoAtual;
+
+  if (pronto && typeof abrirMenuAdicionar === "function") {
+    abrirMenuAdicionar();
+    return;
+  }
+  setTimeout(function () { abrirMenuAdicionarQuandoPronto(tentativa + 1); }, 500);
+}
+
+// Atalho "+" com o app fechado: o Android entrega a URL na abertura, não pelo
+// listener, então é preciso olhar a intent inicial também.
+async function verificarAtalhoDeAbertura() {
+  if (!rodandoNoAplicativo()) return;
+  try {
+    const A = window.Capacitor.Plugins.App;
+    if (!A || !A.getLaunchUrl) return;
+
+    const inicial = await A.getLaunchUrl();
+    if (inicial && inicial.url && inicial.url.indexOf(ESQUEMA_APP + "://novo") === 0) {
+      abrirMenuAdicionarQuandoPronto();
+    }
+  } catch (e) { /* atalho é conveniência: falhar aqui não quebra nada */ }
 }
 
 // ============================================================================
@@ -1490,6 +1541,7 @@ window.addEventListener("load", async function () {
   // confere se há APK novo (não bloqueia a entrada).
   escutarVoltaDoLogin();
   verificarAtualizacaoApp();
+  verificarAtalhoDeAbertura();
 
   // ---------- 1. Já tem sessão salva no aparelho? ----------
   const salva = lerSessaoSalva();
