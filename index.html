@@ -16,11 +16,25 @@
       --azul: #1a3a5c;
       --azul-claro: #2c5f8a;
       --verde: #2e9e6b;
-      --cinza-fundo: #f4f6f9;
-      --cinza-texto: #64748b;
-      --borda: #e2e8f0;
-      --vermelho: #dc2626;
+      --cinza-fundo: #e8ecf3;   /* fundo do app E das superfícies (neumorfismo) */
+      --cinza-texto: #5b6878;   /* escurecido: sobre o fundo do neumorfismo o
+                                   cinza antigo dava 2,9:1 de contraste */
+      --borda: #dbe2ec;
+      --vermelho: #b91c1c;      /* um tom mais fundo: 4,1:1 -> 5,5:1 */
       --laranja: #f97316;
+
+      /* ---- Neumorfismo ----
+         Não existe "cor de card": tudo tem a cor do fundo e o relevo vem de
+         duas sombras opostas — clara em cima/esquerda, escura embaixo/direita.
+         Campos de texto usam a versão afundada (inset): é o que comunica
+         "aqui se digita" sem precisar de borda. */
+      --sombra-clara: #ffffff;
+      --sombra-escura: #c3cad6;
+      --relevo-alto: 6px 6px 12px var(--sombra-escura), -6px -6px 12px var(--sombra-clara);
+      --relevo-medio: 4px 4px 8px var(--sombra-escura), -4px -4px 8px var(--sombra-clara);
+      --relevo-baixo: 2px 2px 5px var(--sombra-escura), -2px -2px 5px var(--sombra-clara);
+      --afundado: inset 4px 4px 8px var(--sombra-escura), inset -4px -4px 8px var(--sombra-clara);
+      --afundado-leve: inset 2px 2px 5px var(--sombra-escura), inset -2px -2px 5px var(--sombra-clara);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
     body {
@@ -1656,6 +1670,180 @@
       transition: transform 0.3s ease-out; box-shadow: 0 8px 24px rgba(0,0,0,0.25);
     }
     #toast.visivel { transform: translateX(-50%) translateY(0); }
+
+    /* ========================================================================
+       CAMADA NEUMORFISMO
+       Vem por último de propósito: em vez de reescrever as ~350 regras
+       originais, esta camada troca as superfícies brancas e as bordas por
+       relevo de sombra. Para voltar ao visual antigo basta remover este bloco
+       e a paleta do :root.
+
+       Regra do estilo: nada de cor de fundo diferente, nada de borda. O que
+       "sobe" tem sombra externa, o que "recebe toque ou texto" tem sombra
+       interna (afundado).
+       ==================================================================== */
+
+    /* ---- Superfícies que antes eram brancas ---- */
+    .card,
+    .modal-caixa,
+    .ma-caixa,
+    .rel-cabecalho,
+    .det-codigo,
+    .busca-soma div,
+    .cv-item,
+    .br-item,
+    .dd-anexo,
+    .edt-escopo,
+    .conf-aviso {
+      background: var(--cinza-fundo) !important;
+      border: none !important;
+      border-radius: 18px;
+      box-shadow: var(--relevo-alto);
+    }
+
+    /* Listas: o item vira uma plaquinha em relevo, sem risco separando */
+    .linha-item,
+    .cfg-item,
+    .pv-item {
+      background: var(--cinza-fundo);
+      border: none !important;
+      border-bottom: none !important;
+      border-radius: 12px;
+      box-shadow: var(--relevo-baixo);
+      padding: 12px;
+      margin-bottom: 8px;
+    }
+
+    /* ---- Campos: afundados ---- */
+    input[type="text"], input[type="number"], input[type="date"],
+    input[type="password"], input[type="search"], select, textarea,
+    #sc-busca, #bl-pin, #chat-input {
+      background: var(--cinza-fundo) !important;
+      border: none !important;
+      border-radius: 12px !important;
+      box-shadow: var(--afundado);
+      color: #2b3a4d;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none !important;
+      box-shadow: var(--afundado), 0 0 0 2px rgba(44, 95, 138, 0.25) !important;
+    }
+    /* O campo preenchido pelo sistema (vencimento da fatura) continua se
+       distinguindo, agora pelo tracejado sobre o relevo afundado. */
+    input.campo-automatico {
+      border: 1px dashed var(--azul-claro) !important;
+      color: var(--azul-claro);
+    }
+
+    /* ---- Botões: em relevo, afundam ao toque ---- */
+    .btn-modal, .det-btn, .btn-liquidar, .cfg-btn, .pv-chip, .edt-op,
+    .btn-categoria, .rb-btn, .cb-btn, .busca-modos button, .br-mais,
+    #busca-btn-filtros, #btn-hoje, #btn-buscar, #btn-atualizar, #btn-config,
+    #btn-voltar, .icone-btn, .fechar, .amigo-menu {
+      background: var(--cinza-fundo) !important;
+      border: none !important;
+      border-radius: 12px !important;
+      box-shadow: var(--relevo-baixo);
+    }
+    .btn-modal:active, .det-btn:active, .btn-liquidar:active, .cfg-btn:active,
+    .pv-chip:active, .edt-op:active, .btn-categoria:active, .rb-btn:active,
+    #btn-hoje:active, #btn-buscar:active, #btn-atualizar:active, #btn-config:active {
+      box-shadow: var(--afundado-leve) !important;
+    }
+
+    /* A cor sai do fundo e vai para o texto — é o que mantém a leitura de
+       "confirmar / cancelar / perigo" sem quebrar o estilo. */
+    .btn-modal.confirmar, .det-btn.doc, .btn-liquidar { color: var(--verde) !important; }
+    .btn-modal.cancelar, .det-btn.email, .det-btn.editar { color: var(--cinza-texto) !important; }
+    .btn-excluir, .btn-rejeitar { color: var(--vermelho) !important; }
+
+    /* Estados "ligado" ficam afundados: o pressionado é o selecionado */
+    .pv-chip.ativo, .edt-op.ativa, .busca-modos button.ativo {
+      box-shadow: var(--afundado-leve) !important;
+      color: var(--azul) !important;
+    }
+
+    /* ---- Abas e navegação de mês: trilho afundado ----
+       As duas usavam rgba(0,0,0,0.18), que vinha do topo azul-escuro antigo.
+       Sobre fundo claro isso virava uma mancha cinza. */
+    .abas, .nav-mes {
+      background: var(--cinza-fundo) !important;
+      border: none !important;
+      border-radius: 14px;
+      box-shadow: var(--afundado);
+    }
+    .abas { padding: 5px; gap: 4px; }
+    .nav-mes { padding: 5px; }
+    .nav-mes button.seta, .nav-mes .mes-txt { color: var(--azul) !important; }
+
+    .abas button {
+      background: transparent !important;
+      border: none !important;
+      border-radius: 10px !important;
+      box-shadow: none;
+      /* Sem isso o rótulo quebra em duas linhas num celular estreito e as
+         abas ficam desalinhadas entre si. */
+      white-space: nowrap;
+      font-size: 12px;
+      padding: 9px 2px;
+      min-width: 0;
+    }
+    .abas button.ativa {
+      background: var(--cinza-fundo) !important;
+      box-shadow: var(--relevo-baixo);
+      color: var(--azul) !important;
+    }
+
+    /* ---- Barras de progresso: canal afundado ---- */
+    .score-barra, .barra-cat, .ev-barra {
+      background: var(--cinza-fundo) !important;
+      box-shadow: var(--afundado-leve);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    /* ---- Topo e rodapé flutuante ---- */
+    .topo {
+      background: var(--cinza-fundo) !important;
+      color: var(--azul) !important;
+      border: none !important;
+      box-shadow: var(--relevo-medio);
+    }
+    .topo .nome-app, .topo .mes-txt, .topo button { color: var(--azul) !important; }
+
+    /* O botão de nova despesa continua verde sólido: é a ação principal da
+       tela e sumiria se virasse mais uma superfície cinza. */
+    #btn-nova-despesa, #btn-chat-ia {
+      border: none !important;
+      box-shadow: var(--relevo-medio), 0 4px 14px rgba(46, 158, 107, 0.35);
+    }
+
+    /* ---- Modais ---- */
+    .modal-fundo { background: rgba(200, 208, 220, 0.55) !important; }
+    .modal-topo {
+      background: var(--cinza-fundo) !important;
+      color: var(--azul) !important;
+      border-radius: 18px 18px 0 0;
+    }
+    .modal-topo .mt-titulo { color: var(--azul) !important; }
+    .modal-topo .mt-mov, .modal-topo div { color: var(--cinza-texto) !important; }
+
+    /* ---- Legibilidade ----
+       O fundo do neumorfismo é mais escuro que o branco de antes, então os
+       cinzas claros herdados (#94a3b8) caíam para 2,2:1 de contraste — abaixo
+       do mínimo de 4,5:1 para texto. Aqui eles sobem para ~4,8:1 sem perder o
+       ar suave do estilo. */
+    .li-mov, .cfg-item-cod, .vazio, .cinza, .conf-nota, .dd-data, .dd-sem-anexo,
+    .dda-info span, .det-buscando small, .rc-data, .rodape-login, .sc-vazio span,
+    .uih-meta, .pvc-faixa, .pvp-qtd, .cv-item small, .br-anexo.vazio,
+    #doc-etapa-lendo small, .btn-categoria .cat-txt.vazio-cat,
+    .pv-item-data, .pv-total-info, .item-sub {
+      color: #5b6878 !important;
+    }
+
+    /* Separadores viram respiro: no neumorfismo o risco cinza polui */
+    .cfg-item, .fi-linha, .det-linha { border-bottom: none !important; }
+    .cfg-grupo-titulo, .pv-mes-topo { border-bottom: none !important; }
   </style>
 </head>
 <body>
@@ -2704,6 +2892,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
