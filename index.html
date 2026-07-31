@@ -394,6 +394,23 @@
     .linha-dupla { display: flex; gap: 12px; }
     .linha-dupla .campo-bloco { flex: 1; }
 
+    /* ---------- AVISO DE ATUALIZAÇÃO DO APLICATIVO ---------- */
+    #aviso-atualizacao {
+      display: none; border-radius: 14px; padding: 14px; margin-bottom: 14px;
+      border-left: 3px solid var(--verde);
+    }
+    #aviso-atualizacao .av-titulo { font-size: 14px; font-weight: 700; color: var(--azul); }
+    #aviso-atualizacao .av-texto {
+      font-size: 12px; color: var(--cinza-texto); margin-top: 5px; line-height: 1.5;
+    }
+    #aviso-atualizacao .av-acoes { display: flex; gap: 8px; margin-top: 12px; }
+    .av-btn {
+      flex: 1; border: none; border-radius: 10px; padding: 11px;
+      font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+    .av-btn.baixar { color: var(--verde); }
+    .av-btn.depois { color: var(--cinza-texto); }
+
     /* ---------- EDITAR LANÇAMENTO ---------- */
     .edt-escopo {
       display: none; background: #fff7ed; border-left: 3px solid var(--laranja);
@@ -2002,6 +2019,7 @@
 
     <div class="conteudo" id="conteudo-dash">
 
+      <div id="aviso-atualizacao"></div>
       <div id="aviso-cache"></div>
       <div id="aviso-vencimento" class="aviso-venc"></div>
 
@@ -2939,6 +2957,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=16"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>

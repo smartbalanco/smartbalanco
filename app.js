@@ -435,6 +435,87 @@ async function agendarNotificacoesContas(contas) {
 }
 
 // ============================================================================
+// ATUALIZAÇÃO DO APLICATIVO
+// O app pergunta ao GitHub qual é a última versão publicada e compara com a
+// instalada. Só o que é nativo (widget, notificação, permissão) exige APK
+// novo — mudança de tela chega sozinha, porque o app carrega o site.
+// No navegador nada disso roda.
+// ============================================================================
+const API_RELEASES = "https://api.github.com/repos/pvsm23/smartbalanco-android/releases/latest";
+
+// Compara "1.10" com "1.9" corretamente (comparar como texto diria que 1.10 < 1.9)
+function versaoEhMaior(nova, atual) {
+  const a = (nova || "").split(".").map(function (n) { return parseInt(n) || 0; });
+  const b = (atual || "").split(".").map(function (n) { return parseInt(n) || 0; });
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const x = a[i] || 0, y = b[i] || 0;
+    if (x > y) return true;
+    if (x < y) return false;
+  }
+  return false;
+}
+
+async function verificarAtualizacaoApp() {
+  if (!rodandoNoAplicativo()) return;
+
+  try {
+    const A = window.Capacitor.Plugins.App;
+    if (!A || !A.getInfo) return;
+
+    const info = await A.getInfo();
+    const instalada = info.version || "0";
+
+    const resp = await fetch(API_RELEASES, { headers: { "Accept": "application/vnd.github+json" } });
+    if (!resp.ok) return;
+
+    const dados = await resp.json();
+    const tag = (dados.tag_name || "").replace(/^v/, "");
+    if (!tag || !versaoEhMaior(tag, instalada)) return;
+
+    const apk = (dados.assets || []).filter(function (a) {
+      return a.name === "Smartbalanco.apk";
+    })[0];
+    if (!apk) return;
+
+    mostrarAvisoAtualizacao(tag, instalada, apk.browser_download_url);
+  } catch (e) {
+    // Sem rede ou GitHub fora do ar: não atrapalha o uso do app.
+    console.warn("Não consegui verificar atualização:", e);
+  }
+}
+
+function mostrarAvisoAtualizacao(nova, atual, url) {
+  const caixa = document.getElementById("aviso-atualizacao");
+  if (!caixa) return;
+
+  caixa.innerHTML =
+    '<div class="av-titulo">📲 Versão ' + escaparHtml(nova) + ' disponível</div>' +
+    '<div class="av-texto">Você está na ' + escaparHtml(atual) + '. ' +
+    'A instalação abre o arquivo baixado — é normal o Android pedir confirmação.</div>' +
+    '<div class="av-acoes">' +
+      '<button class="av-btn depois" onclick="dispensarAtualizacao()">Depois</button>' +
+      '<button class="av-btn baixar" onclick="baixarAtualizacao(\'' + url + '\')">Baixar</button>' +
+    '</div>';
+  caixa.style.display = "block";
+}
+
+function dispensarAtualizacao() {
+  const caixa = document.getElementById("aviso-atualizacao");
+  if (caixa) caixa.style.display = "none";
+}
+
+async function baixarAtualizacao(url) {
+  try {
+    const B = window.Capacitor.Plugins.Browser;
+    if (B && B.open) await B.open({ url: url });
+    else window.open(url, "_blank");
+    dispensarAtualizacao();
+  } catch (e) {
+    mostrarToast("❌ Não consegui abrir o download.");
+  }
+}
+
+// ============================================================================
 // WIDGET DA TELA INICIAL (só dentro do aplicativo Android)
 // O widget roda fora da WebView e não consegue chamar este JavaScript. A ponte
 // é o armazenamento nativo: aqui se grava um resumo com o plugin Preferences
@@ -1405,8 +1486,10 @@ window.addEventListener("load", async function () {
   // Detecta quando o app sai/volta (para bloqueio e atualização automática)
   configurarDeteccaoRetorno();
 
-  // Dentro do aplicativo: fica pronto para receber a volta do login
+  // Dentro do aplicativo: fica pronto para receber a volta do login e
+  // confere se há APK novo (não bloqueia a entrada).
   escutarVoltaDoLogin();
+  verificarAtualizacaoApp();
 
   // ---------- 1. Já tem sessão salva no aparelho? ----------
   const salva = lerSessaoSalva();
