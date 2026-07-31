@@ -432,6 +432,45 @@ async function agendarNotificacoesContas(contas) {
 }
 
 // ============================================================================
+// WIDGET DA TELA INICIAL (só dentro do aplicativo Android)
+// O widget roda fora da WebView e não consegue chamar este JavaScript. A ponte
+// é o armazenamento nativo: aqui se grava um resumo com o plugin Preferences
+// (que por baixo escreve no SharedPreferences "CapacitorStorage"), e o widget
+// lê de lá. Depois de gravar, pede o redesenho — senão ele só atualizaria no
+// ciclo de 30 minutos do Android e mostraria dado velho logo após liquidar
+// uma conta.
+// ============================================================================
+async function atualizarWidget(dashboard) {
+  if (!rodandoNoAplicativo()) return;
+
+  try {
+    const P = window.Capacitor.Plugins.Preferences;
+    if (!P) return;
+
+    const contas = (dashboard && dashboard.contasAVencer) ? dashboard.contasAVencer : [];
+    const proxima = contas[0] || null;
+
+    let total = 0;
+    contas.forEach(function (c) { total += (parseFloat(c.valor) || 0); });
+
+    const agora = new Date();
+    const hora = ("0" + agora.getHours()).slice(-2) + ":" + ("0" + agora.getMinutes()).slice(-2);
+
+    await P.set({ key: "widget_proxima_desc", value: proxima ? proxima.descricao : "" });
+    await P.set({ key: "widget_proxima_valor", value: proxima ? formatarMoeda(proxima.valor) : "" });
+    await P.set({ key: "widget_proxima_data", value: proxima ? proxima.data : "" });
+    await P.set({ key: "widget_total", value: formatarMoeda(total) });
+    await P.set({ key: "widget_atualizado", value: "às " + hora });
+
+    const W = window.Capacitor.Plugins.Widget;
+    if (W && W.atualizar) await W.atualizar();
+  } catch (e) {
+    // O widget é um extra: se falhar, o app segue igual.
+    console.warn("Widget não atualizado:", e);
+  }
+}
+
+// ============================================================================
 // CONFIGURAÇÕES — CATEGORIAS
 // As categorias vivem na planilha no formato "2.2.004. Padaria", e é o código
 // que decide se algo é receita ou despesa. Por isso aqui se escolhe o GRUPO e
@@ -1047,8 +1086,9 @@ function preencherDashboard(d) {
     });
   }
 
-  // Reagenda os avisos no aparelho (só faz algo dentro do aplicativo Android)
+  // Reagenda os avisos e alimenta o widget (só fazem algo dentro do aplicativo)
   agendarNotificacoesContas(d.contasAVencer);
+  atualizarWidget(d);
 
   // ---- TOP CATEGORIAS ----
   const listaCat = document.getElementById("lista-categorias");
