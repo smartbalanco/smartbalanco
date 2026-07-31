@@ -154,6 +154,9 @@ async function aoReceberLoginGoogle(resposta) {
       salvarSessao(r.sessao, emailUsuarioAtual);
       tokenLoginAtual = null;   // não precisa mais do token do Google
 
+      // Login aberto PELO aplicativo: devolve a sessão para ele e encerra aqui
+      if (ehLoginParaAplicativo()) { devolverSessaoAoAplicativo(r.sessao); return; }
+
       // Primeira vez? Oferece cadastrar biometria/PIN
       if (!temDesbloqueioConfigurado()) {
         mostrarTelaConfigurarBloqueio();
@@ -1185,6 +1188,86 @@ function mostrarTelaLogin() {
 }
 
 // ============================================================================
+// LOGIN DO APLICATIVO PELO NAVEGADOR
+// O Google não deixa o login rodar dentro da WebView de um app. Então o app
+// abre o navegador de verdade nesta mesma página, com ?paraApp=1; aqui o
+// login acontece normalmente e a sessão volta para o app por um endereço
+// próprio (com.smartbalanco.app://login?codigo=...), que o Android entrega
+// de volta ao aplicativo.
+// ============================================================================
+const ESQUEMA_APP = "com.smartbalanco.app";
+
+function ehLoginParaAplicativo() {
+  try {
+    return new URLSearchParams(location.search).get("paraApp") === "1";
+  } catch (e) { return false; }
+}
+
+function devolverSessaoAoAplicativo(codigo) {
+  const destino = ESQUEMA_APP + "://login?codigo=" + encodeURIComponent(codigo);
+
+  document.body.innerHTML =
+    '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
+    'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+    'height:100vh;text-align:center;padding:24px;background:#e8ecf3;color:#1e293b;">' +
+      '<div style="font-size:44px;margin-bottom:14px;">✅</div>' +
+      '<h2 style="margin-bottom:8px;font-size:19px;">Pronto!</h2>' +
+      '<p style="font-size:14px;color:#5b6878;line-height:1.5;">Voltando para o aplicativo...</p>' +
+      '<p style="font-size:12px;color:#5b6878;margin-top:22px;line-height:1.6;">' +
+        'Se nada acontecer, <a href="' + destino + '" style="color:#2c5f8a;font-weight:700;">toque aqui</a>.' +
+      '</p>' +
+    '</div>';
+
+  // Alguns navegadores ignoram o redirecionamento se ele vier antes do
+  // desenho da página; o pequeno atraso evita a tela em branco.
+  setTimeout(function () { location.href = destino; }, 400);
+}
+
+// Dentro do aplicativo: abre o navegador para logar e espera a volta
+async function entrarComGoogleNoAplicativo() {
+  try {
+    const B = window.Capacitor.Plugins.Browser;
+    const url = location.origin + location.pathname + "?paraApp=1";
+    if (B && B.open) await B.open({ url: url });
+  } catch (e) {
+    mostrarErroLogin("Não consegui abrir o navegador para o login.");
+  }
+}
+
+// Recebe a volta do navegador (com.smartbalanco.app://login?codigo=...)
+function escutarVoltaDoLogin() {
+  if (!rodandoNoAplicativo()) return;
+
+  try {
+    const A = window.Capacitor.Plugins.App;
+    if (!A || !A.addListener) return;
+
+    A.addListener("appUrlOpen", async function (evento) {
+      const url = (evento && evento.url) ? evento.url : "";
+      if (url.indexOf(ESQUEMA_APP + "://login") !== 0) return;
+
+      let codigo = "";
+      try {
+        codigo = new URLSearchParams(url.split("?")[1] || "").get("codigo") || "";
+      } catch (e) { codigo = ""; }
+
+      try {
+        const B = window.Capacitor.Plugins.Browser;
+        if (B && B.close) await B.close();
+      } catch (e) {}
+
+      if (!codigo) { mostrarErroLogin("O login não devolveu o código."); return; }
+
+      const campo = document.getElementById("login-codigo");
+      if (campo) campo.value = codigo;
+      entrarComCodigo();
+    });
+  } catch (e) {
+    console.warn("Não foi possível escutar a volta do login:", e);
+  }
+}
+
+// ============================================================================
 // ENTRAR COM CÓDIGO DE ACESSO
 // O login do Google não roda dentro do WebView do aplicativo — o próprio
 // Google bloqueia esse fluxo em WebView por segurança. Como o servidor já
@@ -1322,8 +1405,18 @@ window.addEventListener("load", async function () {
   // Detecta quando o app sai/volta (para bloqueio e atualização automática)
   configurarDeteccaoRetorno();
 
+  // Dentro do aplicativo: fica pronto para receber a volta do login
+  escutarVoltaDoLogin();
+
   // ---------- 1. Já tem sessão salva no aparelho? ----------
   const salva = lerSessaoSalva();
+
+  // Este navegador foi aberto PELO aplicativo só para logar. Se já existe
+  // sessão aqui, devolve na hora — sem fazer o usuário logar de novo.
+  if (ehLoginParaAplicativo() && salva.sessao) {
+    devolverSessaoAoAplicativo(salva.sessao);
+    return;
+  }
 
   if (salva.sessao) {
     sessaoAtual = salva.sessao;
@@ -1385,6 +1478,20 @@ async function validarSessaoSalva() {
 
 // Prepara o botão de login do Google
 function prepararLoginGoogle() {
+  // Dentro do aplicativo o botão do Google não funciona (a WebView é
+  // bloqueada por ele). Ali entra um botão que abre o navegador de verdade.
+  if (rodandoNoAplicativo()) {
+    const alvo = document.getElementById("botao-google");
+    if (alvo) {
+      alvo.innerHTML =
+        '<button id="btn-google-app" onclick="entrarComGoogleNoAplicativo()">' +
+          'Entrar com Google' +
+        '</button>';
+    }
+    mostrarTelaLogin();
+    return;
+  }
+
   try {
     google.accounts.id.initialize({
       client_id: GOOGLE_CLIENT_ID,

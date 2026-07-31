@@ -69,6 +69,13 @@
     }
     .rodape-login { position: absolute; bottom: 20px; left: 0; right: 0; font-size: 11px; color: #94a3b8; }
 
+    /* Botão de login dentro do aplicativo (abre o navegador) */
+    #btn-google-app {
+      background: #fff; color: #3c4043; border: 1px solid #dadce0;
+      border-radius: 12px; padding: 13px 26px; font-size: 15px; font-weight: 600;
+      cursor: pointer; font-family: inherit; min-width: 260px;
+    }
+
     /* ---- Entrar com código (usado dentro do aplicativo) ---- */
     #link-codigo {
       background: none; border: none; color: var(--azul-claro); font-size: 12px;
@@ -2932,6 +2939,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>
