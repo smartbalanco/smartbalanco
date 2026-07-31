@@ -69,6 +69,25 @@
     }
     .rodape-login { position: absolute; bottom: 20px; left: 0; right: 0; font-size: 11px; color: #94a3b8; }
 
+    /* ---- Entrar com código (usado dentro do aplicativo) ---- */
+    #link-codigo {
+      background: none; border: none; color: var(--azul-claro); font-size: 12px;
+      font-weight: 600; text-decoration: underline; cursor: pointer;
+      margin-top: 18px; font-family: inherit;
+    }
+    #login-codigo-area { display: none; width: 100%; max-width: 320px; margin: 14px auto 0; }
+    #login-codigo-area.aberto { display: block; }
+    #login-codigo {
+      width: 100%; padding: 13px; border-radius: 12px; border: none;
+      font-size: 13px; text-align: center; margin-bottom: 10px; font-family: inherit;
+    }
+    #btn-entrar-codigo {
+      width: 100%; padding: 13px; border: none; border-radius: 12px;
+      font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+      background: var(--verde); color: #fff;
+    }
+    .lc-ajuda { font-size: 11px; color: var(--cinza-texto); margin-top: 10px; line-height: 1.5; }
+
     /* TOPO */
     #tela-interna { display: none; padding-bottom: 30px; }
     .topo {
@@ -400,6 +419,11 @@
     .cfg-item:last-child { border-bottom: none; }
     .cfg-item-nome { flex: 1; word-break: break-word; }
     .cfg-item-cod { font-size: 10px; color: #94a3b8; display: block; }
+    .cfg-codigo-caixa {
+      font-family: ui-monospace, "Courier New", monospace; font-size: 12px;
+      word-break: break-all; line-height: 1.6; padding: 12px;
+      border-radius: 10px; margin: 8px 0 10px; user-select: all;
+    }
     .cfg-btn {
       background: none; border: 1px solid var(--borda); border-radius: 8px;
       padding: 5px 9px; font-size: 13px; cursor: pointer; flex-shrink: 0;
@@ -1859,6 +1883,19 @@
     <p class="sub">Gestão financeira pessoal</p>
     <div id="botao-google"></div>
     <div id="login-erro"></div>
+
+    <!-- O login do Google não funciona dentro do WebView do aplicativo (o
+         próprio Google bloqueia por segurança). Então, no APK, entra-se com
+         o código de acesso gerado no navegador, em Configurações. -->
+    <button id="link-codigo" onclick="alternarLoginCodigo()">Entrar com código de acesso</button>
+    <div id="login-codigo-area">
+      <input type="text" id="login-codigo" placeholder="Cole aqui o código" autocomplete="off" />
+      <button id="btn-entrar-codigo" onclick="entrarComCodigo()">Entrar</button>
+      <div class="lc-ajuda">
+        Abra o app no navegador, vá em ⚙ Configurações e copie o código de acesso.
+      </div>
+    </div>
+
     <div class="rodape-login">Acesso restrito &middot; Smartbalanço 2.0</div>
   </div>
 
@@ -2580,6 +2617,9 @@
         </div>
 
         <div id="cfg-categorias"></div>
+
+        <div class="cfg-grupo-titulo" style="margin-top:22px;">Acesso pelo aplicativo</div>
+        <div id="cfg-codigo"></div>
       </div>
     </div>
   </div>
@@ -2892,6 +2932,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>

@@ -349,6 +349,89 @@ async function salvarEdicao() {
 }
 
 // ============================================================================
+// NOTIFICAÇÕES LOCAIS (só dentro do aplicativo Android)
+// Nada de servidor de push: o próprio aparelho guarda os avisos das contas a
+// vencer. O reagendamento acontece toda vez que o dashboard carrega, o que
+// basta para contas com vencimento conhecido.
+// No navegador, tudo aqui é silenciosamente ignorado.
+// ============================================================================
+const ID_BASE_NOTIFICACAO = 10000;   // acima disso, as notificações são nossas
+
+function rodandoNoAplicativo() {
+  try {
+    return !!(window.Capacitor &&
+              typeof window.Capacitor.isNativePlatform === "function" &&
+              window.Capacitor.isNativePlatform());
+  } catch (e) { return false; }
+}
+
+function pluginNotificacoes() {
+  try { return window.Capacitor.Plugins.LocalNotifications || null; }
+  catch (e) { return null; }
+}
+
+// "dd/MM" -> Date deste ano (ou do ano que vem, se a data já passou)
+function dataDeDiaMes(txt) {
+  const p = (txt || "").split("/");
+  if (p.length !== 2) return null;
+
+  const hoje = new Date();
+  let d = new Date(hoje.getFullYear(), parseInt(p[1]) - 1, parseInt(p[0]));
+
+  // O dashboard só manda os próximos 15 dias; se caiu bem atrás, virou o ano.
+  if (d.getTime() < hoje.getTime() - (60 * 86400000)) {
+    d = new Date(hoje.getFullYear() + 1, parseInt(p[1]) - 1, parseInt(p[0]));
+  }
+  return isNaN(d.getTime()) ? null : d;
+}
+
+async function agendarNotificacoesContas(contas) {
+  if (!rodandoNoAplicativo()) return;
+
+  const LN = pluginNotificacoes();
+  if (!LN) return;
+
+  try {
+    let permissao = await LN.checkPermissions();
+    if (permissao.display !== "granted") {
+      permissao = await LN.requestPermissions();
+      if (permissao.display !== "granted") return;
+    }
+
+    // Limpa as que este código agendou antes, para não duplicar a cada carga
+    const pendentes = await LN.getPending();
+    const nossas = (pendentes.notifications || [])
+      .filter(function (n) { return n.id >= ID_BASE_NOTIFICACAO; })
+      .map(function (n) { return { id: n.id }; });
+    if (nossas.length > 0) await LN.cancel({ notifications: nossas });
+
+    const agora = new Date();
+    const aAgendar = [];
+
+    (contas || []).forEach(function (c, i) {
+      const venc = dataDeDiaMes(c.data);
+      if (!venc) return;
+
+      // Aviso às 9h do dia anterior ao vencimento
+      const quando = new Date(venc.getFullYear(), venc.getMonth(), venc.getDate() - 1, 9, 0, 0);
+      if (quando <= agora) return;   // já passou: não adianta agendar
+
+      aAgendar.push({
+        id: ID_BASE_NOTIFICACAO + i,
+        title: c.ehFatura ? "Fatura vence amanhã" : "Conta vence amanhã",
+        body: c.descricao + " · " + formatarMoeda(c.valor),
+        schedule: { at: quando, allowWhileIdle: true }
+      });
+    });
+
+    if (aAgendar.length > 0) await LN.schedule({ notifications: aAgendar });
+  } catch (e) {
+    // Notificação é um extra: se falhar, o app segue normal.
+    console.warn("Notificações locais não agendadas:", e);
+  }
+}
+
+// ============================================================================
 // CONFIGURAÇÕES — CATEGORIAS
 // As categorias vivem na planilha no formato "2.2.004. Padaria", e é o código
 // que decide se algo é receita ou despesa. Por isso aqui se escolhe o GRUPO e
@@ -376,6 +459,7 @@ async function abrirConfig() {
   }
 
   renderizarCategoriasConfig();
+  montarCodigoAcesso();
 }
 
 function fecharConfig() {
@@ -963,6 +1047,9 @@ function preencherDashboard(d) {
     });
   }
 
+  // Reagenda os avisos no aparelho (só faz algo dentro do aplicativo Android)
+  agendarNotificacoesContas(d.contasAVencer);
+
   // ---- TOP CATEGORIAS ----
   const listaCat = document.getElementById("lista-categorias");
   listaCat.innerHTML = "";
@@ -1055,6 +1142,95 @@ function mostrarTelaLogin() {
   document.getElementById("tela-login").style.display = "flex";
   const b = document.getElementById("btn-nova-despesa");
   if (b) b.style.display = "none";
+}
+
+// ============================================================================
+// ENTRAR COM CÓDIGO DE ACESSO
+// O login do Google não roda dentro do WebView do aplicativo — o próprio
+// Google bloqueia esse fluxo em WebView por segurança. Como o servidor já
+// trabalha com sessão de 30 dias que se renova a cada uso, o app aceita o
+// código gerado no navegador: entra-se uma vez e pronto.
+// ============================================================================
+function alternarLoginCodigo() {
+  const area = document.getElementById("login-codigo-area");
+  const abriu = area.classList.toggle("aberto");
+  if (abriu) document.getElementById("login-codigo").focus();
+}
+
+async function entrarComCodigo() {
+  const campo = document.getElementById("login-codigo");
+  const codigo = (campo.value || "").trim();
+  const btn = document.getElementById("btn-entrar-codigo");
+
+  if (!codigo) { mostrarErroLogin("Cole o código de acesso."); return; }
+
+  const anterior = sessaoAtual;
+  btn.disabled = true;
+  btn.textContent = "Entrando...";
+  sessaoAtual = codigo;
+
+  try {
+    const r = await chamarServidor("login");
+
+    if (r.ok && r.usuario) {
+      emailUsuarioAtual = r.usuario;
+      salvarSessao(codigo, r.usuario);
+      campo.value = "";
+      await entrarNoApp();
+      return;
+    }
+
+    sessaoAtual = anterior;
+    mostrarErroLogin(r.mensagem || "Código inválido ou expirado.");
+  } catch (e) {
+    sessaoAtual = anterior;
+    mostrarErroLogin("Sem conexão. Tente de novo.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Entrar";
+  }
+}
+
+// Mostra o código da sessão atual em Configurações, para levar ao aplicativo
+function montarCodigoAcesso() {
+  const alvo = document.getElementById("cfg-codigo");
+  if (!alvo) return;
+
+  if (!sessaoAtual) {
+    alvo.innerHTML = '<p class="vazio">Sem sessão ativa.</p>';
+    return;
+  }
+
+  alvo.innerHTML =
+    '<div class="cfg-aviso">Cole este código na tela de entrada do aplicativo. ' +
+    'Ele dá acesso à sua conta — não compartilhe.</div>' +
+    '<div class="cfg-codigo-caixa" id="cfg-codigo-txt">' + escaparHtml(sessaoAtual) + '</div>' +
+    '<button class="btn-modal confirmar" style="width:100%;" onclick="copiarCodigoAcesso()">' +
+      '📋 Copiar código' +
+    '</button>';
+}
+
+async function copiarCodigoAcesso() {
+  try {
+    await navigator.clipboard.writeText(sessaoAtual || "");
+    mostrarToast("📋 Código copiado.");
+  } catch (e) {
+    // WebView antigo: cai no seletor manual
+    const el = document.getElementById("cfg-codigo-txt");
+    if (el) {
+      const faixa = document.createRange();
+      faixa.selectNodeContents(el);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(faixa);
+      try {
+        document.execCommand("copy");
+        mostrarToast("📋 Código copiado.");
+      } catch (e2) {
+        mostrarToast("Selecione e copie o código manualmente.");
+      }
+    }
+  }
 }
 
 function mostrarErroLogin(msg) {
