@@ -215,9 +215,15 @@ async function liquidarFaturaNaTela(indice) {
   const f = faturasNaTela[indice];
   if (!f) return;
 
+  // Vindo do widget ou do calendário, valor e quantidade podem não ser
+  // conhecidos — nesse caso o texto não inventa números.
+  let detalhe;
+  if (f.qtd > 0) detalhe = formatarMoeda(f.valor) + " em " + f.qtd + " compra(s).";
+  else if (f.valor > 0) detalhe = formatarMoeda(f.valor) + ".";
+  else detalhe = "Todas as compras em aberto dessa fatura.";
+
   const confirmou = confirm(
-    "Liquidar a " + f.descricao + "?\n\n" +
-    formatarMoeda(f.valor) + " em " + f.qtd + " compra(s).\n\n" +
+    "Liquidar a " + f.descricao + "?\n\n" + detalhe + "\n\n" +
     "Todas ficarão com a data de pagamento de hoje."
   );
   if (!confirmou) return;
@@ -435,6 +441,292 @@ async function agendarNotificacoesContas(contas) {
 }
 
 // ============================================================================
+// SMARTCALENDÁRIO
+// Mês em grade, com as contas a vencer e os compromissos no mesmo lugar.
+// Compromissos ficam na aba 'Compromissos' da planilha; as despesas vêm da
+// mesma fonte do resto do app, então liquidar aqui é o mesmo fluxo do
+// dashboard — nada é recalculado por fora.
+// ============================================================================
+let calMes = new Date().getMonth();
+let calAno = new Date().getFullYear();
+let calDiaEscolhido = null;      // "yyyy-MM-dd"
+let calDados = { compromissos: [], despesas: [] };
+
+function alternarMenuProdutos() {
+  document.getElementById("menu-produtos").classList.toggle("aberto");
+}
+
+function irParaProduto(qual) {
+  document.getElementById("menu-produtos").classList.remove("aberto");
+  if (qual === "calendario") abrirCalendario();
+  else trocarAba("dashboard");
+}
+
+// Fecha o menu ao tocar fora
+document.addEventListener("click", function (e) {
+  const menu = document.getElementById("menu-produtos");
+  const botao = document.getElementById("titulo-topo");
+  if (!menu || !botao) return;
+  if (!menu.contains(e.target) && !botao.contains(e.target)) {
+    menu.classList.remove("aberto");
+  }
+});
+
+async function abrirCalendario() {
+  trocarAba("calendario");
+
+  const hoje = new Date();
+  calMes = hoje.getMonth();
+  calAno = hoje.getFullYear();
+  calDiaEscolhido = dataParaISO(hoje);
+
+  await carregarCalendario();
+}
+
+function mudarMesCalendario(passo) {
+  calMes += passo;
+  if (calMes > 11) { calMes = 0; calAno++; }
+  if (calMes < 0) { calMes = 11; calAno--; }
+  calDiaEscolhido = null;
+  carregarCalendario();
+}
+
+async function carregarCalendario() {
+  document.getElementById("cal-mes-nome").textContent = MESES_NOMES[calMes] + " de " + calAno;
+  document.getElementById("cal-grade").innerHTML = '<p class="vazio" style="grid-column:1/8;">Carregando...</p>';
+
+  try {
+    const r = await chamarServidor("dadosCalendario", { mes: calMes, ano: calAno });
+    calDados = r.ok ? { compromissos: r.compromissos || [], despesas: r.despesas || [] }
+                    : { compromissos: [], despesas: [] };
+    if (!r.ok) mostrarToast("❌ " + (r.mensagem || "Não consegui carregar o mês."));
+  } catch (e) {
+    calDados = { compromissos: [], despesas: [] };
+    mostrarToast("❌ Sem conexão.");
+  }
+
+  desenharGradeCalendario();
+  mostrarDiaCalendario(calDiaEscolhido);
+}
+
+function desenharGradeCalendario() {
+  const grade = document.getElementById("cal-grade");
+  const primeiro = new Date(calAno, calMes, 1);
+  const diasNoMes = new Date(calAno, calMes + 1, 0).getDate();
+  const hojeISO = dataParaISO(new Date());
+
+  // Quais dias têm o quê
+  const comDespesa = {};
+  const comCompromisso = {};
+  calDados.despesas.forEach(function (d) { comDespesa[d.data] = true; });
+  calDados.compromissos.forEach(function (c) { comCompromisso[c.data] = true; });
+
+  let html = "";
+
+  // Espaços até o primeiro dia cair no dia da semana certo
+  for (let i = 0; i < primeiro.getDay(); i++) {
+    html += '<button class="cal-dia vazio"></button>';
+  }
+
+  for (let dia = 1; dia <= diasNoMes; dia++) {
+    const iso = calAno + "-" + ("0" + (calMes + 1)).slice(-2) + "-" + ("0" + dia).slice(-2);
+    const classes = ["cal-dia"];
+    if (iso === hojeISO) classes.push("hoje");
+    if (iso === calDiaEscolhido) classes.push("escolhido");
+
+    let pontos = "";
+    if (comDespesa[iso]) pontos += '<i class="ponto despesa"></i>';
+    if (comCompromisso[iso]) pontos += '<i class="ponto compromisso"></i>';
+
+    html +=
+      '<button class="' + classes.join(" ") + '" onclick="mostrarDiaCalendario(\'' + iso + '\')">' +
+        '<span>' + dia + '</span>' +
+        '<span class="cal-pontos">' + pontos + '</span>' +
+      '</button>';
+  }
+
+  grade.innerHTML = html;
+}
+
+function mostrarDiaCalendario(iso) {
+  calDiaEscolhido = iso;
+  desenharGradeCalendario();
+
+  const titulo = document.getElementById("cal-dia-titulo");
+  const alvo = document.getElementById("cal-dia-conteudo");
+
+  if (!iso) {
+    titulo.textContent = "Selecione um dia";
+    alvo.innerHTML = '<p class="vazio">Toque num dia do calendário.</p>';
+    return;
+  }
+
+  const p = iso.split("-");
+  titulo.textContent = p[2] + " de " + MESES_NOMES[parseInt(p[1]) - 1];
+
+  const compromissos = calDados.compromissos.filter(function (c) { return c.data === iso; });
+  const despesas = calDados.despesas.filter(function (d) { return d.data === iso; });
+
+  if (compromissos.length === 0 && despesas.length === 0) {
+    alvo.innerHTML = '<p class="vazio">Nada neste dia.</p>';
+    return;
+  }
+
+  let html = "";
+
+  compromissos
+    .sort(function (a, b) { return (a.hora || "99").localeCompare(b.hora || "99"); })
+    .forEach(function (c) {
+      const detalhe = [c.hora, c.local].filter(function (x) { return x; }).join(" · ");
+      html +=
+        '<div class="cal-item' + (c.concluido ? " feito" : "") + '">' +
+          '<div class="cal-item-info" onclick="abrirCompromisso(\'' + c.id + '\')">' +
+            '<div class="cal-item-titulo">📌 ' + escaparHtml(c.titulo) + '</div>' +
+            (detalhe ? '<div class="cal-item-sub">' + escaparHtml(detalhe) + '</div>' : '') +
+          '</div>' +
+          '<button class="cal-btn" onclick="alternarConcluido(\'' + c.id + '\', ' + (!c.concluido) + ')">' +
+            (c.concluido ? "Reabrir" : "Feito") +
+          '</button>' +
+        '</div>';
+    });
+
+  despesas.forEach(function (d, i) {
+    const acao = d.ehFatura
+      ? 'liquidarFaturaDoCalendario(' + i + ')'
+      : 'fecharCalendarioELiquidar(' + d.numMov + ')';
+
+    html +=
+      '<div class="cal-item">' +
+        '<div class="cal-item-info">' +
+          '<div class="cal-item-titulo">' + (d.ehFatura ? "💳 " : "💸 ") + escaparHtml(d.descricao) + '</div>' +
+          '<div class="cal-item-sub">' + (d.numMov ? "MOV-" + d.numMov : "fatura") + '</div>' +
+        '</div>' +
+        '<span class="cal-item-valor">' + formatarMoeda(d.valor) + '</span>' +
+        '<button class="cal-btn" onclick="' + acao + '">Liquidar</button>' +
+      '</div>';
+  });
+
+  alvo.innerHTML = html;
+}
+
+// Liquidar do calendário reusa o fluxo do dashboard, em vez de refazer a regra
+function fecharCalendarioELiquidar(numMov) {
+  abrirLiquidacao(numMov);
+}
+
+async function liquidarFaturaDoCalendario(indice) {
+  const despesasDoDia = calDados.despesas.filter(function (d) { return d.data === calDiaEscolhido; });
+  const f = despesasDoDia[indice];
+  if (!f || !f.ehFatura) return;
+
+  faturasNaTela = [{
+    cartao: f.cartao,
+    vencimento: f.vencimento,
+    descricao: f.descricao,
+    valor: f.valor,
+    qtd: 0
+  }];
+  await liquidarFaturaNaTela(0);
+  carregarCalendario();
+}
+
+// ---------- Compromissos ----------
+function abrirCompromisso(id) {
+  const modal = document.getElementById("modal-compromisso");
+  modal.style.display = "flex";
+
+  const existente = id ? calDados.compromissos.filter(function (c) { return c.id === id; })[0] : null;
+
+  document.getElementById("cp-id").value = existente ? existente.id : "";
+  document.getElementById("cp-nome").value = existente ? existente.titulo : "";
+  document.getElementById("cp-data").value = existente ? existente.data : (calDiaEscolhido || dataHojeISO());
+  document.getElementById("cp-hora").value = existente ? existente.hora : "";
+  document.getElementById("cp-local").value = existente ? existente.local : "";
+  document.getElementById("cp-lembrete").value = existente ? String(existente.lembrete || 0) : "60";
+  document.getElementById("cp-aviso").textContent = "";
+
+  document.getElementById("cp-titulo-modal").textContent = existente ? "📅 Editar compromisso" : "📅 Novo compromisso";
+  document.getElementById("cp-btn-excluir").style.display = existente ? "block" : "none";
+}
+
+function fecharCompromisso() {
+  document.getElementById("modal-compromisso").style.display = "none";
+}
+
+async function salvarCompromissoApp() {
+  const aviso = document.getElementById("cp-aviso");
+  const btn = document.getElementById("cp-btn-salvar");
+
+  const titulo = document.getElementById("cp-nome").value.trim();
+  const data = document.getElementById("cp-data").value;
+
+  if (!titulo) { aviso.textContent = "Dê um nome ao compromisso."; return; }
+  if (!data) { aviso.textContent = "Escolha a data."; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+
+  try {
+    const r = await chamarServidor("salvarCompromisso", {
+      id: document.getElementById("cp-id").value,
+      titulo: titulo,
+      data: data,
+      hora: document.getElementById("cp-hora").value,
+      local: document.getElementById("cp-local").value.trim(),
+      lembrete: document.getElementById("cp-lembrete").value
+    });
+
+    if (r.ok) {
+      fecharCompromisso();
+      mostrarToast("✅ " + r.mensagem);
+      calDiaEscolhido = data;
+      await carregarCalendario();
+    } else {
+      aviso.textContent = r.mensagem || "Não foi possível salvar.";
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão. Nada foi salvo.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Salvar";
+  }
+}
+
+async function excluirCompromissoApp() {
+  const id = document.getElementById("cp-id").value;
+  if (!id) return;
+  if (!confirm("Excluir este compromisso?")) return;
+
+  try {
+    const r = await chamarServidor("excluirCompromisso", { id: id });
+    if (r.ok) {
+      fecharCompromisso();
+      mostrarToast("✅ " + r.mensagem);
+      await carregarCalendario();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não foi possível excluir."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+async function alternarConcluido(id, novoEstado) {
+  try {
+    const r = await chamarServidor("concluirCompromisso", { id: id, concluido: novoEstado ? "true" : "false" });
+    if (r.ok) {
+      const c = calDados.compromissos.filter(function (x) { return x.id === id; })[0];
+      if (c) c.concluido = novoEstado;
+      mostrarDiaCalendario(calDiaEscolhido);
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não deu."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+// ============================================================================
 // ATUALIZAÇÃO DO APLICATIVO
 // O app pergunta ao GitHub qual é a última versão publicada e compara com a
 // instalada. Só o que é nativo (widget, notificação, permissão) exige APK
@@ -544,7 +836,12 @@ async function atualizarWidget(dashboard) {
       total += (parseFloat(c.valor) || 0);
       return {
         descricao: (c.ehFatura ? "💳 " : "") + c.descricao,
-        valor: formatarMoeda(c.valor)
+        valor: formatarMoeda(c.valor),
+        // O botão "Liquidar" do widget precisa saber o que abrir
+        numMov: c.numMov || 0,
+        ehFatura: !!c.ehFatura,
+        cartao: c.cartao || "",
+        vencimento: c.vencimento || ""
       };
     });
 
@@ -1344,6 +1641,12 @@ function escutarVoltaDoLogin() {
         return;
       }
 
+      // Botão "Liquidar" do widget
+      if (url.indexOf(ESQUEMA_APP + "://liquidar") === 0) {
+        tratarLiquidacaoDoWidget(url);
+        return;
+      }
+
       if (url.indexOf(ESQUEMA_APP + "://login") !== 0) return;
 
       let codigo = "";
@@ -1393,10 +1696,52 @@ async function verificarAtalhoDeAbertura() {
     if (!A || !A.getLaunchUrl) return;
 
     const inicial = await A.getLaunchUrl();
-    if (inicial && inicial.url && inicial.url.indexOf(ESQUEMA_APP + "://novo") === 0) {
-      abrirMenuAdicionarQuandoPronto();
-    }
+    const url = (inicial && inicial.url) ? inicial.url : "";
+
+    if (url.indexOf(ESQUEMA_APP + "://novo") === 0) abrirMenuAdicionarQuandoPronto();
+    else if (url.indexOf(ESQUEMA_APP + "://liquidar") === 0) tratarLiquidacaoDoWidget(url);
   } catch (e) { /* atalho é conveniência: falhar aqui não quebra nada */ }
+}
+
+// Liquidar a partir do widget. Não faz a baixa direto: abre a mesma tela de
+// liquidação do app, para você conferir valor e data antes de confirmar —
+// dar baixa com um toque solto na tela inicial é fácil demais de errar.
+function tratarLiquidacaoDoWidget(url, tentativa) {
+  tentativa = tentativa || 0;
+  if (tentativa > 40) return;
+
+  const tela = document.getElementById("tela-interna");
+  const pronto = tela && tela.style.display !== "none" && sessaoAtual;
+
+  if (!pronto) {
+    setTimeout(function () { tratarLiquidacaoDoWidget(url, tentativa + 1); }, 500);
+    return;
+  }
+
+  let params;
+  try {
+    params = new URLSearchParams(url.split("?")[1] || "");
+  } catch (e) { return; }
+
+  // Fatura: reaproveita o fluxo de liquidação em lote do dashboard
+  if (url.indexOf(ESQUEMA_APP + "://liquidarFatura") === 0) {
+    const cartao = params.get("cartao") || "";
+    const venc = params.get("venc") || "";
+    if (!cartao || !venc) return;
+
+    faturasNaTela = [{
+      cartao: cartao,
+      vencimento: venc,
+      descricao: "Fatura " + cartao,
+      valor: 0,
+      qtd: 0
+    }];
+    liquidarFaturaNaTela(0);
+    return;
+  }
+
+  const mov = parseInt(params.get("mov"));
+  if (!isNaN(mov) && mov > 0) abrirLiquidacao(mov);
 }
 
 // ============================================================================
@@ -2167,9 +2512,10 @@ function trocarAba(nome) {
   document.getElementById("conteudo-rel").style.display   = (nome === "relatorios") ? "block" : "none";
   document.getElementById("conteudo-chat").style.display  = (nome === "chat")       ? "flex"  : "none";
   document.getElementById("conteudo-busca").style.display = (nome === "busca")      ? "block" : "none";
+  document.getElementById("conteudo-calendario").style.display = (nome === "calendario") ? "block" : "none";
   document.getElementById("nav-mes-wrap").style.display   = (nome === "dashboard")  ? "flex"  : "none";
   document.getElementById("abas-principais").style.display =
-    (nome === "chat" || nome === "busca") ? "none" : "flex";
+    (nome === "chat" || nome === "busca" || nome === "calendario") ? "none" : "flex";
 
   document.getElementById("tab-dashboard").classList.toggle("ativa", nome === "dashboard");
   document.getElementById("tab-aprovacoes").classList.toggle("ativa", nome === "aprovacoes");
@@ -2182,12 +2528,15 @@ function trocarAba(nome) {
 
   // Botão voltar (no chat e na busca)
   document.getElementById("btn-voltar").style.display =
-    (nome === "chat" || nome === "busca") ? "inline-block" : "none";
+    (nome === "chat" || nome === "busca" || nome === "calendario") ? "inline-block" : "none";
 
   // Título do topo
-  const titulo = document.getElementById("titulo-topo");
+  // Só o texto muda: a seta do menu de produtos fica num span à parte, senão
+  // seria apagada a cada troca de aba.
+  const titulo = document.getElementById("titulo-texto");
   if (nome === "chat") titulo.textContent = "🧠 Assistente IA";
-  else if (nome === "busca") titulo.textContent = "🔍 Buscar";
+  else if (nome === "busca") titulo.textContent = "🚀 Lançamentos";
+  else if (nome === "calendario") titulo.textContent = "Smartcalendário";
   else titulo.textContent = "Smartbalanço";
 
   if (nome === "aprovacoes") carregarAprovacoes(false);

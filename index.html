@@ -394,6 +394,79 @@
     .linha-dupla { display: flex; gap: 12px; }
     .linha-dupla .campo-bloco { flex: 1; }
 
+    /* ---------- MENU DE PRODUTOS (no nome do topo) ---------- */
+    .seta-produtos { font-size: 11px; margin-left: 5px; opacity: 0.7; }
+    #menu-produtos {
+      display: none; position: absolute; top: 52px; left: 12px; z-index: 120;
+      border-radius: 14px; padding: 6px; min-width: 210px;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-alto);
+    }
+    #menu-produtos.aberto { display: block; }
+    #menu-produtos button {
+      display: block; width: 100%; text-align: left; border: none;
+      background: transparent; padding: 12px 14px; border-radius: 10px;
+      font-size: 14px; font-weight: 600; color: var(--azul);
+      cursor: pointer; font-family: inherit;
+    }
+    #menu-produtos button:active { box-shadow: var(--afundado-leve); }
+
+    /* ---------- SMARTCALENDÁRIO ---------- */
+    #conteudo-calendario { display: none; }
+    .cal-topo {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .cal-mes { font-size: 15px; font-weight: 700; color: var(--azul); text-transform: capitalize; }
+    .cal-seta {
+      border: none; background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 10px; width: 36px; height: 36px; font-size: 18px;
+      color: var(--azul); cursor: pointer; font-family: inherit;
+    }
+    .cal-seta:active { box-shadow: var(--afundado-leve); }
+
+    .cal-semana, .cal-grade { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .cal-semana span {
+      text-align: center; font-size: 10px; font-weight: 700;
+      color: var(--cinza-texto); padding-bottom: 6px;
+    }
+    .cal-dia {
+      aspect-ratio: 1 / 1; border: none; border-radius: 10px; cursor: pointer;
+      background: transparent; font-family: inherit; font-size: 13px; color: #1e293b;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 3px; padding: 0;
+    }
+    .cal-dia.vazio { visibility: hidden; }
+    .cal-dia.hoje { box-shadow: var(--afundado-leve); font-weight: 700; color: var(--azul); }
+    .cal-dia.escolhido { background: var(--azul); color: #fff; }
+    .cal-pontos { display: flex; gap: 3px; height: 5px; }
+    .ponto { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+    .ponto.despesa { background: var(--vermelho); }
+    .ponto.compromisso { background: var(--azul-claro); }
+    .cal-dia.escolhido .ponto.compromisso { background: #fff; }
+
+    .cal-legenda {
+      display: flex; gap: 16px; justify-content: center; margin-top: 14px;
+      font-size: 11px; color: var(--cinza-texto);
+    }
+    .cal-legenda span { display: flex; align-items: center; gap: 5px; }
+
+    .cal-item {
+      display: flex; align-items: center; gap: 10px; padding: 11px;
+      border-radius: 12px; margin-bottom: 8px;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+    }
+    .cal-item-info { flex: 1; min-width: 0; }
+    .cal-item-titulo { font-size: 13px; font-weight: 600; word-break: break-word; }
+    .cal-item-sub { font-size: 11px; color: var(--cinza-texto); margin-top: 2px; }
+    .cal-item-valor { font-size: 13px; font-weight: 700; color: var(--vermelho); white-space: nowrap; }
+    .cal-item.feito .cal-item-titulo { text-decoration: line-through; opacity: 0.6; }
+    .cal-btn {
+      border: none; border-radius: 9px; padding: 7px 11px; font-size: 11px;
+      font-weight: 700; cursor: pointer; font-family: inherit; flex-shrink: 0;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo); color: var(--verde);
+    }
+    .cal-btn:active { box-shadow: var(--afundado-leve); }
+
     /* ---------- AVISO DE ATUALIZAÇÃO DO APLICATIVO ---------- */
     #aviso-atualizacao {
       display: none; border-radius: 14px; padding: 14px; margin-bottom: 14px;
@@ -1988,7 +2061,13 @@
       <div class="topo-linha1">
         <div style="display:flex; align-items:center; gap:8px;">
           <button id="btn-voltar" onclick="voltarAoDashboard()" style="display:none;">‹</button>
-          <span class="nome-app" id="titulo-topo">Smartbalanço</span>
+          <button class="nome-app" id="titulo-topo" onclick="alternarMenuProdutos()">
+            <span id="titulo-texto">Smartbalanço</span><span class="seta-produtos">▾</span>
+          </button>
+          <div id="menu-produtos">
+            <button onclick="irParaProduto('balanco')">💰 Smartbalanço</button>
+            <button onclick="irParaProduto('calendario')">📅 Smartcalendário</button>
+          </div>
         </div>
         <div class="acoes">
           <button id="btn-hoje" onclick="irParaMesAtual()">Hoje</button>
@@ -2092,6 +2171,35 @@
 
     <!-- ============ CONTEÚDO: RELATÓRIOS ============ -->
     <div id="conteudo-rel"></div>
+
+    <!-- ============ SMARTCALENDÁRIO ============ -->
+    <div id="conteudo-calendario">
+      <div class="card">
+        <div class="cal-topo">
+          <button class="cal-seta" onclick="mudarMesCalendario(-1)">&#8249;</button>
+          <span class="cal-mes" id="cal-mes-nome"></span>
+          <button class="cal-seta" onclick="mudarMesCalendario(1)">&#8250;</button>
+        </div>
+
+        <div class="cal-semana">
+          <span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span>
+        </div>
+        <div class="cal-grade" id="cal-grade"></div>
+
+        <div class="cal-legenda">
+          <span><i class="ponto despesa"></i> Conta a pagar</span>
+          <span><i class="ponto compromisso"></i> Compromisso</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-topo">
+          <h2 id="cal-dia-titulo">Selecione um dia</h2>
+          <button class="btn-ver-tudo" onclick="abrirCompromisso()">+ Compromisso</button>
+        </div>
+        <div id="cal-dia-conteudo"></div>
+      </div>
+    </div>
 
     <!-- ============ CONTEÚDO: BUSCA ============ -->
     <div id="conteudo-busca">
@@ -2547,6 +2655,63 @@
   </div>
 
 
+  <!-- ============ MODAL: COMPROMISSO ============ -->
+  <div class="modal-fundo" id="modal-compromisso">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo" id="cp-titulo-modal">📅 Novo compromisso</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;" id="cp-sub">No Smartcalendário</div>
+        </div>
+        <button class="fechar" onclick="fecharCompromisso()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <input type="hidden" id="cp-id" />
+
+        <div class="campo-bloco">
+          <label for="cp-nome">Compromisso</label>
+          <input type="text" id="cp-nome" maxlength="80" placeholder="Ex.: Dentista" />
+        </div>
+
+        <div class="linha-dupla">
+          <div class="campo-bloco">
+            <label for="cp-data">Data</label>
+            <input type="date" id="cp-data" />
+          </div>
+          <div class="campo-bloco">
+            <label for="cp-hora">Hora</label>
+            <input type="time" id="cp-hora" />
+          </div>
+        </div>
+
+        <div class="campo-bloco">
+          <label for="cp-local">Local ou detalhe</label>
+          <input type="text" id="cp-local" maxlength="120" placeholder="Opcional" />
+        </div>
+
+        <div class="campo-bloco">
+          <label for="cp-lembrete">Lembrete</label>
+          <select id="cp-lembrete">
+            <option value="0">Sem lembrete</option>
+            <option value="15">15 minutos antes</option>
+            <option value="30">30 minutos antes</option>
+            <option value="60" selected>1 hora antes</option>
+            <option value="180">3 horas antes</option>
+            <option value="1440">1 dia antes</option>
+          </select>
+        </div>
+
+        <div class="cfg-aviso" id="cp-aviso"></div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" id="cp-btn-excluir" onclick="excluirCompromissoApp()">Excluir</button>
+          <button class="btn-modal confirmar" id="cp-btn-salvar" onclick="salvarCompromissoApp()">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: EDITAR LANÇAMENTO ============ -->
   <div class="modal-fundo" id="modal-editar">
     <div class="modal-caixa">
@@ -2957,6 +3122,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>
