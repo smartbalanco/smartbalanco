@@ -354,6 +354,19 @@
     .linha-dupla { display: flex; gap: 12px; }
     .linha-dupla .campo-bloco { flex: 1; }
 
+    /* ---------- EDITAR LANÇAMENTO ---------- */
+    .edt-escopo {
+      display: none; background: #fff7ed; border-left: 3px solid var(--laranja);
+      border-radius: 8px; padding: 12px; margin-bottom: 14px;
+    }
+    .edt-escopo.aberto { display: block; }
+    .edt-escopo-botoes { display: flex; gap: 8px; }
+    .edt-op {
+      flex: 1; background: #fff; border: 1px solid var(--borda); color: var(--cinza-texto);
+      border-radius: 8px; padding: 9px; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .edt-op.ativa { background: var(--azul); color: #fff; border-color: var(--azul); }
+
     /* ---------- CONFIGURAÇÕES ---------- */
     .cfg-nova {
       display: none; background: var(--cinza-fundo); border-radius: 10px;
@@ -1476,6 +1489,10 @@
     .det-btn.liquidar {
       width: 100%; background: var(--verde); color: #fff; margin-bottom: 10px;
     }
+    .det-btn.editar {
+      width: 100%; background: var(--cinza-fundo); color: var(--azul);
+      border: 1px solid var(--borda); margin: 10px 0;
+    }
 
     .det-buscando { text-align: center; padding: 26px 20px; }
     .det-buscando p { font-size: 14px; color: var(--cinza-texto); }
@@ -2280,6 +2297,68 @@
   </div>
 
 
+  <!-- ============ MODAL: EDITAR LANÇAMENTO ============ -->
+  <div class="modal-fundo" id="modal-editar">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">✏️ Editar lançamento</div>
+          <div class="mt-mov" id="edt-mov">MOV-</div>
+        </div>
+        <button class="fechar" onclick="fecharEdicao()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <div id="edt-escopo-bloco" class="edt-escopo">
+          <div class="cfg-aviso" id="edt-escopo-info"></div>
+          <div class="edt-escopo-botoes">
+            <button type="button" class="edt-op ativa" id="edt-op-adiante"
+                    onclick="definirEscopoEdicao('adiante')">Desta em diante</button>
+            <button type="button" class="edt-op" id="edt-op-todas"
+                    onclick="definirEscopoEdicao('todas')">Todas as parcelas</button>
+          </div>
+        </div>
+
+        <div class="campo-bloco">
+          <label for="edt-descricao">Descrição</label>
+          <input type="text" id="edt-descricao" />
+        </div>
+
+        <div class="linha-dupla">
+          <div class="campo-bloco">
+            <label for="edt-valor">Valor da parcela</label>
+            <input type="number" id="edt-valor" step="0.01" inputmode="decimal" />
+          </div>
+          <div class="campo-bloco">
+            <label for="edt-vencimento">Vencimento</label>
+            <input type="date" id="edt-vencimento" />
+          </div>
+        </div>
+
+        <div class="campo-bloco">
+          <label for="edt-metodo">Método</label>
+          <select id="edt-metodo"></select>
+        </div>
+
+        <div class="campo-bloco">
+          <label>Categoria</label>
+          <input type="hidden" id="edt-categoria" />
+          <button type="button" class="btn-categoria" onclick="abrirSeletorCategoria('edt-categoria')">
+            <span class="cat-txt" id="edt-categoria-txt"></span>
+            <span class="cat-lupa">🔍</span>
+          </button>
+        </div>
+
+        <div class="cfg-aviso" id="edt-aviso"></div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharEdicao()">Cancelar</button>
+          <button class="btn-modal confirmar" id="edt-btn-salvar" onclick="salvarEdicao()">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: CONFIGURAÇÕES ============ -->
   <div class="modal-fundo" id="modal-config">
     <div class="modal-caixa">
@@ -2625,6 +2704,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

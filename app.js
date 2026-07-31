@@ -241,6 +241,114 @@ async function liquidarFaturaNaTela(indice) {
 }
 
 // ============================================================================
+// EDITAR LANÇAMENTO
+// Em compra parcelada é preciso dizer até onde a mudança vai: desta parcela
+// em diante ou todas. Quem aplica a regra é o servidor (editarLancamento);
+// aqui só se escolhe o escopo e os campos.
+// ============================================================================
+let edicaoAtual = null;
+let escopoEdicao = "adiante";
+
+async function abrirEdicao(numMov) {
+  const it = (resultadosBusca || []).filter(function (x) { return x.numMov === numMov; })[0] || itemDetalhe;
+  if (!it) return;
+
+  edicaoAtual = it;
+  escopoEdicao = "adiante";
+
+  // Garante as listas para os seletores
+  if (!listasValidas) {
+    try {
+      const rl = await chamarServidor("listasValidas");
+      if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
+    } catch (e) { listasValidas = { categorias: [], metodos: [] }; }
+  }
+
+  document.getElementById("modal-editar").style.display = "flex";
+  document.getElementById("edt-mov").textContent = "MOV-" + it.numMov;
+  document.getElementById("edt-descricao").value = it.descricao || "";
+  document.getElementById("edt-valor").value = (parseFloat(it.valor) || 0).toFixed(2);
+  document.getElementById("edt-vencimento").value = converterDataParaISO(it.vencimento) || "";
+  document.getElementById("edt-aviso").textContent = "";
+
+  montarSelect("edt-metodo", listasValidas.metodos, it.metodo || "");
+  definirCategoriaCampo("edt-categoria", it.categoria || "");
+
+  // Escolha do escopo só aparece quando há mais de uma parcela
+  const partes = (it.parcela || "").toString().split("/");
+  const totalParc = partes.length === 2 ? (parseInt(partes[1]) || 1) : 1;
+  const parcAtual = partes.length === 2 ? (parseInt(partes[0]) || 1) : 1;
+
+  const bloco = document.getElementById("edt-escopo-bloco");
+  if (totalParc > 1) {
+    bloco.classList.add("aberto");
+    document.getElementById("edt-escopo-info").textContent =
+      "Esta é a parcela " + parcAtual + " de " + totalParc + ". O que a alteração deve pegar?";
+    definirEscopoEdicao("adiante");
+  } else {
+    bloco.classList.remove("aberto");
+  }
+}
+
+function fecharEdicao() {
+  document.getElementById("modal-editar").style.display = "none";
+  edicaoAtual = null;
+}
+
+function definirEscopoEdicao(qual) {
+  escopoEdicao = (qual === "todas") ? "todas" : "adiante";
+  document.getElementById("edt-op-adiante").classList.toggle("ativa", escopoEdicao === "adiante");
+  document.getElementById("edt-op-todas").classList.toggle("ativa", escopoEdicao === "todas");
+}
+
+async function salvarEdicao() {
+  if (!edicaoAtual) return;
+
+  const btn = document.getElementById("edt-btn-salvar");
+  const aviso = document.getElementById("edt-aviso");
+
+  const descricao = document.getElementById("edt-descricao").value.trim();
+  const categoria = document.getElementById("edt-categoria").value;
+
+  if (!descricao) { aviso.textContent = "A descrição não pode ficar vazia."; return; }
+  if (!categoria) { aviso.textContent = "Escolha a categoria."; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+
+  try {
+    const r = await chamarServidor("editarLancamento", {
+      numMov: edicaoAtual.numMov,
+      escopo: escopoEdicao,
+      descricao: descricao,
+      categoria: categoria,
+      metodo: document.getElementById("edt-metodo").value,
+      valorParcela: document.getElementById("edt-valor").value,
+      vencimento: document.getElementById("edt-vencimento").value
+    });
+
+    if (r.ok) {
+      fecharEdicao();
+      mostrarToast("✅ " + r.mensagem);
+      limparTodoCache();
+      fecharDetalhe();
+      await recarregarDados();
+      if (typeof executarBusca === "function" && resultadosBusca && resultadosBusca.length) {
+        executarBusca(true);
+      }
+    } else {
+      aviso.textContent = r.mensagem || "Não foi possível salvar.";
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão. Nada foi alterado.";
+  } finally {
+    // Sempre devolve o botão: sem isso, a segunda edição pegaria ele travado.
+    btn.disabled = false;
+    btn.textContent = "Salvar";
+  }
+}
+
+// ============================================================================
 // CONFIGURAÇÕES — CATEGORIAS
 // As categorias vivem na planilha no formato "2.2.004. Padaria", e é o código
 // que decide se algo é receita ou despesa. Por isso aqui se escolhe o GRUPO e
@@ -4794,6 +4902,10 @@ function abrirDetalheBusca(idx) {
         '✉️ Ver e-mails' +
       '</button>' +
     '</div>' +
+
+    '<button class="det-btn editar" onclick="fecharDetalhe(); abrirEdicao(' + it.numMov + ');">' +
+      '✏️ Editar lançamento' +
+    '</button>' +
 
     (!it.pago && it.tipo === "despesa"
       ? '<button class="det-btn liquidar" onclick="fecharDetalhe(); abrirLiquidacao(' + it.numMov + ');">' +
