@@ -4788,6 +4788,7 @@ let resultadosBusca = [];
 let paginaBusca = 0;
 let temMaisBusca = false;
 let buscaTimer = null;
+let buscaSequencia = 0;   // descarta respostas de buscas já superadas
 let itemDetalhe = null;
 let somaBusca = { despesas: 0, receitas: 0, saldo: 0 };
 
@@ -4813,6 +4814,10 @@ async function abrirBusca() {
   }
 
   renderizarTelaBusca();
+
+  // Abre já mostrando os últimos lançamentos (busca sem filtro, que o servidor
+  // devolve ordenada por Nº Mov decrescente), em vez de uma tela vazia.
+  executarBusca(true);
 }
 
 function renderizarTelaBusca() {
@@ -4881,6 +4886,13 @@ async function executarBusca(novaBusca) {
     wrap.innerHTML = '<div style="text-align:center; padding:30px;"><div class="spinner" style="margin:0 auto;"></div></div>';
   }
 
+  // Cada busca ganha um número. O Apps Script serializa as execuções e demora
+  // segundos, então a resposta de um termo antigo chegava DEPOIS da do termo
+  // novo e era concatenada por cima — a tela acabava misturando resultados de
+  // buscas diferentes. Respostas que não são da busca mais recente são
+  // descartadas aqui.
+  const minhaBusca = ++buscaSequencia;
+
   try {
     if (modoBusca === "lancamentos") {
       const params = {
@@ -4896,6 +4908,7 @@ async function executarBusca(novaBusca) {
       };
 
       const r = await chamarServidor("buscarLancamentos", params);
+      if (minhaBusca !== buscaSequencia) return;   // chegou atrasada
 
       if (r.ok) {
         resultadosBusca = resultadosBusca.concat(r.itens || []);
@@ -4916,6 +4929,7 @@ async function executarBusca(novaBusca) {
       };
 
       const r = await chamarServidor("buscarDocumentosLivre", params);
+      if (minhaBusca !== buscaSequencia) return;   // chegou atrasada
 
       if (r.ok) {
         renderizarResultadosDocumentos(r.documentos, r.total);
