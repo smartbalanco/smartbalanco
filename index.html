@@ -2498,7 +2498,7 @@
 
         <div class="campo-bloco">
           <label for="nd-descricao">Descrição</label>
-          <input type="text" id="nd-descricao" placeholder="Ex: Mercado do mês" />
+          <input type="text" id="nd-descricao" list="lista-descricoes" autocomplete="off" placeholder="Ex: Mercado do mês" />
         </div>
 
         <div class="linha-dupla">
@@ -2804,7 +2804,7 @@
 
         <div class="campo-bloco">
           <label for="edt-descricao">Descrição</label>
-          <input type="text" id="edt-descricao" />
+          <input type="text" id="edt-descricao" list="lista-descricoes" autocomplete="off" />
         </div>
 
         <div class="linha-dupla">
@@ -3071,7 +3071,7 @@
 
         <div class="campo-bloco">
           <label for="dr-descricao">Descrição</label>
-          <input type="text" id="dr-descricao" />
+          <input type="text" id="dr-descricao" list="lista-descricoes" autocomplete="off" />
         </div>
 
         <div class="campo-bloco">
@@ -3209,6 +3209,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=30"></script>
+  <script src="app.js?v=31"></script>
+  <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

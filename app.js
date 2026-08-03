@@ -441,6 +441,35 @@ async function agendarNotificacoesContas(contas) {
 }
 
 // ============================================================================
+// SUGESTÃO DE DESCRIÇÃO
+// Digitar "10 p" e o campo oferecer "10 pães" porque já foi lançado antes.
+// Usa o autocomplete nativo do campo (datalist): o teclado do Android já sabe
+// mostrar e filtrar, sem código de tecla nenhum.
+// A lista é carregada UMA vez por sessão — buscar a cada tecla seria
+// insuportável com a lentidão do Apps Script.
+// ============================================================================
+let descricoesCarregadas = false;
+
+async function carregarSugestoesDescricao() {
+  if (descricoesCarregadas) return;
+  descricoesCarregadas = true;   // marca antes: evita duas cargas simultâneas
+
+  try {
+    const r = await chamarServidor("descricoesUsadas");
+    if (!r.ok || !r.descricoes) return;
+
+    const lista = document.getElementById("lista-descricoes");
+    if (!lista) return;
+
+    lista.innerHTML = r.descricoes.map(function (d) {
+      return '<option value="' + escaparHtml(d) + '"></option>';
+    }).join("");
+  } catch (e) {
+    descricoesCarregadas = false;   // deixa tentar de novo depois
+  }
+}
+
+// ============================================================================
 // DOCUMENTO COMPARTILHADO DE OUTRO APP
 // O lado nativo recebe o arquivo (imagem ou PDF), converte para base64 e
 // deixa no armazenamento compartilhado. Aqui ele é recuperado e o app abre
@@ -2554,6 +2583,7 @@ function mostrarToast(msg, fixo) {
 // ============================================================================
 
 async function abrirNovaDespesa() {
+  carregarSugestoesDescricao();
   const modal = document.getElementById("modal-despesa");
   modal.style.display = "flex";
   document.getElementById("nd-erro").style.display = "none";
@@ -5366,6 +5396,7 @@ function escolherAcao(acao) {
 // SELEÇÃO DO ARQUIVO
 // ============================================================================
 function abrirSeletorArquivo() {
+  carregarSugestoesDescricao();
   arquivoAtual = null;
   dadosExtraidos = null;
 
