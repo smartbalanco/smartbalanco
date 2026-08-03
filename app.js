@@ -1259,6 +1259,26 @@ function renderizarConselho() {
   el.innerHTML = c
     ? escaparHtml(c.texto)
     : '<p class="vazio">Sem conselho hoje ainda. Toque em Atualizar.</p>';
+
+  // Conselho longo nasce encolhido: o painel abaixo é o que você veio ver.
+  // A escolha fica guardada, senão ele voltaria a crescer a cada recarga.
+  const guardado = localStorage.getItem("trab_conselho_encolhido");
+  const encolher = guardado === null
+    ? (c && c.texto.length > 180)
+    : guardado === "1";
+
+  aplicarConselhoEncolhido(!!encolher);
+}
+
+function aplicarConselhoEncolhido(encolher) {
+  document.getElementById("trab-conselho").classList.toggle("encolhido", encolher);
+  document.getElementById("trab-btn-encolher").textContent = encolher ? "Expandir" : "Encolher";
+}
+
+function alternarConselho() {
+  const agora = !document.getElementById("trab-conselho").classList.contains("encolhido");
+  aplicarConselhoEncolhido(agora);
+  localStorage.setItem("trab_conselho_encolhido", agora ? "1" : "0");
 }
 
 async function atualizarConselho() {
@@ -1270,6 +1290,9 @@ async function atualizarConselho() {
     if (r.ok) {
       if (trabDados) trabDados.conselho = r.conselho;
       el.innerHTML = escaparHtml(r.conselho.texto);
+      // Quem acabou de pedir um conselho quer lê-lo: abre inteiro, sem mexer
+      // na preferência guardada.
+      aplicarConselhoEncolhido(false);
     } else {
       el.innerHTML = '<p class="vazio">' + escaparHtml(r.mensagem || "Não consegui.") + '</p>';
     }

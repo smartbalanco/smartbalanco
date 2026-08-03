@@ -534,6 +534,13 @@
     .trab-lembrar input { width: auto; }
 
     #trab-conselho { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+    /* Encolhido mostra ~2 linhas e desbota o fim, para ficar claro que tem
+       mais texto embaixo em vez de parecer que o conselho acabou ali. */
+    #trab-conselho.encolhido {
+      max-height: 42px; overflow: hidden;
+      -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent);
+      mask-image: linear-gradient(180deg, #000 55%, transparent);
+    }
     #trab-resposta {
       font-size: 13px; line-height: 1.6; white-space: pre-wrap; margin-top: 10px;
     }
@@ -2415,6 +2422,7 @@
       <div class="card">
         <div class="card-topo">
           <h2>🧠 Conselho do dia</h2>
+          <button class="btn-ver-tudo" id="trab-btn-encolher" onclick="alternarConselho()">Encolher</button>
           <button class="btn-ver-tudo" onclick="atualizarConselho()">Atualizar</button>
         </div>
         <div id="trab-conselho"><p class="vazio">Carregando...</p></div>
@@ -3758,7 +3766,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=40"></script>
+  <script src="app.js?v=41"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
