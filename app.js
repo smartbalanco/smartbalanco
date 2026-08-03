@@ -649,6 +649,50 @@ async function carregarCalendario() {
 
   desenharGradeCalendario();
   mostrarDiaCalendario(calDiaEscolhido);
+  alimentarWidgetAgenda();
+}
+
+// Grava a agenda que o widget do Smartcalendário mostra.
+// Feito aqui porque neste ponto compromissos e despesas do mês já estão em
+// mãos — pedir de novo ao servidor só para o widget custaria uma consulta a
+// mais em cada abertura do app.
+async function alimentarWidgetAgenda() {
+  if (!rodandoNoAplicativo()) return;
+
+  try {
+    const P = window.Capacitor.Plugins.Preferences;
+    if (!P) return;
+
+    const hojeISO = dataParaISO(new Date());
+    const itens = [];
+
+    calDados.compromissos.forEach(function (c) {
+      if (c.data < hojeISO || c.concluido) return;
+      itens.push({
+        iso: c.data,
+        data: c.data.slice(8, 10) + "/" + c.data.slice(5, 7),
+        texto: "📌 " + c.titulo + (c.hora ? " · " + c.hora : "")
+      });
+    });
+
+    calDados.despesas.forEach(function (d) {
+      if (d.data < hojeISO) return;
+      itens.push({
+        iso: d.data,
+        data: d.data.slice(8, 10) + "/" + d.data.slice(5, 7),
+        texto: (d.ehFatura ? "💳 " : "") + d.descricao + " · " + formatarMoeda(d.valor)
+      });
+    });
+
+    itens.sort(function (a, b) { return a.iso.localeCompare(b.iso); });
+
+    await P.set({ key: "widget_agenda", value: JSON.stringify(itens.slice(0, 4)) });
+
+    const W = window.Capacitor.Plugins.Widget;
+    if (W && W.atualizar) await W.atualizar();
+  } catch (e) {
+    console.warn("Agenda do widget não atualizada:", e);
+  }
 }
 
 function desenharGradeCalendario() {
