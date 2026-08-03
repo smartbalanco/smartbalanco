@@ -2386,6 +2386,17 @@
           <input type="date" id="in-datapgto" />
         </div>
 
+        <!-- Comprovante: fica aqui, junto da data, que e onde se procura. -->
+        <div class="campo-bloco">
+          <label>Comprovante (opcional)</label>
+          <input type="file" id="liq-arquivo" accept="image/*,application/pdf"
+                 style="display:none;" onchange="aoEscolherComprovante(this)" />
+          <button type="button" class="btn-categoria" onclick="document.getElementById('liq-arquivo').click()">
+            <span class="cat-txt" id="liq-arquivo-nome">Anexar comprovante</span>
+            <span class="cat-lupa">📎</span>
+          </button>
+        </div>
+
         <!-- Toggle editar -->
         <div class="toggle-editar" onclick="document.getElementById('chk-editar').click()">
           <input type="checkbox" id="chk-editar" onclick="event.stopPropagation(); alternarEdicao();" />
@@ -2434,17 +2445,6 @@
         </div>
         <div id="conf-resumo"></div>
 
-        <!-- Anexo do comprovante: opcional, vai junto com a liquidação e fica
-             vinculado ao mesmo Nº Mov. -->
-        <div class="campo-bloco" style="margin-top:14px;">
-          <label>Comprovante (opcional)</label>
-          <input type="file" id="liq-arquivo" accept="image/*,application/pdf"
-                 style="display:none;" onchange="aoEscolherComprovante(this)" />
-          <button type="button" class="btn-categoria" onclick="document.getElementById('liq-arquivo').click()">
-            <span class="cat-txt" id="liq-arquivo-nome">Anexar comprovante</span>
-            <span class="cat-lupa">📎</span>
-          </button>
-        </div>
         <div class="modal-acoes">
           <button class="btn-modal voltar" onclick="voltarDaConfirmacao()">Voltar</button>
           <button class="btn-modal confirmar" id="btn-confirmar-final" onclick="confirmarLiquidacao()">Sim, liquidar</button>
@@ -3151,6 +3151,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=24"></script>
+  <script src="app.js?v=25"></script>
 </body>
 </html>
