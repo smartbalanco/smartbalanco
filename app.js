@@ -5550,10 +5550,62 @@ function alternarPagoDoc() {
 function alternarVinculo() {
   const marcado = document.getElementById("dr-chk-vincular").checked;
   document.getElementById("dr-area-vinculo").style.display = marcado ? "block" : "none";
+
   if (!marcado) {
     document.getElementById("dr-nummov").value = "";
     document.getElementById("dr-despesa-encontrada").style.display = "none";
+    const sug = document.getElementById("dr-sugestoes");
+    if (sug) sug.innerHTML = "";
+    return;
   }
+
+  // Quem tem o documento na mão sabe o valor, não o Nº Mov: as despesas em
+  // aberto com valor parecido viram atalho.
+  sugerirDespesasParaVincular();
+}
+
+async function sugerirDespesasParaVincular() {
+  const alvo = document.getElementById("dr-sugestoes");
+  if (!alvo) return;
+
+  const valor = dadosExtraidos ? parseFloat(dadosExtraidos.valor_total) : 0;
+  if (!valor || valor <= 0) { alvo.innerHTML = ""; return; }
+
+  alvo.innerHTML = '<div class="cfg-aviso">Procurando despesas de ' + formatarMoeda(valor) + '...</div>';
+
+  try {
+    const r = await chamarServidor("sugerirDespesasPorValor", { valor: String(valor) });
+
+    if (!r.ok || !r.sugestoes || r.sugestoes.length === 0) {
+      alvo.innerHTML = '<div class="cfg-aviso">Nenhuma despesa em aberto perto de ' +
+                       formatarMoeda(valor) + '. Digite o Nº abaixo.</div>';
+      return;
+    }
+
+    let html = '<div class="cfg-aviso">Despesas em aberto com valor parecido:</div>';
+    r.sugestoes.forEach(function (s) {
+      const detalhe = [s.vencimento ? "vence " + s.vencimento : "", s.metodo, s.parcela]
+        .filter(function (x) { return x; }).join(" · ");
+
+      html +=
+        '<button type="button" class="sug-item" onclick="escolherSugestao(' + s.numMov + ')">' +
+          '<span class="sug-info">' +
+            '<b>' + escaparHtml(s.descricao) + '</b>' +
+            '<span class="sug-sub">MOV-' + s.numMov + (detalhe ? " · " + escaparHtml(detalhe) : "") + '</span>' +
+          '</span>' +
+          '<span class="sug-valor' + (s.exato ? " exato" : "") + '">' + formatarMoeda(s.valor) + '</span>' +
+        '</button>';
+    });
+
+    alvo.innerHTML = html;
+  } catch (e) {
+    alvo.innerHTML = '<div class="cfg-aviso">Não consegui buscar sugestões. Digite o Nº abaixo.</div>';
+  }
+}
+
+function escolherSugestao(numMov) {
+  document.getElementById("dr-nummov").value = numMov;
+  buscarDespesaPorMov();   // já mostra a despesa e a opção de atualizar o valor
 }
 
 let buscaMovTimer = null;

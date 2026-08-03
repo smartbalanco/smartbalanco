@@ -490,6 +490,20 @@
     }
     .dv-atualizar input { margin-top: 2px; flex-shrink: 0; }
 
+    /* ---------- SUGESTÕES DE DESPESA POR VALOR ---------- */
+    .sug-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      width: 100%; text-align: left; margin-bottom: 7px; padding: 11px;
+      border: none; border-radius: 12px; cursor: pointer; font-family: inherit;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+    }
+    .sug-item:active { box-shadow: var(--afundado-leve); }
+    .sug-info { display: flex; flex-direction: column; min-width: 0; }
+    .sug-info b { font-size: 13px; color: #1e293b; }
+    .sug-sub { font-size: 10px; color: var(--cinza-texto); margin-top: 2px; }
+    .sug-valor { font-size: 13px; font-weight: 700; color: var(--cinza-texto); white-space: nowrap; }
+    .sug-valor.exato { color: var(--verde); }
+
     /* ---------- EDITAR LANÇAMENTO ---------- */
     .edt-escopo {
       display: none; background: #fff7ed; border-left: 3px solid var(--laranja);
@@ -3131,6 +3145,7 @@
               <input type="number" id="dr-nummov" inputmode="numeric"
                      placeholder="Ex: 630" oninput="buscarDespesaPorMov()" />
             </div>
+            <div id="dr-sugestoes"></div>
             <div id="dr-despesa-encontrada" class="dv-box" style="display:none;"></div>
           </div>
         </div>
@@ -3194,6 +3209,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=29"></script>
 </body>
 </html>
