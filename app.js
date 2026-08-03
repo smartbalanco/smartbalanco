@@ -1707,6 +1707,11 @@ function escutarVoltaDoLogin() {
 // não uma cópia paralela do app.
 function tratarAtalhoDeTela(url) {
   const destinos = {
+    // Vindos do pop-up nativo: a escolha já foi feita na tela inicial, então
+    // aqui abre direto o formulário, sem repetir o menu.
+    "novo-manual": function () { quandoTelaPronta(function () { escolherAcao("manual"); }); },
+    "novo-documento": function () { quandoTelaPronta(function () { escolherAcao("lancar"); }); },
+    "novo-arquivar": function () { quandoTelaPronta(function () { escolherAcao("arquivar"); }); },
     "novo": function () { abrirMenuAdicionarQuandoPronto(); },
     "chat": function () { quandoTelaPronta(function () { trocarAba("chat"); }); },
     "busca": function () { quandoTelaPronta(function () { trocarAba("busca"); abrirBusca(); }); },
