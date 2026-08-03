@@ -630,6 +630,12 @@ function mudarMesCalendario(passo) {
   if (calMes > 11) { calMes = 0; calAno++; }
   if (calMes < 0) { calMes = 11; calAno--; }
   calDiaEscolhido = null;
+
+  // Sugestões são do mês que estava em tela; ao virar o mês elas ficariam
+  // penduradas fora de contexto.
+  const sug = document.getElementById("cal-sugestoes");
+  if (sug) sug.innerHTML = "";
+
   carregarCalendario();
 }
 
