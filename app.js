@@ -1670,17 +1670,14 @@ function escutarVoltaDoLogin() {
     A.addListener("appUrlOpen", async function (evento) {
       const url = (evento && evento.url) ? evento.url : "";
 
-      // Atalho "+" da tela inicial: abre direto o menu de lançamento
-      if (url.indexOf(ESQUEMA_APP + "://novo") === 0) {
-        abrirMenuAdicionarQuandoPronto();
-        return;
-      }
-
       // Botão "Liquidar" do widget
       if (url.indexOf(ESQUEMA_APP + "://liquidar") === 0) {
         tratarLiquidacaoDoWidget(url);
         return;
       }
+
+      // Atalhos do widget de ações (e o "+")
+      if (tratarAtalhoDeTela(url)) return;
 
       if (url.indexOf(ESQUEMA_APP + "://login") !== 0) return;
 
@@ -1703,6 +1700,41 @@ function escutarVoltaDoLogin() {
   } catch (e) {
     console.warn("Não foi possível escutar a volta do login:", e);
   }
+}
+
+// Atalhos do widget de ações. Devolve true se a URL era de atalho.
+// Cada destino cai numa tela que já existe: o widget é um caminho mais curto,
+// não uma cópia paralela do app.
+function tratarAtalhoDeTela(url) {
+  const destinos = {
+    "novo": function () { abrirMenuAdicionarQuandoPronto(); },
+    "chat": function () { quandoTelaPronta(function () { trocarAba("chat"); }); },
+    "busca": function () { quandoTelaPronta(function () { trocarAba("busca"); abrirBusca(); }); },
+    "aprovacoes": function () { quandoTelaPronta(function () { trocarAba("aprovacoes"); }); },
+    "relatorios": function () { quandoTelaPronta(function () { trocarAba("relatorios"); }); },
+    "calendario": function () { quandoTelaPronta(function () { abrirCalendario(); }); }
+  };
+
+  const nomes = Object.keys(destinos);
+  for (let i = 0; i < nomes.length; i++) {
+    if (url.indexOf(ESQUEMA_APP + "://" + nomes[i]) === 0) {
+      destinos[nomes[i]]();
+      return true;
+    }
+  }
+  return false;
+}
+
+// Espera o app estar realmente dentro (logado e com a tela montada) antes de
+// navegar: o atalho pode chegar com o app fechado, no meio do carregamento.
+function quandoTelaPronta(acao, tentativa) {
+  tentativa = tentativa || 0;
+  if (tentativa > 40) return;   // ~20s e desiste em silêncio
+
+  const tela = document.getElementById("tela-interna");
+  if (tela && tela.style.display !== "none" && sessaoAtual) { acao(); return; }
+
+  setTimeout(function () { quandoTelaPronta(acao, tentativa + 1); }, 500);
 }
 
 // O atalho "+" pode chegar antes de o app terminar de entrar (ou com o app
@@ -1733,8 +1765,8 @@ async function verificarAtalhoDeAbertura() {
     const inicial = await A.getLaunchUrl();
     const url = (inicial && inicial.url) ? inicial.url : "";
 
-    if (url.indexOf(ESQUEMA_APP + "://novo") === 0) abrirMenuAdicionarQuandoPronto();
-    else if (url.indexOf(ESQUEMA_APP + "://liquidar") === 0) tratarLiquidacaoDoWidget(url);
+    if (url.indexOf(ESQUEMA_APP + "://liquidar") === 0) tratarLiquidacaoDoWidget(url);
+    else tratarAtalhoDeTela(url);
   } catch (e) { /* atalho é conveniência: falhar aqui não quebra nada */ }
 }
 
