@@ -527,6 +527,27 @@
     }
     .trab-acoes-card button:active { box-shadow: var(--afundado-leve); }
 
+    .trab-topo-linha { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .trab-topo-linha .nav-mes { flex: 1; margin-bottom: 0; }
+
+    /* Lista de condomínios das configurações */
+    .ct-item {
+      display: flex; align-items: center; gap: 10px; padding: 11px;
+      border-radius: 12px; margin-bottom: 8px; cursor: pointer;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+    }
+    .ct-item:active { box-shadow: var(--afundado-leve); }
+    .ct-item-info { flex: 1; min-width: 0; }
+    .ct-item-nome { font-size: 13px; font-weight: 600; word-break: break-word; }
+    .ct-item-sub { font-size: 11px; color: var(--cinza-texto); margin-top: 2px; }
+    .ct-item.arquivado .ct-item-nome { opacity: 0.5; text-decoration: line-through; }
+
+    .cd-excluir {
+      width: 100%; margin-top: 16px; padding: 11px; background: none;
+      border: none; color: var(--vermelho); font-size: 12px; font-weight: 600;
+      font-family: inherit; cursor: pointer; text-decoration: underline;
+    }
+
     .trab-lembrar {
       display: flex; align-items: center; gap: 7px; font-size: 11px;
       color: var(--cinza-texto); margin-top: 8px; cursor: pointer;
@@ -2412,10 +2433,13 @@
 
     <!-- ============ SMARTTRABALHO ============ -->
     <div id="conteudo-trabalho">
-      <div class="nav-mes" id="trab-nav-comp">
-        <button class="seta" onclick="mudarCompetencia(-1)">&#8249;</button>
-        <span class="mes-txt" id="trab-competencia"></span>
-        <button class="seta" onclick="mudarCompetencia(1)">&#8250;</button>
+      <div class="trab-topo-linha">
+        <div class="nav-mes" id="trab-nav-comp">
+          <button class="seta" onclick="mudarCompetencia(-1)">&#8249;</button>
+          <span class="mes-txt" id="trab-competencia"></span>
+          <button class="seta" onclick="mudarCompetencia(1)">&#8250;</button>
+        </div>
+        <button class="tf-btn" onclick="abrirConfigTrabalho()" title="Configurações">&#9881;</button>
       </div>
 
       <!-- CONSELHO DO DIA -->
@@ -2808,6 +2832,50 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: CONFIGURAÇÕES DO SMARTTRABALHO ============ -->
+  <div class="modal-fundo" id="modal-config-trabalho">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">⚙️ Configurações do Smarttrabalho</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;" id="ct-sub"></div>
+        </div>
+        <button class="fechar" onclick="fecharConfigTrabalho()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <div class="card-topo">
+          <h3 style="font-size:13px;">Condomínios</h3>
+          <button class="btn-ver-tudo" onclick="fecharConfigTrabalho(); abrirCondominio();">
+            + Novo
+          </button>
+        </div>
+
+        <div class="busca-campo">
+          <input type="text" id="ct-busca" placeholder="Procurar condomínio..."
+                 oninput="renderizarListaCondominios()" />
+        </div>
+
+        <div id="ct-lista"></div>
+
+        <div class="card-topo" style="margin-top:20px;">
+          <h3 style="font-size:13px;">Manutenção</h3>
+        </div>
+        <div class="cfg-aviso" id="ct-aviso-dup">
+          Cadastrou algo duas vezes? Isto acha os repetidos e mostra o que seria
+          removido antes de apagar.
+        </div>
+        <button class="btn-modal cancelar" style="width:100%;" onclick="procurarDuplicados()">
+          Procurar repetidos
+        </button>
+
+        <div class="modal-acoes">
+          <button class="btn-modal confirmar" onclick="fecharConfigTrabalho()">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: CADASTRO DE CONDOMÍNIO ============ -->
   <div class="modal-fundo" id="modal-condominio">
     <div class="modal-caixa">
@@ -2862,12 +2930,23 @@
           <textarea id="cd-obs" rows="2" placeholder="Particularidades deste condomínio"></textarea>
         </div>
 
+        <label class="trab-lembrar" id="cd-bloco-ativo">
+          <input type="checkbox" id="cd-ativo" checked />
+          Ativo (entra nas competências novas)
+        </label>
+
         <div class="cfg-aviso" id="cd-aviso"></div>
 
         <div class="modal-acoes">
           <button class="btn-modal cancelar" id="cd-btn-arquivar" onclick="arquivarCondominio()">Arquivar</button>
           <button class="btn-modal confirmar" id="cd-btn-salvar" onclick="salvarCondominio()">Salvar</button>
         </div>
+
+        <!-- Exclusão de verdade fica separada e por último, longe do Salvar:
+             leva o histórico junto e não tem desfazer. -->
+        <button class="cd-excluir" id="cd-btn-excluir" onclick="apagarCondominioDeVez()">
+          Excluir de vez, com todo o histórico
+        </button>
       </div>
     </div>
   </div>
@@ -3766,7 +3845,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=41"></script>
+  <script src="app.js?v=42"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

@@ -1492,6 +1492,105 @@ async function salvarNotasProcesso() {
   }
 }
 
+// ---------- Configurações do Smarttrabalho ----------
+function abrirConfigTrabalho() {
+  document.getElementById("modal-config-trabalho").style.display = "flex";
+  document.getElementById("ct-busca").value = "";
+  renderizarListaCondominios();
+}
+
+function fecharConfigTrabalho() {
+  document.getElementById("modal-config-trabalho").style.display = "none";
+}
+
+function renderizarListaCondominios() {
+  const el = document.getElementById("ct-lista");
+  const todos = (trabDados && trabDados.condominios) || [];
+  const busca = document.getElementById("ct-busca").value.trim().toLowerCase();
+
+  document.getElementById("ct-sub").textContent =
+    todos.length + " condomínio(s) cadastrado(s)";
+
+  const lista = busca
+    ? todos.filter(function (c) { return c.nome.toLowerCase().indexOf(busca) >= 0; })
+    : todos;
+
+  if (!lista.length) {
+    el.innerHTML = '<p class="vazio">' +
+      (busca ? "Nada encontrado." : "Nenhum condomínio ainda.") + '</p>';
+    return;
+  }
+
+  // Em ordem alfabética: aqui você procura pelo nome, não pela urgência.
+  const ordenada = lista.slice().sort(function (a, b) { return a.nome.localeCompare(b.nome); });
+
+  el.innerHTML = ordenada.map(function (c) {
+    const partes = [];
+    if (c.frentes === "ambas") partes.push("Balancete + contas");
+    else if (c.frentes === "contas") partes.push("Contas a pagar");
+    else partes.push("Balancete");
+    if (c.boleto) partes.push("boleto dia " + c.diaBoleto);
+    if (c.diaEntrega) partes.push("entrega dia " + c.diaEntrega);
+    if (!c.ativo) partes.push("arquivado");
+
+    return '<div class="ct-item' + (c.ativo ? "" : " arquivado") + '" ' +
+             'onclick="editarPelaConfig(\'' + c.id + '\')">' +
+             '<div class="ct-item-info">' +
+               '<div class="ct-item-nome">' + escaparHtml(c.nome) + '</div>' +
+               '<div class="ct-item-sub">' + escaparHtml(partes.join(" · ")) + '</div>' +
+             '</div>' +
+             '<span class="tf-btn">✎</span>' +
+           '</div>';
+  }).join("");
+}
+
+function editarPelaConfig(id) {
+  fecharConfigTrabalho();
+  abrirCondominio(id);
+}
+
+// Conta antes de apagar: linha removida da planilha não tem desfazer.
+async function procurarDuplicados() {
+  const aviso = document.getElementById("ct-aviso-dup");
+  aviso.textContent = "Procurando...";
+
+  try {
+    const r = await chamarServidor("trabalhoLimparDuplicados", { simular: "true" });
+    if (!r.ok) { aviso.textContent = r.mensagem || "Não consegui verificar."; return; }
+
+    if (!r.condominios && !r.processos) {
+      aviso.textContent = "Nada repetido. Está tudo limpo.";
+      return;
+    }
+
+    const nomes = (r.nomes || []).slice(0, 6).join(", ");
+    aviso.textContent =
+      "Repetidos: " + r.condominios + " condomínio(s) e " + r.processos + " processo(s)" +
+      (r.impostos ? ", além de " + r.impostos + " imposto(s) ligados a eles" : "") +
+      (nomes ? ". São: " + nomes : "") + ".";
+
+    const texto =
+      "Remover " + r.condominios + " condomínio(s) repetido(s) e " +
+      r.processos + " processo(s)?\n\n" +
+      "Fica sempre o cadastro mais antigo de cada nome — que é o que os " +
+      "processos já apontam.\n\nIsso não tem desfazer.";
+
+    if (!confirm(texto)) { aviso.textContent = "Nada foi removido."; return; }
+
+    const f = await chamarServidor("trabalhoLimparDuplicados", {});
+    if (f.ok) {
+      mostrarToast("✅ " + f.mensagem);
+      aviso.textContent = f.mensagem;
+      await carregarTrabalho();
+      renderizarListaCondominios();
+    } else {
+      aviso.textContent = f.mensagem || "Não consegui remover.";
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão.";
+  }
+}
+
 // ---------- Cadastro de condomínio ----------
 function abrirCondominio(id) {
   const c = id && trabDados
@@ -1506,9 +1605,15 @@ function abrirCondominio(id) {
   document.getElementById("cd-dia-boleto").value = c && c.diaBoleto ? c.diaBoleto : "";
   document.getElementById("cd-dia-entrega").value = c && c.diaEntrega ? c.diaEntrega : "";
   document.getElementById("cd-obs").value = c ? c.observacao : "";
+  document.getElementById("cd-ativo").checked = c ? c.ativo : true;
   document.getElementById("cd-aviso").textContent = "";
   document.getElementById("cd-titulo").textContent = c ? "🏢 Editar condomínio" : "🏢 Novo condomínio";
-  document.getElementById("cd-btn-arquivar").style.display = c ? "block" : "none";
+
+  // Só faz sentido arquivar, excluir ou desativar o que já existe.
+  ["cd-btn-arquivar", "cd-btn-excluir", "cd-bloco-ativo"].forEach(function (id) {
+    document.getElementById(id).style.display = c ? "block" : "none";
+  });
+  if (c) document.getElementById("cd-bloco-ativo").style.display = "flex";
 
   escolherFrentes(c ? c.frentes : "balancete");
   alternarCamposBoleto();
@@ -1557,7 +1662,8 @@ async function salvarCondominio() {
       diaBoleto: diaBoleto || "0",
       diaEntrega: document.getElementById("cd-dia-entrega").value || "0",
       observacao: document.getElementById("cd-obs").value.trim(),
-      frentes: document.getElementById("modal-condominio").dataset.frentes || "balancete"
+      frentes: document.getElementById("modal-condominio").dataset.frentes || "balancete",
+      ativo: document.getElementById("cd-ativo").checked ? "true" : "false"
     });
 
     if (r.ok) {
@@ -1572,6 +1678,36 @@ async function salvarCondominio() {
   } finally {
     btn.disabled = false;
     btn.textContent = "Salvar";
+  }
+}
+
+// Confirmação em duas etapas de propósito: leva os processos e impostos junto
+// e não tem desfazer. Arquivar continua sendo o caminho normal.
+async function apagarCondominioDeVez() {
+  const id = document.getElementById("cd-id").value;
+  if (!id) return;
+
+  const nome = document.getElementById("cd-nome").value.trim();
+  const c = trabDados && trabDados.condominios.filter(function (x) { return x.id === id; })[0];
+  if (!c) return;
+
+  if (!confirm('Excluir "' + nome + '" DE VEZ?\n\nVai junto todo o histórico: ' +
+               'processos, etapas e impostos lançados.\n\nIsso não tem desfazer. ' +
+               'Se você só quer tirá-lo da lista, use Arquivar.')) return;
+
+  if (!confirm("Tem certeza? Última confirmação.")) return;
+
+  try {
+    const r = await chamarServidor("trabalhoApagarCondominio", { id: id });
+    if (r.ok) {
+      fecharCondominio();
+      mostrarToast("✅ " + r.mensagem);
+      await carregarTrabalho();
+    } else {
+      document.getElementById("cd-aviso").textContent = r.mensagem || "Não deu.";
+    }
+  } catch (e) {
+    document.getElementById("cd-aviso").textContent = "Sem conexão.";
   }
 }
 
