@@ -441,6 +441,92 @@ async function agendarNotificacoesContas(contas) {
 }
 
 // ============================================================================
+// DOCUMENTO COMPARTILHADO DE OUTRO APP
+// O lado nativo recebe o arquivo (imagem ou PDF), converte para base64 e
+// deixa no armazenamento compartilhado. Aqui ele é recuperado e o app abre
+// as opções — lançar por IA, arquivar, ou lançar na mão.
+// O arquivo é apagado do armazenamento assim que lido: ele é pesado e não
+// pode reaparecer no próximo uso.
+// ============================================================================
+let documentoCompartilhado = null;
+
+async function verificarDocumentoCompartilhado() {
+  if (!rodandoNoAplicativo()) return;
+
+  try {
+    const P = window.Capacitor.Plugins.Preferences;
+    if (!P) return;
+
+    const guardado = await P.get({ key: "doc_compartilhado" });
+    if (!guardado || !guardado.value) return;
+
+    const mime = await P.get({ key: "doc_compartilhado_mime" });
+    const nome = await P.get({ key: "doc_compartilhado_nome" });
+
+    documentoCompartilhado = {
+      base64: guardado.value,
+      mimeType: (mime && mime.value) || "image/jpeg",
+      nome: (nome && nome.value) || "documento"
+    };
+
+    await P.remove({ key: "doc_compartilhado" });
+    await P.remove({ key: "doc_compartilhado_mime" });
+    await P.remove({ key: "doc_compartilhado_nome" });
+
+    quandoTelaPronta(abrirOpcoesDoCompartilhado);
+  } catch (e) {
+    console.warn("Documento compartilhado não pôde ser lido:", e);
+  }
+}
+
+function abrirOpcoesDoCompartilhado() {
+  if (!documentoCompartilhado) return;
+  document.getElementById("modal-compartilhado").style.display = "flex";
+  document.getElementById("comp-nome").textContent = documentoCompartilhado.nome;
+}
+
+function fecharCompartilhado() {
+  document.getElementById("modal-compartilhado").style.display = "none";
+  documentoCompartilhado = null;
+}
+
+// Usa o documento recebido no fluxo escolhido. "manual" ignora o arquivo de
+// propósito: lançar na mão não depende dele.
+function usarCompartilhado(comoFazer) {
+  const doc = documentoCompartilhado;
+  document.getElementById("modal-compartilhado").style.display = "none";
+
+  if (comoFazer === "manual") {
+    documentoCompartilhado = null;
+    escolherAcao("manual");
+    return;
+  }
+
+  modoDocumento = (comoFazer === "arquivar") ? "arquivar" : "lancar";
+  abrirSeletorArquivo();
+
+  // Entrega o arquivo já pronto, como se tivesse sido escolhido ali
+  arquivoAtual = {
+    base64: doc.base64,
+    mimeType: doc.mimeType,
+    nome: doc.nome,
+    preview: "data:" + doc.mimeType + ";base64," + doc.base64
+  };
+  documentoCompartilhado = null;
+
+  const prev = document.getElementById("doc-preview");
+  if (doc.mimeType.indexOf("image") === 0) {
+    prev.innerHTML = '<img src="' + arquivoAtual.preview + '" alt="prévia" />' +
+                     '<div class="dp-nome">' + escaparHtml(doc.nome) + '</div>';
+  } else {
+    prev.innerHTML = '<div class="dp-pdf">📄</div>' +
+                     '<div class="dp-nome">' + escaparHtml(doc.nome) + '</div>';
+  }
+  prev.style.display = "block";
+  document.getElementById("doc-btn-analisar").disabled = false;
+}
+
+// ============================================================================
 // SMARTCALENDÁRIO
 // Mês em grade, com as contas a vencer e os compromissos no mesmo lugar.
 // Compromissos ficam na aba 'Compromissos' da planilha; as despesas vêm da
@@ -1979,6 +2065,13 @@ window.addEventListener("load", async function () {
   escutarVoltaDoLogin();
   verificarAtualizacaoApp();
   verificarAtalhoDeAbertura();
+  verificarDocumentoCompartilhado();
+
+  // Com o app já aberto, o compartilhamento chega pelo onNewIntent do
+  // Android e esta página não recarrega — só descobre ao voltar à tona.
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) verificarDocumentoCompartilhado();
+  });
 
   // ---------- 1. Já tem sessão salva no aparelho? ----------
   const salva = lerSessaoSalva();

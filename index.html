@@ -2672,6 +2672,38 @@
   </div>
 
 
+  <!-- ============ MODAL: DOCUMENTO COMPARTILHADO ============ -->
+  <div class="modal-fundo" id="modal-compartilhado">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">📥 Documento recebido</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;" id="comp-nome"></div>
+        </div>
+        <button class="fechar" onclick="fecharCompartilhado()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <div class="cfg-aviso">O que você quer fazer com ele?</div>
+
+        <button class="ma-opcao" style="width:100%;" onclick="usarCompartilhado('lancar')">
+          <b>🧠 Lançar com IA</b>
+          <span>A IA lê os dados e manda para Aprovações</span>
+        </button>
+
+        <button class="ma-opcao" style="width:100%; margin-top:10px;" onclick="usarCompartilhado('arquivar')">
+          <b>📎 Arquivar documento</b>
+          <span>Guardar e, se quiser, vincular a uma despesa</span>
+        </button>
+
+        <button class="ma-opcao" style="width:100%; margin-top:10px;" onclick="usarCompartilhado('manual')">
+          <b>✍️ Lançar na mão</b>
+          <span>Digitar os dados da despesa</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: COMPROMISSO ============ -->
   <div class="modal-fundo" id="modal-compromisso">
     <div class="modal-caixa">
@@ -3157,6 +3189,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=26"></script>
+  <script src="app.js?v=27"></script>
 </body>
 </html>
