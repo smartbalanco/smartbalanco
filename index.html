@@ -299,11 +299,12 @@
       display: block; font-size: 12px; color: var(--cinza-texto);
       text-transform: uppercase; font-weight: 700; margin-bottom: 6px;
     }
-    .campo-bloco input, .campo-bloco select {
+    .campo-bloco input, .campo-bloco select, .campo-bloco textarea {
       width: 100%; padding: 12px; border: 1px solid var(--borda); border-radius: 10px;
       font-size: 15px; font-family: inherit; background: #fff; color: #1e293b;
     }
-    .campo-bloco input:focus, .campo-bloco select:focus {
+    .campo-bloco textarea { resize: vertical; line-height: 1.4; }
+    .campo-bloco input:focus, .campo-bloco select:focus, .campo-bloco textarea:focus {
       outline: none; border-color: var(--azul-claro);
     }
     .campo-data-destaque input { border: 2px solid var(--verde); font-weight: 600; }
@@ -412,6 +413,66 @@
 
     /* ---------- SMARTCALENDÁRIO ---------- */
     #conteudo-calendario { display: none; }
+
+    /* ---- SMARTTAREFAS ---- */
+    #conteudo-tarefas { display: none; padding: 16px; max-width: 680px; margin: 0 auto; }
+    .tf-selo {
+      display: inline-block; min-width: 17px; padding: 1px 5px; margin-left: 3px;
+      border-radius: 9px; background: var(--azul); color: #fff;
+      font-size: 10px; font-weight: 700; vertical-align: middle;
+    }
+    .busca-modos button.ativo .tf-selo { background: var(--azul); color: #fff; }
+    .tf-selo:empty { display: none; }
+    /* Três abas com emoji + selo não cabem em 375px no tamanho padrão:
+       "Lembretes" quebrava em duas linhas. */
+    #conteudo-tarefas .busca-modos button { font-size: 12px; padding: 10px 4px; white-space: nowrap; }
+
+    .tf-item {
+      display: flex; align-items: flex-start; gap: 11px; padding: 12px;
+      border-radius: 12px; margin-bottom: 8px;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+    }
+    /* A marca de concluir é uma caixa desenhada, não o checkbox nativo: em
+       neumorfismo o nativo aparece chapado e some no fundo claro. */
+    .tf-check {
+      flex-shrink: 0; width: 22px; height: 22px; margin-top: 1px;
+      border-radius: 7px; background: var(--cinza-fundo);
+      box-shadow: var(--afundado-leve); cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; color: var(--verde); line-height: 1;
+    }
+    .tf-info { flex: 1; min-width: 0; }
+    .tf-titulo { font-size: 14px; font-weight: 600; word-break: break-word; }
+    .tf-detalhe {
+      font-size: 12px; color: var(--cinza-texto); margin-top: 3px;
+      line-height: 1.4; word-break: break-word;
+    }
+    .tf-linha-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+    .tf-tag {
+      font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 8px;
+      background: #eef4fa; color: var(--azul-claro);
+    }
+    .tf-tag.alta { background: #fdeaea; color: var(--vermelho); }
+    .tf-tag.baixa { background: #eef1f4; color: var(--cinza-texto); }
+    .tf-tag.atrasada { background: var(--vermelho); color: #fff; }
+    .tf-tag.hoje { background: var(--verde); color: #fff; }
+    .tf-item.feita .tf-titulo { text-decoration: line-through; opacity: 0.55; }
+    .tf-item.feita .tf-detalhe { opacity: 0.55; }
+    .tf-acoes { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+    .tf-btn {
+      background: var(--cinza-fundo); border: none; border-radius: 9px;
+      box-shadow: var(--relevo-baixo); width: 30px; height: 30px;
+      font-size: 13px; cursor: pointer; color: var(--cinza-texto);
+    }
+    .tf-btn:active { box-shadow: var(--afundado-leve); }
+
+    #btn-nova-tarefa {
+      position: fixed; right: 18px; bottom: 22px; z-index: 60; display: none;
+      width: 58px; height: 58px; border-radius: 50%; border: none;
+      background: var(--azul); color: #fff; font-size: 28px; cursor: pointer;
+      box-shadow: 0 6px 16px rgba(26,58,92,0.35);
+      align-items: center; justify-content: center;
+    }
     .cal-topo {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 14px;
@@ -2087,6 +2148,7 @@
           <div id="menu-produtos">
             <button onclick="irParaProduto('balanco')">💰 Smartbalanço</button>
             <button onclick="irParaProduto('calendario')">📅 Smartcalendário</button>
+            <button onclick="irParaProduto('tarefas')">✅ Smarttarefas</button>
           </div>
         </div>
         <div class="acoes">
@@ -2219,6 +2281,33 @@
         </div>
         <div id="cal-sugestoes"></div>
         <div id="cal-dia-conteudo"></div>
+      </div>
+    </div>
+
+    <!-- ============ SMARTTAREFAS ============ -->
+    <div id="conteudo-tarefas">
+      <div class="busca-modos">
+        <button id="tf-aba-tarefa" class="ativo" onclick="trocarTipoTarefa('tarefa')">
+          ✅ Tarefas <span class="tf-selo" id="tf-selo-tarefa"></span>
+        </button>
+        <button id="tf-aba-lembrete" onclick="trocarTipoTarefa('lembrete')">
+          🔔 Lembretes <span class="tf-selo" id="tf-selo-lembrete"></span>
+        </button>
+        <button id="tf-aba-ideia" onclick="trocarTipoTarefa('ideia')">
+          💡 Ideias <span class="tf-selo" id="tf-selo-ideia"></span>
+        </button>
+      </div>
+
+      <div class="busca-campo">
+        <input type="text" id="tf-busca" placeholder="Procurar..." oninput="filtrarTarefas()" />
+      </div>
+
+      <div class="card">
+        <div class="card-topo">
+          <h2 id="tf-lista-titulo">Tarefas em aberto</h2>
+          <button class="btn-ver-tudo" id="tf-btn-feitas" onclick="alternarFeitas()">Mostrar feitas</button>
+        </div>
+        <div id="tf-lista"></div>
       </div>
     </div>
 
@@ -2480,6 +2569,73 @@
   <!-- BOTÃO FLUTUANTE NOVA DESPESA -->
   <button id="btn-chat-ia" onclick="trocarAba('chat')" title="Assistente IA">✨</button>
   <button id="btn-nova-despesa" onclick="abrirMenuAdicionar()" title="Adicionar">+</button>
+  <button id="btn-nova-tarefa" onclick="abrirTarefa()" title="Nova anotação">+</button>
+
+  <!-- ============ MODAL TAREFA / LEMBRETE / IDEIA ============ -->
+  <div class="modal-fundo" id="modal-tarefa">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo" id="tf-titulo-modal">✅ Nova tarefa</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;">No Smarttarefas</div>
+        </div>
+        <button class="fechar" onclick="fecharTarefa()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <input type="hidden" id="tf-id" />
+
+        <div class="campo-bloco">
+          <label>Tipo</label>
+          <div class="busca-modos">
+            <button type="button" id="tf-tipo-tarefa" class="ativo" onclick="escolherTipoTarefa('tarefa')">✅ Tarefa</button>
+            <button type="button" id="tf-tipo-lembrete" onclick="escolherTipoTarefa('lembrete')">🔔 Lembrete</button>
+            <button type="button" id="tf-tipo-ideia" onclick="escolherTipoTarefa('ideia')">💡 Ideia</button>
+          </div>
+        </div>
+
+        <div class="campo-bloco">
+          <label for="tf-nome">Título</label>
+          <input type="text" id="tf-nome" maxlength="90" placeholder="Ex.: Levar o carro na revisão" />
+        </div>
+
+        <div class="campo-bloco">
+          <label for="tf-detalhe">Detalhe</label>
+          <textarea id="tf-detalhe" rows="3" maxlength="500" placeholder="Opcional"></textarea>
+        </div>
+
+        <!-- Ideia não tem prazo: este bloco some quando o tipo é ideia -->
+        <div id="tf-bloco-prazo">
+          <div class="linha-dupla">
+            <div class="campo-bloco">
+              <label for="tf-data">Data</label>
+              <input type="date" id="tf-data" />
+            </div>
+            <div class="campo-bloco">
+              <label for="tf-hora">Hora</label>
+              <input type="time" id="tf-hora" />
+            </div>
+          </div>
+        </div>
+
+        <div class="campo-bloco">
+          <label for="tf-prioridade">Prioridade</label>
+          <select id="tf-prioridade">
+            <option value="alta">Alta</option>
+            <option value="normal" selected>Normal</option>
+            <option value="baixa">Baixa</option>
+          </select>
+        </div>
+
+        <div class="cfg-aviso" id="tf-aviso"></div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" id="tf-btn-excluir" onclick="excluirTarefaApp()">Excluir</button>
+          <button class="btn-modal confirmar" id="tf-btn-salvar" onclick="salvarTarefaApp()">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ============ MODAL NOVA DESPESA ============ -->
   <div class="modal-fundo" id="modal-despesa">
@@ -3309,7 +3465,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=38"></script>
+  <script src="app.js?v=39"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

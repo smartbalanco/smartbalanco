@@ -595,6 +595,7 @@ function alternarMenuProdutos() {
 function irParaProduto(qual) {
   document.getElementById("menu-produtos").classList.remove("aberto");
   if (qual === "calendario") abrirCalendario();
+  else if (qual === "tarefas") trocarAba("tarefas");
   else trocarAba("dashboard");
 }
 
@@ -1016,6 +1017,287 @@ async function alternarConcluido(id, novoEstado) {
       const c = calDados.compromissos.filter(function (x) { return x.id === id; })[0];
       if (c) c.concluido = novoEstado;
       mostrarDiaCalendario(calDiaEscolhido);
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não deu."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+// ============================================================================
+// SMARTTAREFAS
+// ----------------------------------------------------------------------------
+// Tarefas, lembretes e ideias. A lista do tipo escolhido vem inteira do
+// servidor (inclusive as concluídas) e o filtro — busca e "mostrar feitas" —
+// acontece aqui. É de propósito: o Apps Script leva segundos por chamada, e
+// filtrar no servidor a cada tecla traria de volta a corrida de respostas
+// atrasadas que já deu dor de cabeça na busca de lançamentos.
+// ============================================================================
+let tfTipo = "tarefa";
+let tfMostrarFeitas = false;
+let tfDados = [];
+
+// "novo" está aqui porque lembrete é masculino e tarefa/ideia femininas:
+// sem isso o título do modal saía "Nova lembrete".
+const TF_ROTULOS = {
+  tarefa:   { emoji: "✅", singular: "tarefa",   plural: "Tarefas",   novo: "Nova" },
+  lembrete: { emoji: "🔔", singular: "lembrete", plural: "Lembretes", novo: "Novo" },
+  ideia:    { emoji: "💡", singular: "ideia",    plural: "Ideias",    novo: "Nova" }
+};
+
+function trocarTipoTarefa(tipo) {
+  tfTipo = tipo;
+  ["tarefa", "lembrete", "ideia"].forEach(function (t) {
+    document.getElementById("tf-aba-" + t).classList.toggle("ativo", t === tipo);
+  });
+  document.getElementById("tf-busca").value = "";
+  carregarTarefas();
+}
+
+function alternarFeitas() {
+  tfMostrarFeitas = !tfMostrarFeitas;
+  document.getElementById("tf-btn-feitas").textContent =
+    tfMostrarFeitas ? "Esconder feitas" : "Mostrar feitas";
+  renderizarTarefas();
+}
+
+function filtrarTarefas() {
+  renderizarTarefas();
+}
+
+async function carregarTarefas() {
+  const lista = document.getElementById("tf-lista");
+  lista.innerHTML = '<p class="vazio">Carregando...</p>';
+
+  try {
+    const r = await chamarServidor("listarTarefas", { tipo: tfTipo, incluirFeitas: "true" });
+
+    if (r.ok) {
+      tfDados = r.tarefas || [];
+      ["tarefa", "lembrete", "ideia"].forEach(function (t) {
+        const n = (r.abertas && r.abertas[t]) || 0;
+        document.getElementById("tf-selo-" + t).textContent = n > 0 ? n : "";
+      });
+    } else {
+      tfDados = [];
+      mostrarToast("❌ " + (r.mensagem || "Não consegui carregar."));
+    }
+  } catch (e) {
+    tfDados = [];
+    mostrarToast("❌ Sem conexão.");
+  }
+
+  renderizarTarefas();
+}
+
+function renderizarTarefas() {
+  const lista = document.getElementById("tf-lista");
+  const rot = TF_ROTULOS[tfTipo];
+  const busca = document.getElementById("tf-busca").value.trim().toLowerCase();
+
+  document.getElementById("tf-lista-titulo").textContent =
+    rot.plural + (tfMostrarFeitas ? "" : " em aberto");
+
+  let itens = tfDados;
+  if (!tfMostrarFeitas) itens = itens.filter(function (t) { return !t.concluido; });
+  if (busca) {
+    itens = itens.filter(function (t) {
+      return (t.titulo + " " + t.detalhe).toLowerCase().indexOf(busca) >= 0;
+    });
+  }
+
+  if (!itens.length) {
+    lista.innerHTML = '<p class="vazio">' +
+      (busca ? "Nada encontrado." : "Nenhuma " + rot.singular + " por aqui ainda.") + '</p>';
+    return;
+  }
+
+  const hoje = dataHojeISO();
+  let html = "";
+
+  itens.forEach(function (t) {
+    const tags = [];
+
+    if (t.data) {
+      let classe = "", texto = formatarDataCurta(t.data);
+      if (t.hora) texto += " · " + t.hora;
+      if (!t.concluido && t.data < hoje) { classe = "atrasada"; texto = "Atrasada · " + texto; }
+      else if (t.data === hoje) { classe = "hoje"; texto = "Hoje" + (t.hora ? " · " + t.hora : ""); }
+      tags.push('<span class="tf-tag ' + classe + '">' + texto + '</span>');
+    }
+    if (t.prioridade !== "normal") {
+      tags.push('<span class="tf-tag ' + t.prioridade + '">' +
+                (t.prioridade === "alta" ? "Alta" : "Baixa") + '</span>');
+    }
+    if (t.origem) tags.push('<span class="tf-tag">Veio de uma ideia</span>');
+
+    // Promover só faz sentido em ideia aberta: é o caminho ideia -> tarefa.
+    const btnPromover = (t.tipo === "ideia" && !t.concluido)
+      ? '<button class="tf-btn" title="Virar tarefa" onclick="promoverIdeiaApp(\'' + t.id + '\')">→</button>'
+      : '';
+
+    html +=
+      '<div class="tf-item' + (t.concluido ? " feita" : "") + '">' +
+        '<div class="tf-check" onclick="concluirTarefaApp(\'' + t.id + '\', ' + (!t.concluido) + ')">' +
+          (t.concluido ? "✔" : "") +
+        '</div>' +
+        '<div class="tf-info" onclick="abrirTarefa(\'' + t.id + '\')">' +
+          '<div class="tf-titulo">' + escaparHtml(t.titulo) + '</div>' +
+          (t.detalhe ? '<div class="tf-detalhe">' + escaparHtml(t.detalhe) + '</div>' : '') +
+          (tags.length ? '<div class="tf-linha-meta">' + tags.join("") + '</div>' : '') +
+        '</div>' +
+        '<div class="tf-acoes">' +
+          btnPromover +
+          '<button class="tf-btn" title="Editar" onclick="abrirTarefa(\'' + t.id + '\')">✎</button>' +
+        '</div>' +
+      '</div>';
+  });
+
+  lista.innerHTML = html;
+}
+
+// "2026-08-14" -> "14/08"
+function formatarDataCurta(iso) {
+  const p = (iso || "").split("-");
+  return p.length === 3 ? p[2] + "/" + p[1] : iso;
+}
+
+function abrirTarefa(id) {
+  const modal = document.getElementById("modal-tarefa");
+  modal.style.display = "flex";
+
+  const t = id ? tfDados.filter(function (x) { return x.id === id; })[0] : null;
+
+  document.getElementById("tf-id").value = t ? t.id : "";
+  document.getElementById("tf-nome").value = t ? t.titulo : "";
+  document.getElementById("tf-detalhe").value = t ? t.detalhe : "";
+  document.getElementById("tf-data").value = t ? t.data : "";
+  document.getElementById("tf-hora").value = t ? t.hora : "";
+  document.getElementById("tf-prioridade").value = t ? t.prioridade : "normal";
+  document.getElementById("tf-aviso").textContent = "";
+  document.getElementById("tf-btn-excluir").style.display = t ? "block" : "none";
+
+  // Nova anotação nasce no tipo da aba aberta: quem está em "Ideias" e toca
+  // no "+" quer anotar uma ideia.
+  escolherTipoTarefa(t ? t.tipo : tfTipo);
+}
+
+function escolherTipoTarefa(tipo) {
+  document.getElementById("modal-tarefa").dataset.tipo = tipo;
+
+  ["tarefa", "lembrete", "ideia"].forEach(function (t) {
+    document.getElementById("tf-tipo-" + t).classList.toggle("ativo", t === tipo);
+  });
+
+  const rot = TF_ROTULOS[tipo];
+  const editando = !!document.getElementById("tf-id").value;
+  document.getElementById("tf-titulo-modal").textContent =
+    rot.emoji + " " + (editando ? "Editar " : rot.novo + " ") + rot.singular;
+
+  document.getElementById("tf-bloco-prazo").style.display = (tipo === "ideia") ? "none" : "block";
+}
+
+function fecharTarefa() {
+  document.getElementById("modal-tarefa").style.display = "none";
+}
+
+async function salvarTarefaApp() {
+  const aviso = document.getElementById("tf-aviso");
+  const btn = document.getElementById("tf-btn-salvar");
+
+  const tipo = document.getElementById("modal-tarefa").dataset.tipo || "tarefa";
+  const titulo = document.getElementById("tf-nome").value.trim();
+  const data = document.getElementById("tf-data").value;
+
+  if (!titulo) { aviso.textContent = "Escreva o título."; return; }
+  if (tipo === "lembrete" && !data) { aviso.textContent = "Um lembrete precisa de data."; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+
+  try {
+    const r = await chamarServidor("salvarTarefa", {
+      id: document.getElementById("tf-id").value,
+      tipo: tipo,
+      titulo: titulo,
+      detalhe: document.getElementById("tf-detalhe").value.trim(),
+      data: (tipo === "ideia") ? "" : data,
+      hora: (tipo === "ideia") ? "" : document.getElementById("tf-hora").value,
+      prioridade: document.getElementById("tf-prioridade").value
+    });
+
+    if (r.ok) {
+      fecharTarefa();
+      mostrarToast("✅ " + r.mensagem);
+      // Trocar o tipo dentro do modal move a anotação de aba; sem isto ela
+      // sumiria da tela e pareceria perdida.
+      if (tipo !== tfTipo) trocarTipoTarefa(tipo);
+      else await carregarTarefas();
+    } else {
+      aviso.textContent = r.mensagem || "Não foi possível salvar.";
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão. Nada foi salvo.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Salvar";
+  }
+}
+
+async function concluirTarefaApp(id, feito) {
+  // Muda na tela antes da resposta: marcar item é gesto rápido e esperar o
+  // Apps Script responder parece travamento.
+  const alvo = tfDados.filter(function (x) { return x.id === id; })[0];
+  if (alvo) { alvo.concluido = feito; renderizarTarefas(); }
+
+  try {
+    const r = await chamarServidor("concluirTarefa", { id: id, concluido: feito ? "true" : "false" });
+    if (!r.ok) {
+      if (alvo) { alvo.concluido = !feito; renderizarTarefas(); }
+      mostrarToast("❌ " + (r.mensagem || "Não deu."));
+      return;
+    }
+    const selo = document.getElementById("tf-selo-" + tfTipo);
+    const n = Math.max(0, (parseInt(selo.textContent) || 0) + (feito ? -1 : 1));
+    selo.textContent = n > 0 ? n : "";
+  } catch (e) {
+    if (alvo) { alvo.concluido = !feito; renderizarTarefas(); }
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+async function excluirTarefaApp() {
+  const id = document.getElementById("tf-id").value;
+  if (!id) return;
+  if (!confirm("Excluir definitivamente?")) return;
+
+  try {
+    const r = await chamarServidor("excluirTarefa", { id: id });
+    if (r.ok) {
+      fecharTarefa();
+      mostrarToast("✅ " + r.mensagem);
+      await carregarTarefas();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não foi possível excluir."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+// A ideia não é apagada: fica marcada como concluída e a tarefa nova aponta
+// para ela. Saber de onde a tarefa veio é metade da graça de anotar ideia.
+async function promoverIdeiaApp(id) {
+  const ideia = tfDados.filter(function (x) { return x.id === id; })[0];
+  if (!ideia) return;
+  if (!confirm('Transformar "' + ideia.titulo + '" em tarefa?')) return;
+
+  try {
+    const r = await chamarServidor("promoverIdeia", { id: id });
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      trocarTipoTarefa("tarefa");
     } else {
       mostrarToast("❌ " + (r.mensagem || "Não deu."));
     }
@@ -2238,7 +2520,8 @@ function tratarAtalhoDeTela(url) {
     "busca": function () { quandoTelaPronta(function () { trocarAba("busca"); abrirBusca(); }); },
     "aprovacoes": function () { quandoTelaPronta(function () { trocarAba("aprovacoes"); }); },
     "relatorios": function () { quandoTelaPronta(function () { trocarAba("relatorios"); }); },
-    "calendario": function () { quandoTelaPronta(function () { abrirCalendario(); }); }
+    "calendario": function () { quandoTelaPronta(function () { abrirCalendario(); }); },
+    "tarefas": function () { quandoTelaPronta(function () { trocarAba("tarefas"); }); }
   };
 
   const nomes = Object.keys(destinos);
@@ -3224,9 +3507,10 @@ function trocarAba(nome) {
   document.getElementById("conteudo-chat").style.display  = (nome === "chat")       ? "flex"  : "none";
   document.getElementById("conteudo-busca").style.display = (nome === "busca")      ? "block" : "none";
   document.getElementById("conteudo-calendario").style.display = (nome === "calendario") ? "block" : "none";
+  document.getElementById("conteudo-tarefas").style.display = (nome === "tarefas") ? "block" : "none";
   document.getElementById("nav-mes-wrap").style.display   = (nome === "dashboard")  ? "flex"  : "none";
   document.getElementById("abas-principais").style.display =
-    (nome === "chat" || nome === "busca" || nome === "calendario") ? "none" : "flex";
+    (nome === "chat" || nome === "busca" || nome === "calendario" || nome === "tarefas") ? "none" : "flex";
 
   document.getElementById("tab-dashboard").classList.toggle("ativa", nome === "dashboard");
   document.getElementById("tab-aprovacoes").classList.toggle("ativa", nome === "aprovacoes");
@@ -3236,10 +3520,11 @@ function trocarAba(nome) {
   const noDash = (nome === "dashboard");
   document.getElementById("btn-nova-despesa").style.display = noDash ? "flex" : "none";
   document.getElementById("btn-chat-ia").style.display = noDash ? "flex" : "none";
+  document.getElementById("btn-nova-tarefa").style.display = (nome === "tarefas") ? "flex" : "none";
 
   // Botão voltar (no chat e na busca)
   document.getElementById("btn-voltar").style.display =
-    (nome === "chat" || nome === "busca" || nome === "calendario") ? "inline-block" : "none";
+    (nome === "chat" || nome === "busca" || nome === "calendario" || nome === "tarefas") ? "inline-block" : "none";
 
   // Título do topo
   // Só o texto muda: a seta do menu de produtos fica num span à parte, senão
@@ -3248,12 +3533,14 @@ function trocarAba(nome) {
   if (nome === "chat") titulo.textContent = "🧠 Assistente IA";
   else if (nome === "busca") titulo.textContent = "🚀 Lançamentos";
   else if (nome === "calendario") titulo.textContent = "Smartcalendário";
+  else if (nome === "tarefas") titulo.textContent = "Smarttarefas";
   else titulo.textContent = "Smartbalanço";
 
   if (nome === "aprovacoes") carregarAprovacoes(false);
   if (nome === "relatorios") renderizarTelaRelatorios();
   if (nome === "chat") abrirChat();
   if (nome === "busca") abrirBusca();
+  if (nome === "tarefas") carregarTarefas();
 }
 
 // ---------- Carrega a lista ----------
