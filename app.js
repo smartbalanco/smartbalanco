@@ -5427,6 +5427,48 @@ function alternarVinculo() {
 
 let buscaMovTimer = null;
 
+// ---------------------------------------------------------------------------
+// ATUALIZAR O VALOR DA DESPESA PELO DOCUMENTO ANEXADO
+// Conta de valor variável (água, luz, cartão) chega com o valor certo só no
+// boleto. Quando o documento vinculado tem valor diferente do gravado, aqui
+// se OFERECE a atualização — nunca automática: uma compra pode vir com nota
+// separada por item, e nesse caso o valor da nota é só uma parte da despesa.
+// ---------------------------------------------------------------------------
+// Reusa editarLancamento com escopo "adiante": numa despesa de parcela única
+// (o caso das contas variáveis) ele altera só ela; numa parcelada, o novo
+// valor vale desta parcela em diante, que é o comportamento esperado quando
+// uma conta muda de preço.
+async function atualizarValorPeloDocumento(numMov, valor) {
+  try {
+    const r = await chamarServidor("editarLancamento", {
+      numMov: numMov,
+      escopo: "adiante",
+      valorParcela: String(valor)
+    });
+    if (r && r.ok) mostrarToast("💰 Valor do MOV-" + numMov + " atualizado para " + formatarMoeda(valor) + ".");
+    else mostrarToast("⚠️ Documento anexado, mas o valor não foi atualizado.");
+  } catch (e) {
+    mostrarToast("⚠️ Documento anexado, mas o valor não foi atualizado.");
+  }
+}
+
+function montarOpcaoAtualizarValor(despesa) {
+  const lido = dadosExtraidos ? parseFloat(dadosExtraidos.valor_total) : 0;
+  const atual = parseFloat(despesa.valor) || 0;
+
+  if (!lido || lido <= 0) return "";
+  if (Math.abs(lido - atual) < 0.01) return "";       // mesmo valor: nada a fazer
+  if (despesa.pago) return "";                         // já liquidada: não mexe
+
+  return (
+    '<label class="dv-atualizar">' +
+      '<input type="checkbox" id="dr-chk-atualizar-valor" />' +
+      '<span>Atualizar a despesa para <b>' + formatarMoeda(lido) + '</b> ' +
+      '(hoje está ' + formatarMoeda(atual) + ')</span>' +
+    '</label>'
+  );
+}
+
 function buscarDespesaPorMov() {
   clearTimeout(buscaMovTimer);
   const num = document.getElementById("dr-nummov").value.trim();
@@ -5458,6 +5500,7 @@ function buscarDespesaPorMov() {
           '</div>' +
           '<div class="dv-cat">' + escaparHtml(d.categoria) + '</div>' +
           (d.pago ? '<div class="dv-alerta">⚠️ Esta despesa já consta como paga.</div>' : '') +
+          montarOpcaoAtualizarValor(d) +
           (d.codigoAtual ? '<div class="dv-alerta">⚠️ Esta despesa já tem um código salvo. Ele será substituído.</div>' : '');
       } else {
         box.className = "dv-box erro";
@@ -5504,6 +5547,11 @@ async function confirmarDocumento() {
         return;
       }
       dados.numMovVinculo = num;
+
+      // Só marca a intenção; a atualização vai depois do arquivo subir.
+      const chk = document.getElementById("dr-chk-atualizar-valor");
+      dados._atualizarValorPara = (chk && chk.checked && dadosExtraidos)
+        ? parseFloat(dadosExtraidos.valor_total) : 0;
     }
   } else {
     // Modo lançar: valida os campos
@@ -5531,6 +5579,12 @@ async function confirmarDocumento() {
     if (r.ok) {
       mostrarToast("✅ " + r.mensagem);
       limparTodoCache();
+
+      // Valor do documento manda na despesa vinculada, quando pedido
+      if (dados._atualizarValorPara > 0 && dados.numMovVinculo) {
+        await atualizarValorPeloDocumento(dados.numMovVinculo, dados._atualizarValorPara);
+      }
+
       if (!ehArquivar) checarPendentesAprovacao();
       else await recarregarDados();
     } else {
