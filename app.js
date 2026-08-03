@@ -1046,6 +1046,13 @@ async function abrirConfig() {
   const rotulo = document.getElementById("cfg-cat-rotulo");
   if (secao) secao.style.display = "none";
   if (rotulo) rotulo.textContent = "🏷️ Editar categorias";
+
+  // Fixas também começam recolhidas, senão Configurações reabre gigante
+  const secaoFix = document.getElementById("cfg-secao-fixas");
+  const rotuloFix = document.getElementById("cfg-fix-rotulo");
+  if (secaoFix) secaoFix.style.display = "none";
+  if (rotuloFix) rotuloFix.textContent = "🔁 Gerenciar despesas fixas";
+  fecharFormFixa();
 }
 
 // Bloco de versão em Configurações: mostra a instalada e um botão que abre o
@@ -1135,6 +1142,178 @@ function renderizarCategoriasConfig() {
   }
 
   alvo.innerHTML = html || '<p class="vazio">Nenhuma categoria cadastrada.</p>';
+}
+
+// ============================================================================
+// DESPESAS FIXAS
+// Elas dividem a aba 'Dados fcnmt' com categorias e métodos, então o servidor
+// só mexe nas colunas delas — apagar a linha inteira levaria junto uma
+// categoria e um método. Aqui é só a tela.
+// ============================================================================
+let fixasCarregadas = [];
+
+function alternarSecaoFixas() {
+  const secao = document.getElementById("cfg-secao-fixas");
+  const rotulo = document.getElementById("cfg-fix-rotulo");
+  const abriu = secao.style.display === "none";
+
+  secao.style.display = abriu ? "block" : "none";
+  rotulo.textContent = abriu ? "🔁 Ocultar despesas fixas" : "🔁 Gerenciar despesas fixas";
+
+  if (abriu) {
+    const hoje = new Date();
+    const selMes = document.getElementById("fix-mes");
+    if (selMes && !selMes.options.length) {
+      // Começa no mês que vem: fixa se lança para o ciclo seguinte
+      selMes.innerHTML = opcoesMeses((hoje.getMonth() + 1) % 12);
+      document.getElementById("fix-ano").innerHTML = opcoesAnos(hoje.getFullYear());
+    }
+    carregarFixas();
+  }
+}
+
+async function carregarFixas() {
+  const alvo = document.getElementById("cfg-fixas-lista");
+  alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+
+  try {
+    const r = await chamarServidor("listarFixas");
+    fixasCarregadas = (r.ok && r.fixas) ? r.fixas : [];
+  } catch (e) {
+    alvo.innerHTML = '<p class="vazio">Sem conexão.</p>';
+    return;
+  }
+
+  if (fixasCarregadas.length === 0) {
+    alvo.innerHTML = '<p class="vazio">Nenhuma despesa fixa cadastrada.</p>';
+    return;
+  }
+
+  let total = 0;
+  let html = "";
+
+  fixasCarregadas.forEach(function (f, i) {
+    total += f.valor || 0;
+    html +=
+      '<div class="cfg-item">' +
+        '<span class="cfg-item-nome">' + escaparHtml(f.descricao) +
+          '<span class="cfg-item-cod">dia ' + f.dia + ' · ' + escaparHtml(f.metodo || "sem método") + '</span>' +
+        '</span>' +
+        '<span class="sug-valor">' + formatarMoeda(f.valor) + '</span>' +
+        '<button class="cfg-btn" title="Editar" onclick="abrirFormFixa(' + i + ')">✏️</button>' +
+        '<button class="cfg-btn" title="Excluir" onclick="excluirFixaApp(' + i + ')">🗑️</button>' +
+      '</div>';
+  });
+
+  alvo.innerHTML = html +
+    '<div class="cfg-aviso" style="margin-top:8px;">' + fixasCarregadas.length +
+    ' fixa(s) · ' + formatarMoeda(total) + ' por mês</div>';
+}
+
+function abrirFormFixa(indice) {
+  const f = (indice !== undefined) ? fixasCarregadas[indice] : null;
+  const form = document.getElementById("fix-form");
+  form.classList.add("aberto");
+
+  montarSelect("fix-metodo", (listasValidas && listasValidas.metodos) ? listasValidas.metodos : [],
+               f ? f.metodo : "");
+  definirCategoriaCampo("fix-categoria", f ? f.categoria : "");
+
+  document.getElementById("fix-linha").value = f ? f.linha : "";
+  document.getElementById("fix-desc").value = f ? f.descricao : "";
+  document.getElementById("fix-valor").value = f ? f.valor : "";
+  document.getElementById("fix-dia").value = f ? f.dia : "";
+  document.getElementById("fix-aviso").textContent = "";
+}
+
+function fecharFormFixa() {
+  document.getElementById("fix-form").classList.remove("aberto");
+}
+
+async function salvarFixaApp() {
+  const aviso = document.getElementById("fix-aviso");
+  const btn = document.getElementById("fix-btn-salvar");
+
+  const descricao = document.getElementById("fix-desc").value.trim();
+  const valor = document.getElementById("fix-valor").value;
+  const categoria = document.getElementById("fix-categoria").value;
+
+  if (!descricao) { aviso.textContent = "Informe a descrição."; return; }
+  if (!valor || parseFloat(valor) <= 0) { aviso.textContent = "Informe o valor."; return; }
+  if (!categoria) { aviso.textContent = "Escolha a categoria."; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+
+  try {
+    const r = await chamarServidor("salvarFixa", {
+      linha: document.getElementById("fix-linha").value,
+      descricao: descricao,
+      valor: valor,
+      dia: document.getElementById("fix-dia").value,
+      metodo: document.getElementById("fix-metodo").value,
+      categoria: categoria
+    });
+
+    if (r.ok) {
+      fecharFormFixa();
+      mostrarToast("✅ " + r.mensagem);
+      await carregarFixas();
+    } else {
+      aviso.textContent = r.mensagem || "Não foi possível salvar.";
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão. Nada foi salvo.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Salvar";
+  }
+}
+
+async function excluirFixaApp(indice) {
+  const f = fixasCarregadas[indice];
+  if (!f) return;
+  if (!confirm("Excluir a despesa fixa?\n\n" + f.descricao +
+               "\n\nOs lançamentos já feitos a partir dela não são afetados.")) return;
+
+  try {
+    const r = await chamarServidor("excluirFixa", { linha: f.linha });
+    if (r.ok) { mostrarToast("✅ " + r.mensagem); await carregarFixas(); }
+    else mostrarToast("❌ " + (r.mensagem || "Não foi possível excluir."));
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+async function gerarFixasApp() {
+  const btn = document.getElementById("fix-btn-gerar");
+  const mes = document.getElementById("fix-mes");
+  const ano = document.getElementById("fix-ano");
+
+  if (!confirm("Incluir as despesas fixas de " + MESES_NOMES[parseInt(mes.value)] +
+               " de " + ano.value + "?\n\nElas vão para Aprovações. " +
+               "O que já foi lançado nesse mês é ignorado.")) return;
+
+  btn.disabled = true;
+  btn.textContent = "...";
+
+  try {
+    const r = await chamarServidor("gerarFixasDoMes", { mes: mes.value, ano: ano.value });
+
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      limparTodoCache();
+      await recarregarDados();
+      checarPendentesAprovacao();
+    } else {
+      mostrarToast("⚠️ " + (r.mensagem || "Nada foi gerado."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão. Nada foi gerado.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Incluir";
+  }
 }
 
 // A lista de categorias é longa demais para ficar sempre aberta em

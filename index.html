@@ -2884,6 +2884,68 @@
           <div id="cfg-categorias"></div>
         </div>
 
+        <div class="cfg-grupo-titulo" style="margin-top:22px;">Despesas fixas</div>
+        <button class="btn-modal cancelar" style="width:100%;" onclick="alternarSecaoFixas()">
+          <span id="cfg-fix-rotulo">🔁 Gerenciar despesas fixas</span>
+        </button>
+
+        <div id="cfg-secao-fixas" style="display:none;">
+          <button class="btn-modal confirmar" style="width:100%; margin-top:10px;" onclick="abrirFormFixa()">
+            + Nova despesa fixa
+          </button>
+
+          <div id="fix-form" class="cfg-nova">
+            <input type="hidden" id="fix-linha" />
+            <div class="campo-bloco">
+              <label for="fix-desc">Descrição</label>
+              <input type="text" id="fix-desc" maxlength="80" placeholder="Ex.: Aluguel" />
+            </div>
+            <div class="linha-dupla">
+              <div class="campo-bloco">
+                <label for="fix-valor">Valor</label>
+                <input type="number" id="fix-valor" step="0.01" inputmode="decimal" />
+              </div>
+              <div class="campo-bloco">
+                <label for="fix-dia">Dia do vencimento</label>
+                <input type="number" id="fix-dia" min="1" max="31" inputmode="numeric" />
+              </div>
+            </div>
+            <div class="campo-bloco">
+              <label for="fix-metodo">Método</label>
+              <select id="fix-metodo"></select>
+            </div>
+            <div class="campo-bloco">
+              <label>Categoria</label>
+              <input type="hidden" id="fix-categoria" />
+              <button type="button" class="btn-categoria" onclick="abrirSeletorCategoria('fix-categoria')">
+                <span class="cat-txt" id="fix-categoria-txt"></span>
+                <span class="cat-lupa">🔍</span>
+              </button>
+            </div>
+            <div class="cfg-aviso" id="fix-aviso"></div>
+            <div class="modal-acoes">
+              <button class="btn-modal cancelar" onclick="fecharFormFixa()">Cancelar</button>
+              <button class="btn-modal confirmar" id="fix-btn-salvar" onclick="salvarFixaApp()">Salvar</button>
+            </div>
+          </div>
+
+          <div id="cfg-fixas-lista"></div>
+
+          <div class="cfg-grupo-titulo" style="margin-top:18px;">Incluir no mês</div>
+          <div class="cfg-aviso">Manda todas as fixas para Aprovações. O que já foi lançado no mês é ignorado.</div>
+          <div class="linha-tripla">
+            <div class="campo-bloco">
+              <label for="fix-mes">Mês</label>
+              <select id="fix-mes"></select>
+            </div>
+            <div class="campo-bloco">
+              <label for="fix-ano">Ano</label>
+              <select id="fix-ano"></select>
+            </div>
+            <button class="btn-modal confirmar pv-btn-ver" id="fix-btn-gerar" onclick="gerarFixasApp()">Incluir</button>
+          </div>
+        </div>
+
         <div class="cfg-grupo-titulo" style="margin-top:22px;">Aplicativo</div>
         <div id="cfg-versao"></div>
 
@@ -3209,7 +3271,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=31"></script>
+  <script src="app.js?v=32"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
