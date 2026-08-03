@@ -2091,6 +2091,7 @@ function prepararLoginGoogle() {
 async function abrirLiquidacao(numMov) {
   const modal = document.getElementById("modal-liquidar");
   modal.style.display = "flex";
+  limparComprovanteLiquidacao();   // anexo da liquidação anterior não vaza
   document.getElementById("modal-corpo").style.display = "none";
   document.getElementById("modal-carregando").style.display = "block";
   document.getElementById("modal-erro").style.display = "none";
@@ -2302,12 +2303,79 @@ function confirmarLiquidacao() {
   enviarLiquidacao(params, numMov);
 }
 
+// ---------------------------------------------------------------------------
+// COMPROVANTE ANEXADO NA LIQUIDAÇÃO
+// O anexo é opcional e vai DEPOIS da baixa: se o upload falhar, a liquidação
+// já está gravada e o que se perde é só o arquivo — o contrário deixaria a
+// despesa em aberto por causa de uma foto.
+// ---------------------------------------------------------------------------
+let comprovanteLiquidacao = null;
+
+function aoEscolherComprovante(input) {
+  const arquivo = input.files && input.files[0];
+  const rotulo = document.getElementById("liq-arquivo-nome");
+
+  if (!arquivo) { comprovanteLiquidacao = null; return; }
+
+  if (arquivo.size > 8 * 1024 * 1024) {
+    mostrarToast("❌ Arquivo muito grande (máx. 8 MB).");
+    input.value = "";
+    return;
+  }
+
+  const leitor = new FileReader();
+  leitor.onload = function (ev) {
+    comprovanteLiquidacao = {
+      base64: ev.target.result.split(",")[1],
+      mimeType: arquivo.type || "image/jpeg",
+      nome: arquivo.name || "comprovante"
+    };
+    if (rotulo) {
+      rotulo.textContent = "📎 " + arquivo.name;
+      rotulo.classList.remove("vazio-cat");
+    }
+  };
+  leitor.readAsDataURL(arquivo);
+}
+
+function limparComprovanteLiquidacao() {
+  comprovanteLiquidacao = null;
+  const campo = document.getElementById("liq-arquivo");
+  const rotulo = document.getElementById("liq-arquivo-nome");
+  if (campo) campo.value = "";
+  if (rotulo) rotulo.textContent = "Anexar comprovante";
+}
+
+// Envia o anexo já vinculado ao Nº Mov, reusando o mesmo caminho do
+// "Arquivar documento" do app.
+async function enviarComprovanteAnexado(doc, numMov, descricao) {
+  try {
+    const r = await chamarServidorPost("arquivarDocumento", {
+      arquivo: doc.base64,
+      mimeType: doc.mimeType,
+      tipoDocumento: "Comprovante",
+      descricao: descricao || ("Comprovante MOV-" + numMov),
+      numMovVinculo: String(numMov)
+    });
+    if (r && r.ok) mostrarToast("📎 Comprovante anexado ao MOV-" + numMov + ".");
+    else mostrarToast("⚠️ Liquidado, mas o comprovante não subiu.");
+  } catch (e) {
+    mostrarToast("⚠️ Liquidado, mas o comprovante não subiu.");
+  }
+}
+
 // Faz o envio de verdade, sem travar a tela
 async function enviarLiquidacao(params, numMov) {
+  // Guarda e limpa antes do await: se o usuário abrir outra liquidação
+  // enquanto esta viaja, o anexo não pode vazar para a despesa errada.
+  const doc = comprovanteLiquidacao;
+  limparComprovanteLiquidacao();
+
   try {
     const r = await chamarServidor("liquidar", params);
     if (r.ok) {
       mostrarToast("✅ MOV-" + numMov + " liquidado! Comprovante enviado por e-mail.");
+      if (doc) await enviarComprovanteAnexado(doc, numMov, params.descricao);
       await recarregarDados();
     } else {
       mostrarToast("❌ MOV-" + numMov + ": " + (r.mensagem || "não foi possível liquidar."));
