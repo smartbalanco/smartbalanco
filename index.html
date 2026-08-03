@@ -2214,8 +2214,10 @@
       <div class="card">
         <div class="card-topo">
           <h2 id="cal-dia-titulo">Selecione um dia</h2>
+          <button class="btn-ver-tudo" onclick="sugerirLembretesApp()">✨ Sugestões</button>
           <button class="btn-ver-tudo" onclick="abrirCompromisso()">+ Compromisso</button>
         </div>
+        <div id="cal-sugestoes"></div>
         <div id="cal-dia-conteudo"></div>
       </div>
     </div>
@@ -3307,7 +3309,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=36"></script>
+  <script src="app.js?v=37"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

@@ -816,6 +816,74 @@ async function liquidarFaturaDoCalendario(indice) {
   carregarCalendario();
 }
 
+// ---------- Sugestões de lembrete pela IA ----------
+// Ela sugere; você escolhe. Nada vira compromisso sozinho: agenda que se
+// enche de lembrete não pedido é agenda que ninguém lê.
+let sugestoesLembrete = [];
+
+async function sugerirLembretesApp() {
+  const alvo = document.getElementById("cal-sugestoes");
+  alvo.innerHTML = '<div class="cfg-aviso">✨ Analisando suas contas...</div>';
+
+  try {
+    const r = await chamarServidor("sugerirLembretes");
+
+    if (!r.ok) { alvo.innerHTML = '<div class="cfg-aviso">' + escaparHtml(r.mensagem || "Não deu.") + '</div>'; return; }
+
+    sugestoesLembrete = r.sugestoes || [];
+    if (sugestoesLembrete.length === 0) {
+      alvo.innerHTML = '<div class="cfg-aviso">' + escaparHtml(r.mensagem || "Nenhuma sugestão por agora.") + '</div>';
+      return;
+    }
+
+    let html = '<div class="cfg-aviso">Toque para criar o lembrete:</div>';
+    sugestoesLembrete.forEach(function (s, i) {
+      const p = (s.data || "").split("-");
+      const dataBr = p.length === 3 ? p[2] + "/" + p[1] : s.data;
+
+      html +=
+        '<button type="button" class="sug-item" onclick="criarLembreteSugerido(' + i + ')">' +
+          '<span class="sug-info">' +
+            '<b>✨ ' + escaparHtml(s.titulo) + '</b>' +
+            '<span class="sug-sub">' + dataBr + (s.hora ? " às " + escaparHtml(s.hora) : "") +
+            (s.motivo ? " · " + escaparHtml(s.motivo) : "") + '</span>' +
+          '</span>' +
+          '<span class="sug-valor">criar</span>' +
+        '</button>';
+    });
+
+    alvo.innerHTML = html;
+  } catch (e) {
+    alvo.innerHTML = '<div class="cfg-aviso">Sem conexão.</div>';
+  }
+}
+
+async function criarLembreteSugerido(indice) {
+  const s = sugestoesLembrete[indice];
+  if (!s) return;
+
+  try {
+    const r = await chamarServidor("salvarCompromisso", {
+      titulo: s.titulo,
+      data: s.data,
+      hora: s.hora || "09:00",
+      local: "",
+      lembrete: "60"
+    });
+
+    if (r.ok) {
+      mostrarToast("✅ Lembrete criado: " + s.titulo);
+      sugestoesLembrete.splice(indice, 1);
+      document.getElementById("cal-sugestoes").innerHTML = "";
+      await carregarCalendario();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não foi possível criar."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
 // ---------- Compromissos ----------
 function abrirCompromisso(id) {
   const modal = document.getElementById("modal-compromisso");
