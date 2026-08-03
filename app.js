@@ -901,6 +901,15 @@ async function abrirConfig() {
   renderizarCategoriasConfig();
   montarCodigoAcesso();
   montarVersaoApp();
+
+  const conta = document.getElementById("cfg-conta-email");
+  if (conta) conta.textContent = emailUsuarioAtual || "";
+
+  // Reabre sempre recolhida
+  const secao = document.getElementById("cfg-secao-categorias");
+  const rotulo = document.getElementById("cfg-cat-rotulo");
+  if (secao) secao.style.display = "none";
+  if (rotulo) rotulo.textContent = "🏷️ Editar categorias";
 }
 
 // Bloco de versão em Configurações: mostra a instalada e um botão que abre o
@@ -990,6 +999,17 @@ function renderizarCategoriasConfig() {
   }
 
   alvo.innerHTML = html || '<p class="vazio">Nenhuma categoria cadastrada.</p>';
+}
+
+// A lista de categorias é longa demais para ficar sempre aberta em
+// Configurações: empurrava conta, versão e código para fora da tela.
+function alternarSecaoCategorias() {
+  const secao = document.getElementById("cfg-secao-categorias");
+  const rotulo = document.getElementById("cfg-cat-rotulo");
+  const abriu = secao.style.display === "none";
+
+  secao.style.display = abriu ? "block" : "none";
+  rotulo.textContent = abriu ? "🏷️ Ocultar categorias" : "🏷️ Editar categorias";
 }
 
 function alternarNovaCategoria() {

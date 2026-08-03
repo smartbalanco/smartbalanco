@@ -2074,7 +2074,6 @@
           <button id="btn-buscar" onclick="trocarAba('busca')" title="Últimos lançamentos e busca">🚀</button>
           <button id="btn-atualizar" onclick="recarregarDados()" title="Atualizar">&#8635;</button>
           <button id="btn-config" onclick="abrirConfig()" title="Configurações">&#9881;</button>
-          <button onclick="sair()">Sair</button>
         </div>
       </div>
       <div class="nav-mes" id="nav-mes-wrap">
@@ -2786,9 +2785,16 @@
       </div>
 
       <div class="modal-conteudo">
-        <button class="btn-modal confirmar" style="width:100%;" onclick="alternarNovaCategoria()">
-          + Nova categoria
+        <!-- A lista de categorias é longa; fica recolhida para não empurrar o
+             resto das configurações para fora da tela. -->
+        <button class="btn-modal cancelar" style="width:100%;" onclick="alternarSecaoCategorias()">
+          <span id="cfg-cat-rotulo">🏷️ Editar categorias</span>
         </button>
+
+        <div id="cfg-secao-categorias" style="display:none;">
+          <button class="btn-modal confirmar" style="width:100%; margin-top:10px;" onclick="alternarNovaCategoria()">
+            + Nova categoria
+          </button>
 
         <div id="cfg-nova" class="cfg-nova">
           <div class="campo-bloco">
@@ -2806,13 +2812,21 @@
           </div>
         </div>
 
-        <div id="cfg-categorias"></div>
+          <div id="cfg-categorias"></div>
+        </div>
 
         <div class="cfg-grupo-titulo" style="margin-top:22px;">Aplicativo</div>
         <div id="cfg-versao"></div>
 
         <div class="cfg-grupo-titulo" style="margin-top:22px;">Acesso pelo aplicativo</div>
         <div id="cfg-codigo"></div>
+
+        <div class="cfg-grupo-titulo" style="margin-top:22px;">Conta</div>
+        <div class="cfg-aviso" id="cfg-conta-email"></div>
+        <button class="btn-modal cancelar" style="width:100%; color:var(--vermelho);"
+                onclick="fecharConfig(); sair();">
+          Sair da conta
+        </button>
       </div>
     </div>
   </div>
@@ -3125,6 +3139,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>
