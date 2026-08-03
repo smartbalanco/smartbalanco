@@ -2696,6 +2696,11 @@
           <span>Guardar e, se quiser, vincular a uma despesa</span>
         </button>
 
+        <button class="ma-opcao" style="width:100%; margin-top:10px;" onclick="usarCompartilhado('liquidar')">
+          <b>✅ Liquidar uma despesa</b>
+          <span>Dar baixa e anexar este documento a ela</span>
+        </button>
+
         <button class="ma-opcao" style="width:100%; margin-top:10px;" onclick="usarCompartilhado('manual')">
           <b>✍️ Lançar na mão</b>
           <span>Digitar os dados da despesa</span>
@@ -3189,6 +3194,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
 </body>
 </html>

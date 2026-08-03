@@ -502,6 +502,27 @@ function usarCompartilhado(comoFazer) {
     return;
   }
 
+  // Liquidar: o documento vira o comprovante da baixa. Como ainda não se sabe
+  // QUAL despesa, o app leva para a lista de pendentes e segura o arquivo até
+  // a liquidação ser aberta.
+  if (comoFazer === "liquidar") {
+    comprovanteLiquidacao = {
+      base64: doc.base64,
+      mimeType: doc.mimeType,
+      nome: doc.nome
+    };
+    comprovanteVeioDeFora = true;
+    documentoCompartilhado = null;
+
+    trocarAba("busca");
+    const status = document.getElementById("bl-status");
+    if (status) status.value = "pendente";
+    abrirBusca();
+
+    mostrarToast("📎 Escolha a despesa para liquidar com este comprovante.", true);
+    return;
+  }
+
   modoDocumento = (comoFazer === "arquivar") ? "arquivar" : "lancar";
   abrirSeletorArquivo();
 
@@ -2184,7 +2205,11 @@ function prepararLoginGoogle() {
 async function abrirLiquidacao(numMov) {
   const modal = document.getElementById("modal-liquidar");
   modal.style.display = "flex";
-  limparComprovanteLiquidacao();   // anexo da liquidação anterior não vaza
+  // Anexo da liquidação anterior não pode vazar para esta — a não ser que o
+  // arquivo tenha vindo de um compartilhamento, que é justamente para ser
+  // usado na despesa que está sendo escolhida agora.
+  if (comprovanteVeioDeFora) mostrarComprovantePendente();
+  else limparComprovanteLiquidacao();
   document.getElementById("modal-corpo").style.display = "none";
   document.getElementById("modal-carregando").style.display = "block";
   document.getElementById("modal-erro").style.display = "none";
@@ -2403,6 +2428,9 @@ function confirmarLiquidacao() {
 // despesa em aberto por causa de uma foto.
 // ---------------------------------------------------------------------------
 let comprovanteLiquidacao = null;
+// Comprovante que veio de um compartilhamento: sobrevive à abertura da tela
+// de liquidação, que normalmente zera o anexo da vez anterior.
+let comprovanteVeioDeFora = false;
 
 function aoEscolherComprovante(input) {
   const arquivo = input.files && input.files[0];
@@ -2433,10 +2461,20 @@ function aoEscolherComprovante(input) {
 
 function limparComprovanteLiquidacao() {
   comprovanteLiquidacao = null;
+  comprovanteVeioDeFora = false;
   const campo = document.getElementById("liq-arquivo");
   const rotulo = document.getElementById("liq-arquivo-nome");
   if (campo) campo.value = "";
   if (rotulo) rotulo.textContent = "Anexar comprovante";
+}
+
+// Mostra no botão o arquivo que já está em mãos (veio compartilhado)
+function mostrarComprovantePendente() {
+  const rotulo = document.getElementById("liq-arquivo-nome");
+  if (rotulo && comprovanteLiquidacao) {
+    rotulo.textContent = "📎 " + comprovanteLiquidacao.nome;
+    rotulo.classList.remove("vazio-cat");
+  }
 }
 
 // Envia o anexo já vinculado ao Nº Mov, reusando o mesmo caminho do
