@@ -1278,7 +1278,11 @@ async function salvarFixaApp() {
       valor: valor,
       dia: document.getElementById("fix-dia").value,
       metodo: document.getElementById("fix-metodo").value,
-      categoria: categoria
+      categoria: categoria,
+      juros: document.getElementById("fix-juros").value,
+      taxa: document.getElementById("fix-taxa").value,
+      periodo: document.getElementById("fix-periodo").value,
+      desde: document.getElementById("fix-desde").value
     });
 
     if (r.ok) {
