@@ -2609,6 +2609,10 @@ function atualizarCamposDespesa() {
   document.getElementById("nd-aviso-cartao").style.display = ehCartao ? "block" : "none";
   preencherVencimentoCartao("nd");
 
+  // No cartão não existe "já paga": quem se paga é a fatura, e a data de
+  // pagamento só é carimbada quando ela é liquidada.
+  esconderJaPagoSeCartao("nd", ehCartao);
+
   // Data de pagamento: aparece só se marcado como pago
   document.getElementById("nd-bloco-datapgto").style.display = jaPago ? "block" : "none";
 
@@ -2623,6 +2627,27 @@ function atualizarCamposDespesa() {
 // conta repetida aqui que pode divergir com o tempo.
 // Vale para os formulários "nd" (nova despesa) e "dr" (revisão do scanner).
 // ---------------------------------------------------------------------------
+// Some com o "já foi paga" quando o método é cartão. A compra entra na fatura
+// e só recebe data de pagamento quando a fatura inteira é liquidada — deixar
+// a opção na tela convida a marcar algo que o servidor ignora.
+function esconderJaPagoSeCartao(prefixo, ehCartao) {
+  const toggle = document.getElementById(prefixo + "-toggle-pago");
+  const check = document.getElementById(prefixo + "-chk-pago");
+  const blocoData = document.getElementById(prefixo + "-bloco-datapgto");
+  const aviso = document.getElementById(prefixo + "-aviso-cartao");
+
+  if (toggle) toggle.style.display = ehCartao ? "none" : "flex";
+
+  if (ehCartao) {
+    if (check) check.checked = false;          // desmarca o que já estivesse
+    if (blocoData) blocoData.style.display = "none";
+    if (aviso) {
+      aviso.innerHTML = "💳 Vencimento definido pela fatura deste cartão, que fecha 8 dias antes. " +
+                        "A data de pagamento é preenchida quando você liquida a fatura.";
+    }
+  }
+}
+
 async function preencherVencimentoCartao(prefixo) {
   const selMetodo = document.getElementById(prefixo + "-metodo");
   const campoVenc = document.getElementById(prefixo + "-vencimento");
@@ -5512,6 +5537,7 @@ async function mostrarRevisao(d, avisoCodigo) {
   // Se a IA identificou um cartão, a fatura decide o vencimento — não o
   // que estava escrito no comprovante.
   preencherVencimentoCartao("dr");
+  esconderJaPagoSeCartao("dr", normalizarBusca(document.getElementById("dr-metodo").value || "").indexOf("cart") !== -1);
 
   // Já pago?
   document.getElementById("dr-chk-pago").checked = !!d.ja_pago;

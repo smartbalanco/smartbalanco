@@ -2543,7 +2543,7 @@
           <input type="date" id="nd-vencimento" />
         </div>
 
-        <div class="toggle-editar" onclick="document.getElementById('nd-chk-pago').click()">
+        <div class="toggle-editar" id="nd-toggle-pago" onclick="document.getElementById('nd-chk-pago').click()">
           <input type="checkbox" id="nd-chk-pago"
                  onclick="event.stopPropagation(); atualizarCamposDespesa();" />
           <label for="nd-chk-pago" onclick="event.stopPropagation();">✅ Esta despesa já foi paga</label>
@@ -3117,7 +3117,7 @@
             </button>
           </div>
 
-          <div class="toggle-editar" onclick="document.getElementById('dr-chk-pago').click()">
+          <div class="toggle-editar" id="dr-toggle-pago" onclick="document.getElementById('dr-chk-pago').click()">
             <input type="checkbox" id="dr-chk-pago"
                    onclick="event.stopPropagation(); alternarPagoDoc();" />
             <label for="dr-chk-pago" onclick="event.stopPropagation();">✅ Já foi paga</label>
@@ -3209,6 +3209,6 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>
