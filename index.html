@@ -2737,6 +2737,15 @@
       <div class="modal-conteudo">
         <input type="hidden" id="cp-id" />
 
+        <!-- Escreva em português e a IA preenche os campos abaixo -->
+        <div class="campo-bloco">
+          <label for="cp-livre">✨ Escreva do seu jeito</label>
+          <input type="text" id="cp-livre" placeholder="dentista terça 15h na clínica do centro" />
+          <button type="button" class="btn-modal confirmar" style="width:100%; margin-top:8px;"
+                  id="cp-btn-ia" onclick="interpretarCompromissoApp()">Preencher com IA</button>
+          <div class="cfg-aviso" id="cp-aviso-ia">Confira os campos depois: a IA às vezes erra a data.</div>
+        </div>
+
         <div class="campo-bloco">
           <label for="cp-nome">Compromisso</label>
           <input type="text" id="cp-nome" maxlength="80" placeholder="Ex.: Dentista" />
@@ -3298,7 +3307,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=35"></script>
+  <script src="app.js?v=36"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

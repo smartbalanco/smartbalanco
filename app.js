@@ -830,9 +830,47 @@ function abrirCompromisso(id) {
   document.getElementById("cp-local").value = existente ? existente.local : "";
   document.getElementById("cp-lembrete").value = existente ? String(existente.lembrete || 0) : "60";
   document.getElementById("cp-aviso").textContent = "";
+  document.getElementById("cp-livre").value = "";
+  document.getElementById("cp-aviso-ia").textContent = "Confira os campos depois: a IA às vezes erra a data.";
 
   document.getElementById("cp-titulo-modal").textContent = existente ? "📅 Editar compromisso" : "📅 Novo compromisso";
   document.getElementById("cp-btn-excluir").style.display = existente ? "block" : "none";
+}
+
+// Manda o texto para a IA e PREENCHE os campos — não salva. O que ela devolve
+// é rascunho: data é justamente o que ela mais erra, e um compromisso salvo no
+// dia errado incomoda mais do que um campo vazio.
+async function interpretarCompromissoApp() {
+  const campo = document.getElementById("cp-livre");
+  const btn = document.getElementById("cp-btn-ia");
+  const aviso = document.getElementById("cp-aviso-ia");
+
+  const texto = campo.value.trim();
+  if (!texto) { aviso.textContent = "Escreva o compromisso primeiro."; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Entendendo...";
+
+  try {
+    const r = await chamarServidor("interpretarCompromisso", { texto: texto });
+
+    if (r.ok) {
+      if (r.titulo) document.getElementById("cp-nome").value = r.titulo;
+      if (r.data) document.getElementById("cp-data").value = r.data;
+      if (r.hora) document.getElementById("cp-hora").value = r.hora;
+      if (r.local) document.getElementById("cp-local").value = r.local;
+
+      campo.value = "";
+      aviso.textContent = "Preenchido. Confira a data antes de salvar.";
+    } else {
+      aviso.textContent = r.mensagem || "Não consegui entender.";
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Preencher com IA";
+  }
 }
 
 function fecharCompromisso() {
