@@ -2922,6 +2922,33 @@
                 <span class="cat-lupa">🔍</span>
               </button>
             </div>
+            <div class="campo-bloco">
+              <label for="fix-juros">Correção do valor</label>
+              <select id="fix-juros" onchange="alternarCamposJuros()">
+                <option value="">Sem correção</option>
+                <option value="simples">Juros simples (sobre o valor original)</option>
+                <option value="composto">Juros compostos (sobre o valor corrigido)</option>
+              </select>
+            </div>
+
+            <div id="fix-bloco-juros" style="display:none;">
+              <div class="linha-dupla">
+                <div class="campo-bloco">
+                  <label for="fix-taxa">Taxa (%)</label>
+                  <input type="number" id="fix-taxa" step="0.01" inputmode="decimal" oninput="alternarCamposJuros()" />
+                </div>
+                <div class="campo-bloco">
+                  <label for="fix-periodo">A cada (meses)</label>
+                  <input type="number" id="fix-periodo" min="1" max="120" inputmode="numeric" oninput="alternarCamposJuros()" />
+                </div>
+              </div>
+              <div class="campo-bloco">
+                <label for="fix-desde">Valendo desde</label>
+                <input type="date" id="fix-desde" />
+              </div>
+              <div class="cfg-aviso" id="fix-previa-juros"></div>
+            </div>
+
             <div class="cfg-aviso" id="fix-aviso"></div>
             <div class="modal-acoes">
               <button class="btn-modal cancelar" onclick="fecharFormFixa()">Cancelar</button>
@@ -3271,7 +3298,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=32"></script>
+  <script src="app.js?v=33"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

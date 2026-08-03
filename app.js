@@ -1223,7 +1223,33 @@ function abrirFormFixa(indice) {
   document.getElementById("fix-desc").value = f ? f.descricao : "";
   document.getElementById("fix-valor").value = f ? f.valor : "";
   document.getElementById("fix-dia").value = f ? f.dia : "";
+  document.getElementById("fix-juros").value = f ? (f.juros || "") : "";
+  document.getElementById("fix-taxa").value = f && f.taxa ? f.taxa : "";
+  document.getElementById("fix-periodo").value = f && f.periodo ? f.periodo : 12;
+  document.getElementById("fix-desde").value = (f && f.desde) ? f.desde : dataHojeISO();
+  alternarCamposJuros();
   document.getElementById("fix-aviso").textContent = "";
+}
+
+// Mostra os campos de taxa só quando há correção, e adianta em texto o que a
+// regra faz — juros composto sobre 3 anos surpreende quem só viu a taxa.
+function alternarCamposJuros() {
+  const tipo = document.getElementById("fix-juros").value;
+  const bloco = document.getElementById("fix-bloco-juros");
+  bloco.style.display = tipo ? "block" : "none";
+  if (!tipo) return;
+
+  const base = parseFloat(document.getElementById("fix-valor").value) || 0;
+  const taxa = parseFloat(document.getElementById("fix-taxa").value) || 0;
+  const periodo = parseInt(document.getElementById("fix-periodo").value) || 12;
+  const previa = document.getElementById("fix-previa-juros");
+
+  if (!base || !taxa) { previa.textContent = ""; return; }
+
+  const t = taxa / 100;
+  const depois = (tipo === "composto") ? base * Math.pow(1 + t, 3) : base * (1 + t * 3);
+  previa.textContent = "Depois de 3 ciclos de " + periodo + " meses: " +
+                       formatarMoeda(base) + " vira " + formatarMoeda(Math.round(depois * 100) / 100) + ".";
 }
 
 function fecharFormFixa() {
