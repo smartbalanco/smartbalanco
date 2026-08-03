@@ -466,6 +466,97 @@
     }
     .tf-btn:active { box-shadow: var(--afundado-leve); }
 
+    /* ---- SMARTTRABALHO ---- */
+    #conteudo-trabalho { display: none; padding: 16px; max-width: 1100px; margin: 0 auto; }
+    #conteudo-trabalho .nav-mes { margin-bottom: 14px; }
+
+    /* As duas frentes lado a lado só quando há largura. No celular vira
+       uma coluna por vez, escolhida no segmented acima. */
+    .trab-colunas { display: grid; grid-template-columns: 1fr; gap: 14px; }
+    .trab-coluna-titulo { display: none; font-size: 14px; margin-bottom: 10px; }
+    @media (min-width: 900px) {
+      .trab-colunas { grid-template-columns: 1fr 1fr; }
+      .trab-coluna { display: block !important; }
+      .trab-coluna-titulo { display: block; }
+      #trab-frentes-abas { display: none; }
+    }
+
+    .trab-card {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 14px; padding: 13px; margin-bottom: 10px;
+    }
+    .trab-card-topo { display: flex; align-items: flex-start; gap: 8px; }
+    .trab-nome { font-size: 14px; font-weight: 700; flex: 1; word-break: break-word; }
+    .trab-selo {
+      font-size: 10px; font-weight: 700; padding: 3px 7px; border-radius: 8px;
+      background: #eef4fa; color: var(--azul-claro); white-space: nowrap;
+    }
+    .trab-selo.boleto { background: var(--azul); color: #fff; }
+    .trab-selo.estourado { background: var(--vermelho); color: #fff; }
+    .trab-selo.critico { background: #b45309; color: #fff; }
+    .trab-selo.atencao { background: #fef3c7; color: #92400e; }
+    .trab-selo.pronto { background: var(--verde); color: #fff; }
+
+    .trab-barra {
+      height: 6px; border-radius: 4px; background: var(--cinza-fundo);
+      box-shadow: var(--afundado-leve); margin: 10px 0 4px; overflow: hidden;
+    }
+    .trab-barra-preenchida { height: 100%; background: var(--verde); border-radius: 4px; }
+    .trab-progresso-txt { font-size: 11px; color: var(--cinza-texto); }
+
+    .trab-etapa {
+      display: flex; align-items: center; gap: 8px; padding: 7px 0;
+      border-top: 1px solid var(--borda);
+    }
+    .trab-etapa:first-of-type { border-top: none; }
+    .trab-etapa-nome { flex: 1; font-size: 12px; }
+    .trab-etapa.feita .trab-etapa-nome { color: var(--verde); font-weight: 600; }
+    .trab-etapa input[type="date"] {
+      border: 1px solid var(--borda); border-radius: 8px; padding: 5px 7px;
+      font-size: 12px; font-family: inherit; background: #fff; color: #1e293b;
+    }
+    .trab-pendencia {
+      font-size: 11px; color: #92400e; background: #fef3c7;
+      border-radius: 8px; padding: 7px 9px; margin-top: 8px; line-height: 1.4;
+    }
+    .trab-acoes-card { display: flex; gap: 8px; margin-top: 10px; }
+    .trab-acoes-card button {
+      flex: 1; background: var(--cinza-fundo); border: none; border-radius: 10px;
+      box-shadow: var(--relevo-baixo); padding: 8px; font-size: 11px;
+      font-weight: 600; color: var(--cinza-texto); cursor: pointer; font-family: inherit;
+    }
+    .trab-acoes-card button:active { box-shadow: var(--afundado-leve); }
+
+    .trab-lembrar {
+      display: flex; align-items: center; gap: 7px; font-size: 11px;
+      color: var(--cinza-texto); margin-top: 8px; cursor: pointer;
+    }
+    .trab-lembrar input { width: auto; }
+
+    #trab-conselho { font-size: 13px; line-height: 1.6; white-space: pre-wrap; }
+    #trab-resposta {
+      font-size: 13px; line-height: 1.6; white-space: pre-wrap; margin-top: 10px;
+    }
+    #trab-resposta:not(:empty) {
+      background: #eef4fa; border-left: 3px solid var(--azul-claro);
+      border-radius: 6px; padding: 10px;
+    }
+
+    .trab-mem {
+      display: flex; align-items: flex-start; gap: 9px; padding: 9px 0;
+      border-top: 1px solid var(--borda); font-size: 12px; line-height: 1.4;
+    }
+    .trab-mem:first-child { border-top: none; }
+    .trab-mem-data { font-size: 10px; color: var(--cinza-texto); margin-top: 3px; }
+
+    .trab-imposto {
+      display: flex; align-items: center; gap: 9px; padding: 9px 0;
+      border-top: 1px solid var(--borda); font-size: 12px;
+    }
+    .trab-imposto:first-child { border-top: none; }
+    .trab-imposto-nome { font-weight: 700; min-width: 58px; }
+    .trab-imposto-val { flex: 1; text-align: right; font-weight: 600; }
+
     #btn-nova-tarefa {
       position: fixed; right: 18px; bottom: 22px; z-index: 60; display: none;
       width: 58px; height: 58px; border-radius: 50%; border: none;
@@ -2149,6 +2240,7 @@
             <button onclick="irParaProduto('balanco')">💰 Smartbalanço</button>
             <button onclick="irParaProduto('calendario')">📅 Smartcalendário</button>
             <button onclick="irParaProduto('tarefas')">✅ Smarttarefas</button>
+            <button onclick="irParaProduto('trabalho')">💼 Smarttrabalho</button>
           </div>
         </div>
         <div class="acoes">
@@ -2308,6 +2400,78 @@
           <button class="btn-ver-tudo" id="tf-btn-feitas" onclick="alternarFeitas()">Mostrar feitas</button>
         </div>
         <div id="tf-lista"></div>
+      </div>
+    </div>
+
+    <!-- ============ SMARTTRABALHO ============ -->
+    <div id="conteudo-trabalho">
+      <div class="nav-mes" id="trab-nav-comp">
+        <button class="seta" onclick="mudarCompetencia(-1)">&#8249;</button>
+        <span class="mes-txt" id="trab-competencia"></span>
+        <button class="seta" onclick="mudarCompetencia(1)">&#8250;</button>
+      </div>
+
+      <!-- CONSELHO DO DIA -->
+      <div class="card">
+        <div class="card-topo">
+          <h2>🧠 Conselho do dia</h2>
+          <button class="btn-ver-tudo" onclick="atualizarConselho()">Atualizar</button>
+        </div>
+        <div id="trab-conselho"><p class="vazio">Carregando...</p></div>
+
+        <div class="busca-campo" style="margin-top:12px;">
+          <input type="text" id="trab-pergunta"
+                 placeholder="Pergunte ou conte um imprevisto..."
+                 onkeydown="if(event.key==='Enter') perguntarIA()" />
+          <button class="tf-btn" onclick="perguntarIA()" title="Perguntar">➤</button>
+        </div>
+        <label class="trab-lembrar">
+          <input type="checkbox" id="trab-lembrar" />
+          Guardar na memória dela
+        </label>
+        <div id="trab-resposta"></div>
+      </div>
+
+      <!-- MEMÓRIA -->
+      <div class="card">
+        <div class="card-topo">
+          <h2>📌 Na memória dela</h2>
+          <button class="btn-ver-tudo" onclick="anotarNaMemoria()">+ Anotar</button>
+        </div>
+        <div id="trab-memoria"></div>
+      </div>
+
+      <!-- AS DUAS FRENTES -->
+      <div class="busca-modos" id="trab-frentes-abas">
+        <button id="trab-frente-contas" class="ativo" onclick="trocarFrente('contas')">
+          💸 Contas a pagar
+        </button>
+        <button id="trab-frente-balancete" onclick="trocarFrente('balancete')">
+          📗 Balancetes
+        </button>
+      </div>
+
+      <div class="trab-colunas">
+        <div class="trab-coluna" id="trab-coluna-contas">
+          <h3 class="trab-coluna-titulo">💸 Contas a pagar</h3>
+          <div id="trab-lista-contas"></div>
+        </div>
+        <div class="trab-coluna" id="trab-coluna-balancete">
+          <h3 class="trab-coluna-titulo">📗 Balancetes</h3>
+          <div id="trab-lista-balancete"></div>
+        </div>
+      </div>
+
+      <div class="card" id="trab-rodape">
+        <div class="card-topo">
+          <h2>Resumo</h2>
+          <button class="btn-ver-tudo" onclick="abrirCondominio()">+ Condomínio</button>
+        </div>
+        <div id="trab-resumo"></div>
+        <div class="cfg-aviso">
+          Os conselhos da IA são apoio, não parecer contábil. Confira a
+          legislação vigente e a convenção de cada condomínio.
+        </div>
       </div>
     </div>
 
@@ -2570,6 +2734,135 @@
   <button id="btn-chat-ia" onclick="trocarAba('chat')" title="Assistente IA">✨</button>
   <button id="btn-nova-despesa" onclick="abrirMenuAdicionar()" title="Adicionar">+</button>
   <button id="btn-nova-tarefa" onclick="abrirTarefa()" title="Nova anotação">+</button>
+
+  <!-- ============ MODAL: IMPOSTOS E NOTAS DO PROCESSO ============ -->
+  <div class="modal-fundo" id="modal-processo">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo" id="pr-titulo">Condomínio</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;" id="pr-sub"></div>
+        </div>
+        <button class="fechar" onclick="fecharProcesso()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <input type="hidden" id="pr-id" />
+
+        <h3 style="font-size:13px; margin-bottom:8px;">Impostos retidos</h3>
+        <div id="pr-impostos"></div>
+
+        <div class="linha-dupla" style="margin-top:10px;">
+          <div class="campo-bloco">
+            <label for="pr-imp-nome">Imposto</label>
+            <input type="text" id="pr-imp-nome" list="pr-imp-lista" placeholder="INSS" />
+            <datalist id="pr-imp-lista"></datalist>
+          </div>
+          <div class="campo-bloco">
+            <label for="pr-imp-valor">Valor retido</label>
+            <input type="text" id="pr-imp-valor" inputmode="decimal" placeholder="0,00" />
+          </div>
+        </div>
+        <div class="linha-dupla">
+          <div class="campo-bloco">
+            <label for="pr-imp-base">Base de cálculo</label>
+            <input type="text" id="pr-imp-base" inputmode="decimal" placeholder="Opcional" />
+          </div>
+          <div class="campo-bloco">
+            <label for="pr-imp-venc">Vencimento</label>
+            <input type="date" id="pr-imp-venc" />
+          </div>
+        </div>
+        <button class="btn-modal confirmar" style="width:100%;" onclick="salvarImposto()">
+          Lançar imposto
+        </button>
+
+        <div class="campo-bloco" style="margin-top:18px;">
+          <label for="pr-pendencias">Pendências da conciliação</label>
+          <textarea id="pr-pendencias" rows="3"
+                    placeholder="O que ainda não bateu"></textarea>
+        </div>
+
+        <div class="campo-bloco">
+          <label for="pr-observacoes">Observações</label>
+          <textarea id="pr-observacoes" rows="2" placeholder="Opcional"></textarea>
+        </div>
+
+        <div class="cfg-aviso" id="pr-aviso"></div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharProcesso()">Fechar</button>
+          <button class="btn-modal confirmar" id="pr-btn-salvar" onclick="salvarNotasProcesso()">
+            Salvar anotações
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: CADASTRO DE CONDOMÍNIO ============ -->
+  <div class="modal-fundo" id="modal-condominio">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div class="mt-titulo" id="cd-titulo">🏢 Novo condomínio</div>
+        <button class="fechar" onclick="fecharCondominio()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <input type="hidden" id="cd-id" />
+
+        <div class="campo-bloco">
+          <label for="cd-nome">Nome</label>
+          <input type="text" id="cd-nome" maxlength="80" placeholder="Residencial Alvorada" />
+        </div>
+
+        <div class="campo-bloco">
+          <label for="cd-cnpj">CNPJ</label>
+          <input type="text" id="cd-cnpj" maxlength="20" placeholder="Opcional" />
+        </div>
+
+        <div class="campo-bloco">
+          <label>O que você faz neste condomínio</label>
+          <div class="busca-modos">
+            <button type="button" id="cd-frente-balancete" class="ativo"
+                    onclick="escolherFrentes('balancete')">📗 Balancete</button>
+            <button type="button" id="cd-frente-contas"
+                    onclick="escolherFrentes('contas')">💸 Contas</button>
+            <button type="button" id="cd-frente-ambas"
+                    onclick="escolherFrentes('ambas')">Os dois</button>
+          </div>
+        </div>
+
+        <label class="trab-lembrar" style="margin:4px 0 12px;">
+          <input type="checkbox" id="cd-boleto" onchange="alternarCamposBoleto()" />
+          Emite boleto para os moradores (prazo mais curto)
+        </label>
+
+        <div class="linha-dupla">
+          <div class="campo-bloco" id="cd-bloco-boleto">
+            <label for="cd-dia-boleto">Conciliar até o dia</label>
+            <input type="number" id="cd-dia-boleto" min="1" max="31" placeholder="5" />
+          </div>
+          <div class="campo-bloco">
+            <label for="cd-dia-entrega">Entregar até o dia</label>
+            <input type="number" id="cd-dia-entrega" min="1" max="31" placeholder="20" />
+          </div>
+        </div>
+
+        <div class="campo-bloco">
+          <label for="cd-obs">Observação</label>
+          <textarea id="cd-obs" rows="2" placeholder="Particularidades deste condomínio"></textarea>
+        </div>
+
+        <div class="cfg-aviso" id="cd-aviso"></div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" id="cd-btn-arquivar" onclick="arquivarCondominio()">Arquivar</button>
+          <button class="btn-modal confirmar" id="cd-btn-salvar" onclick="salvarCondominio()">Salvar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ============ MODAL TAREFA / LEMBRETE / IDEIA ============ -->
   <div class="modal-fundo" id="modal-tarefa">
@@ -3465,7 +3758,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=39"></script>
+  <script src="app.js?v=40"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

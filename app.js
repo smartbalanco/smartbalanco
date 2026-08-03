@@ -596,6 +596,7 @@ function irParaProduto(qual) {
   document.getElementById("menu-produtos").classList.remove("aberto");
   if (qual === "calendario") abrirCalendario();
   else if (qual === "tarefas") trocarAba("tarefas");
+  else if (qual === "trabalho") abrirTrabalho();
   else trocarAba("dashboard");
 }
 
@@ -1017,6 +1018,551 @@ async function alternarConcluido(id, novoEstado) {
       const c = calDados.compromissos.filter(function (x) { return x.id === id; })[0];
       if (c) c.concluido = novoEstado;
       mostrarDiaCalendario(calDiaEscolhido);
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não deu."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+// ============================================================================
+// SMARTTRABALHO
+// ----------------------------------------------------------------------------
+// Fechamento mensal de condomínios, em duas frentes: contas a pagar de um
+// lado, balancete do outro. Em tela larga as duas aparecem lado a lado; no
+// celular só a escolhida, pelo segmented control.
+//
+// Os dados são separados por e-mail no servidor: o que aparece aqui é sempre
+// só de quem está logado.
+// ============================================================================
+let trabComp = "";              // "aaaa-mm"
+let trabFrente = "contas";
+let trabDados = null;
+
+function competenciaDeHoje() {
+  // A competência trabalhada é a do mês PASSADO: em agosto se fecha julho.
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2);
+}
+
+function competenciaPorExtenso(comp) {
+  const p = (comp || "").split("-");
+  if (p.length !== 2) return comp;
+  return MESES_NOMES[parseInt(p[1]) - 1] + " de " + p[0];
+}
+
+function mudarCompetencia(passo) {
+  const p = trabComp.split("-");
+  const d = new Date(parseInt(p[0]), parseInt(p[1]) - 1 + passo, 1);
+  trabComp = d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2);
+  carregarTrabalho();
+}
+
+function trocarFrente(qual) {
+  trabFrente = qual;
+  document.getElementById("trab-frente-contas").classList.toggle("ativo", qual === "contas");
+  document.getElementById("trab-frente-balancete").classList.toggle("ativo", qual === "balancete");
+  aplicarFrenteVisivel();
+}
+
+// Em telas largas o CSS manda (as duas colunas aparecem). Aqui só se resolve
+// o caso do celular, onde uma some.
+function aplicarFrenteVisivel() {
+  const largo = window.matchMedia("(min-width: 900px)").matches;
+  document.getElementById("trab-coluna-contas").style.display =
+    (largo || trabFrente === "contas") ? "block" : "none";
+  document.getElementById("trab-coluna-balancete").style.display =
+    (largo || trabFrente === "balancete") ? "block" : "none";
+}
+
+async function abrirTrabalho() {
+  trocarAba("trabalho");
+  if (!trabComp) trabComp = competenciaDeHoje();
+  await carregarTrabalho();
+}
+
+async function carregarTrabalho() {
+  document.getElementById("trab-competencia").textContent = competenciaPorExtenso(trabComp);
+  document.getElementById("trab-lista-contas").innerHTML = '<p class="vazio">Carregando...</p>';
+  document.getElementById("trab-lista-balancete").innerHTML = "";
+
+  try {
+    const r = await chamarServidor("trabalhoPainel", { competencia: trabComp });
+    if (!r.ok) {
+      trabDados = null;
+      document.getElementById("trab-lista-contas").innerHTML =
+        '<p class="vazio">' + escaparHtml(r.mensagem || "Não consegui carregar.") + '</p>';
+      return;
+    }
+    trabDados = r;
+  } catch (e) {
+    trabDados = null;
+    document.getElementById("trab-lista-contas").innerHTML = '<p class="vazio">Sem conexão.</p>';
+    return;
+  }
+
+  renderizarTrabalho();
+  aplicarFrenteVisivel();
+}
+
+function renderizarTrabalho() {
+  const d = trabDados;
+  if (!d) return;
+
+  // Sem condomínio nenhum: oferece semear, para dar o que ver na primeira vez.
+  if (!d.condominios.length) {
+    const vazio =
+      '<p class="vazio">Nenhum condomínio cadastrado.</p>' +
+      '<div class="trab-acoes-card">' +
+        '<button onclick="abrirCondominio()">+ Cadastrar um</button>' +
+        '<button onclick="semearCondominios()">Cadastrar minha carteira</button>' +
+      '</div>';
+    document.getElementById("trab-lista-contas").innerHTML = vazio;
+    document.getElementById("trab-lista-balancete").innerHTML = "";
+    document.getElementById("trab-resumo").innerHTML = "";
+    renderizarConselho();
+    renderizarMemoria();
+    return;
+  }
+
+  // Competência ainda não aberta
+  if (!d.itens.length) {
+    const vazio =
+      '<p class="vazio">Nada aberto em ' + escaparHtml(competenciaPorExtenso(trabComp)) + '.</p>' +
+      '<div class="trab-acoes-card">' +
+        '<button onclick="gerarProcessos()">Abrir esta competência</button>' +
+      '</div>';
+    document.getElementById("trab-lista-contas").innerHTML = vazio;
+    document.getElementById("trab-lista-balancete").innerHTML = "";
+  } else {
+    // Cada condomínio aparece só na(s) frente(s) dele. Home Boutique, que faz
+    // as duas coisas, é o único que aparece nas duas colunas.
+    ["contas", "balancete"].forEach(function (frente) {
+      const meus = d.itens.filter(function (it) {
+        return it.frentes === frente || it.frentes === "ambas";
+      });
+      document.getElementById("trab-lista-" + frente).innerHTML = meus.length
+        ? meus.map(function (it) { return cardCondominio(it, frente); }).join("")
+        : '<p class="vazio">Nenhum condomínio nesta frente.</p>';
+    });
+  }
+
+  const prontos = d.itens.filter(function (i) { return i.total > 0 && i.feitas === i.total; }).length;
+  document.getElementById("trab-resumo").innerHTML =
+    '<div class="status-desp">' +
+      '<div><div class="lbl">Concluídos</div><div class="val paga">' +
+        prontos + " de " + d.itens.length + '</div></div>' +
+      '<div><div class="lbl">Retido no mês</div><div class="val pend">' +
+        formatarMoeda(d.totalRetido || 0) + '</div></div>' +
+    '</div>';
+
+  renderizarConselho();
+  renderizarMemoria();
+}
+
+function cardCondominio(it, frente) {
+  const etapas = trabDados.etapas.filter(function (e) { return e.frente === frente; });
+  const feitasAqui = etapas.filter(function (e) { return !!it.etapas[e.chave]; }).length;
+  const pct = etapas.length ? Math.round((feitasAqui / etapas.length) * 100) : 0;
+
+  let selos = "";
+  if (it.frentes === "ambas") selos += '<span class="trab-selo">2 FRENTES</span>';
+  if (it.boleto) selos += '<span class="trab-selo boleto">BOLETO</span>';
+  if (it.prazo) {
+    const n = it.prazo.nivel;
+    let txt;
+    if (n === "pronto") txt = "no prazo";
+    else if (n === "estourado") txt = Math.abs(it.prazo.diasRestantes) + "d vencido";
+    else txt = it.prazo.diasRestantes + "d p/ dia " + it.prazo.dia;
+    selos += '<span class="trab-selo ' + n + '">' + txt + '</span>';
+  }
+
+  const linhas = etapas.map(function (e) {
+    const data = it.etapas[e.chave] || "";
+    return '<div class="trab-etapa' + (data ? " feita" : "") + '">' +
+             '<span class="trab-etapa-nome">' + (data ? "✔ " : "○ ") + e.rotulo + '</span>' +
+             '<input type="date" value="' + data + '" ' +
+               'onchange="marcarEtapa(\'' + it.idProcesso + '\',\'' + e.chave + '\',this.value)" />' +
+           '</div>';
+  }).join("");
+
+  // A pendência só faz sentido ao lado da conciliação, que é onde ela nasce.
+  const pend = (frente === "balancete" && it.pendencias)
+    ? '<div class="trab-pendencia">⚠ ' + escaparHtml(it.pendencias) + '</div>'
+    : '';
+
+  const impostos = (frente === "balancete" && it.totalRetido > 0)
+    ? '<div class="trab-progresso-txt" style="margin-top:8px;">Retido: <b>' +
+      formatarMoeda(it.totalRetido) + '</b></div>'
+    : '';
+
+  const detalhe = (frente === "balancete")
+    ? '<div class="trab-acoes-card">' +
+        '<button onclick="abrirProcesso(\'' + it.idProcesso + '\')">Impostos e notas</button>' +
+      '</div>'
+    : '';
+
+  return '<div class="trab-card">' +
+    '<div class="trab-card-topo">' +
+      '<div class="trab-nome">' + escaparHtml(it.nome) + '</div>' + selos +
+    '</div>' +
+    '<div class="trab-barra"><div class="trab-barra-preenchida" style="width:' + pct + '%"></div></div>' +
+    '<div class="trab-progresso-txt">' + feitasAqui + " de " + etapas.length + ' nesta frente</div>' +
+    linhas + pend + impostos + detalhe +
+  '</div>';
+}
+
+async function marcarEtapa(idProcesso, etapa, data) {
+  try {
+    const r = await chamarServidor("trabalhoMarcarEtapa", {
+      idProcesso: idProcesso, etapa: etapa, data: data || ""
+    });
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      await carregarTrabalho();
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não deu."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+async function gerarProcessos() {
+  mostrarToast("Abrindo a competência...");
+  try {
+    const r = await chamarServidor("trabalhoGerarProcessos", { competencia: trabComp });
+    mostrarToast((r.ok ? "✅ " : "❌ ") + r.mensagem);
+    if (r.ok) await carregarTrabalho();
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+async function semearCondominios() {
+  try {
+    const r = await chamarServidor("trabalhoSemear", {});
+    mostrarToast((r.ok ? "✅ " : "❌ ") + r.mensagem);
+    if (r.ok) await carregarTrabalho();
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+// ---------- Conselho e conversa ----------
+function renderizarConselho() {
+  const el = document.getElementById("trab-conselho");
+  const c = trabDados && trabDados.conselho;
+  el.innerHTML = c
+    ? escaparHtml(c.texto)
+    : '<p class="vazio">Sem conselho hoje ainda. Toque em Atualizar.</p>';
+}
+
+async function atualizarConselho() {
+  const el = document.getElementById("trab-conselho");
+  el.innerHTML = '<p class="vazio">Analisando...</p>';
+
+  try {
+    const r = await chamarServidor("trabalhoConselho", { competencia: trabComp, forcar: "true" });
+    if (r.ok) {
+      if (trabDados) trabDados.conselho = r.conselho;
+      el.innerHTML = escaparHtml(r.conselho.texto);
+    } else {
+      el.innerHTML = '<p class="vazio">' + escaparHtml(r.mensagem || "Não consegui.") + '</p>';
+    }
+  } catch (e) {
+    el.innerHTML = '<p class="vazio">Sem conexão.</p>';
+  }
+}
+
+async function perguntarIA() {
+  const campo = document.getElementById("trab-pergunta");
+  const saida = document.getElementById("trab-resposta");
+  const texto = campo.value.trim();
+  if (!texto) return;
+
+  const lembrar = document.getElementById("trab-lembrar").checked;
+  saida.textContent = "Pensando...";
+
+  try {
+    const r = await chamarServidor("trabalhoPerguntar", {
+      texto: texto, competencia: trabComp, lembrar: lembrar ? "true" : "false"
+    });
+
+    if (r.ok) {
+      saida.textContent = r.resposta;
+      campo.value = "";
+      if (lembrar) {
+        document.getElementById("trab-lembrar").checked = false;
+        await carregarTrabalho();
+      }
+    } else {
+      saida.textContent = r.mensagem || "Não consegui responder.";
+    }
+  } catch (e) {
+    saida.textContent = "Sem conexão.";
+  }
+}
+
+// ---------- Memória ----------
+function renderizarMemoria() {
+  const el = document.getElementById("trab-memoria");
+  const lista = (trabDados && trabDados.memoria) || [];
+
+  if (!lista.length) {
+    el.innerHTML = '<p class="vazio">Nada pendente na memória dela.</p>';
+    return;
+  }
+
+  el.innerHTML = lista.map(function (m) {
+    return '<div class="trab-mem">' +
+             '<div class="tf-check" onclick="concluirMemoria(\'' + m.id + '\')"></div>' +
+             '<div style="flex:1;">' + escaparHtml(m.texto) +
+               '<div class="trab-mem-data">' + escaparHtml(m.data) + '</div>' +
+             '</div>' +
+           '</div>';
+  }).join("");
+}
+
+async function anotarNaMemoria() {
+  const texto = prompt("O que ela precisa lembrar?");
+  if (!texto || !texto.trim()) return;
+
+  try {
+    const r = await chamarServidor("trabalhoAnotarMemoria", { texto: texto.trim() });
+    mostrarToast((r.ok ? "✅ " : "❌ ") + r.mensagem);
+    if (r.ok) await carregarTrabalho();
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+async function concluirMemoria(id) {
+  try {
+    const r = await chamarServidor("trabalhoConcluirMemoria", { id: id, concluido: "true" });
+    mostrarToast((r.ok ? "✅ " : "❌ ") + r.mensagem);
+    if (r.ok) await carregarTrabalho();
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+// ---------- Impostos e notas do processo ----------
+function abrirProcesso(idProcesso) {
+  const it = trabDados.itens.filter(function (i) { return i.idProcesso === idProcesso; })[0];
+  if (!it) return;
+
+  document.getElementById("modal-processo").style.display = "flex";
+  document.getElementById("pr-id").value = idProcesso;
+  document.getElementById("pr-titulo").textContent = it.nome;
+  document.getElementById("pr-sub").textContent = competenciaPorExtenso(trabComp);
+  document.getElementById("pr-pendencias").value = it.pendencias || "";
+  document.getElementById("pr-observacoes").value = it.observacoes || "";
+  document.getElementById("pr-aviso").textContent = "";
+  ["pr-imp-nome", "pr-imp-valor", "pr-imp-base", "pr-imp-venc"].forEach(function (id) {
+    document.getElementById(id).value = "";
+  });
+
+  document.getElementById("pr-imp-lista").innerHTML =
+    (trabDados.impostosComuns || []).map(function (i) {
+      return '<option value="' + i + '"></option>';
+    }).join("");
+
+  renderizarImpostos(it);
+}
+
+function renderizarImpostos(it) {
+  const el = document.getElementById("pr-impostos");
+  if (!it.impostos || !it.impostos.length) {
+    el.innerHTML = '<p class="vazio">Nenhum imposto lançado.</p>';
+    return;
+  }
+
+  el.innerHTML = it.impostos.map(function (i) {
+    return '<div class="trab-imposto">' +
+             '<span class="trab-imposto-nome">' + escaparHtml(i.imposto) + '</span>' +
+             '<span class="trab-imposto-val">' + formatarMoeda(i.valor) + '</span>' +
+             '<button class="tf-btn" title="Excluir" onclick="excluirImposto(\'' + i.id + '\')">×</button>' +
+           '</div>';
+  }).join("");
+}
+
+function fecharProcesso() {
+  document.getElementById("modal-processo").style.display = "none";
+}
+
+async function salvarImposto() {
+  const aviso = document.getElementById("pr-aviso");
+  const nome = document.getElementById("pr-imp-nome").value.trim();
+  const valor = document.getElementById("pr-imp-valor").value.trim();
+
+  if (!nome) { aviso.textContent = "Qual imposto?"; return; }
+  if (!valor) { aviso.textContent = "Informe o valor retido."; return; }
+
+  try {
+    const r = await chamarServidor("trabalhoSalvarImposto", {
+      idProcesso: document.getElementById("pr-id").value,
+      imposto: nome,
+      valor: valor,
+      base: document.getElementById("pr-imp-base").value.trim(),
+      vencimento: document.getElementById("pr-imp-venc").value
+    });
+
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      const id = document.getElementById("pr-id").value;
+      await carregarTrabalho();
+      abrirProcesso(id);
+    } else {
+      aviso.textContent = r.mensagem || "Não deu.";
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão.";
+  }
+}
+
+async function excluirImposto(id) {
+  if (!confirm("Excluir este lançamento?")) return;
+
+  try {
+    const r = await chamarServidor("trabalhoExcluirImposto", { id: id });
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      const idProc = document.getElementById("pr-id").value;
+      await carregarTrabalho();
+      abrirProcesso(idProc);
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não deu."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+async function salvarNotasProcesso() {
+  const btn = document.getElementById("pr-btn-salvar");
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+
+  try {
+    const r = await chamarServidor("trabalhoSalvarNotas", {
+      idProcesso: document.getElementById("pr-id").value,
+      pendencias: document.getElementById("pr-pendencias").value.trim(),
+      observacoes: document.getElementById("pr-observacoes").value.trim()
+    });
+
+    if (r.ok) {
+      fecharProcesso();
+      mostrarToast("✅ " + r.mensagem);
+      await carregarTrabalho();
+    } else {
+      document.getElementById("pr-aviso").textContent = r.mensagem || "Não deu.";
+    }
+  } catch (e) {
+    document.getElementById("pr-aviso").textContent = "Sem conexão.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Salvar anotações";
+  }
+}
+
+// ---------- Cadastro de condomínio ----------
+function abrirCondominio(id) {
+  const c = id && trabDados
+    ? trabDados.condominios.filter(function (x) { return x.id === id; })[0]
+    : null;
+
+  document.getElementById("modal-condominio").style.display = "flex";
+  document.getElementById("cd-id").value = c ? c.id : "";
+  document.getElementById("cd-nome").value = c ? c.nome : "";
+  document.getElementById("cd-cnpj").value = c ? c.cnpj : "";
+  document.getElementById("cd-boleto").checked = c ? c.boleto : false;
+  document.getElementById("cd-dia-boleto").value = c && c.diaBoleto ? c.diaBoleto : "";
+  document.getElementById("cd-dia-entrega").value = c && c.diaEntrega ? c.diaEntrega : "";
+  document.getElementById("cd-obs").value = c ? c.observacao : "";
+  document.getElementById("cd-aviso").textContent = "";
+  document.getElementById("cd-titulo").textContent = c ? "🏢 Editar condomínio" : "🏢 Novo condomínio";
+  document.getElementById("cd-btn-arquivar").style.display = c ? "block" : "none";
+
+  escolherFrentes(c ? c.frentes : "balancete");
+  alternarCamposBoleto();
+}
+
+function escolherFrentes(qual) {
+  document.getElementById("modal-condominio").dataset.frentes = qual;
+  ["balancete", "contas", "ambas"].forEach(function (f) {
+    document.getElementById("cd-frente-" + f).classList.toggle("ativo", f === qual);
+  });
+}
+
+// O dia da conciliação só importa para quem emite boleto: é ele que aperta
+// o prazo. Sem boleto, o campo só confundiria.
+function alternarCamposBoleto() {
+  const marcado = document.getElementById("cd-boleto").checked;
+  document.getElementById("cd-bloco-boleto").style.display = marcado ? "block" : "none";
+}
+
+function fecharCondominio() {
+  document.getElementById("modal-condominio").style.display = "none";
+}
+
+async function salvarCondominio() {
+  const aviso = document.getElementById("cd-aviso");
+  const nome = document.getElementById("cd-nome").value.trim();
+  if (!nome) { aviso.textContent = "Dê um nome ao condomínio."; return; }
+
+  const boleto = document.getElementById("cd-boleto").checked;
+  const diaBoleto = document.getElementById("cd-dia-boleto").value;
+  if (boleto && !diaBoleto) {
+    aviso.textContent = "Até que dia a conciliação precisa estar pronta?";
+    return;
+  }
+
+  const btn = document.getElementById("cd-btn-salvar");
+  btn.disabled = true;
+  btn.textContent = "Salvando...";
+
+  try {
+    const r = await chamarServidor("trabalhoSalvarCondominio", {
+      id: document.getElementById("cd-id").value,
+      nome: nome,
+      cnpj: document.getElementById("cd-cnpj").value.trim(),
+      boleto: boleto ? "true" : "false",
+      diaBoleto: diaBoleto || "0",
+      diaEntrega: document.getElementById("cd-dia-entrega").value || "0",
+      observacao: document.getElementById("cd-obs").value.trim(),
+      frentes: document.getElementById("modal-condominio").dataset.frentes || "balancete"
+    });
+
+    if (r.ok) {
+      fecharCondominio();
+      mostrarToast("✅ " + r.mensagem);
+      await carregarTrabalho();
+    } else {
+      aviso.textContent = r.mensagem || "Não foi possível salvar.";
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Salvar";
+  }
+}
+
+async function arquivarCondominio() {
+  const id = document.getElementById("cd-id").value;
+  if (!id) return;
+  if (!confirm("Arquivar este condomínio? O histórico dele fica.")) return;
+
+  try {
+    const r = await chamarServidor("trabalhoExcluirCondominio", { id: id });
+    if (r.ok) {
+      fecharCondominio();
+      mostrarToast("✅ " + r.mensagem);
+      await carregarTrabalho();
     } else {
       mostrarToast("❌ " + (r.mensagem || "Não deu."));
     }
@@ -3508,9 +4054,11 @@ function trocarAba(nome) {
   document.getElementById("conteudo-busca").style.display = (nome === "busca")      ? "block" : "none";
   document.getElementById("conteudo-calendario").style.display = (nome === "calendario") ? "block" : "none";
   document.getElementById("conteudo-tarefas").style.display = (nome === "tarefas") ? "block" : "none";
+  document.getElementById("conteudo-trabalho").style.display = (nome === "trabalho") ? "block" : "none";
   document.getElementById("nav-mes-wrap").style.display   = (nome === "dashboard")  ? "flex"  : "none";
   document.getElementById("abas-principais").style.display =
-    (nome === "chat" || nome === "busca" || nome === "calendario" || nome === "tarefas") ? "none" : "flex";
+    (nome === "chat" || nome === "busca" || nome === "calendario" ||
+     nome === "tarefas" || nome === "trabalho") ? "none" : "flex";
 
   document.getElementById("tab-dashboard").classList.toggle("ativa", nome === "dashboard");
   document.getElementById("tab-aprovacoes").classList.toggle("ativa", nome === "aprovacoes");
@@ -3524,7 +4072,8 @@ function trocarAba(nome) {
 
   // Botão voltar (no chat e na busca)
   document.getElementById("btn-voltar").style.display =
-    (nome === "chat" || nome === "busca" || nome === "calendario" || nome === "tarefas") ? "inline-block" : "none";
+    (nome === "chat" || nome === "busca" || nome === "calendario" ||
+     nome === "tarefas" || nome === "trabalho") ? "inline-block" : "none";
 
   // Título do topo
   // Só o texto muda: a seta do menu de produtos fica num span à parte, senão
@@ -3534,6 +4083,7 @@ function trocarAba(nome) {
   else if (nome === "busca") titulo.textContent = "🚀 Lançamentos";
   else if (nome === "calendario") titulo.textContent = "Smartcalendário";
   else if (nome === "tarefas") titulo.textContent = "Smarttarefas";
+  else if (nome === "trabalho") titulo.textContent = "Smarttrabalho";
   else titulo.textContent = "Smartbalanço";
 
   if (nome === "aprovacoes") carregarAprovacoes(false);
