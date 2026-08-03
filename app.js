@@ -475,6 +475,12 @@ document.addEventListener("click", function (e) {
 async function abrirCalendario() {
   trocarAba("calendario");
 
+  // No calendário não há o que lançar: os botões flutuantes saem de cena.
+  ["btn-nova-despesa", "btn-chat-ia"].forEach(function (id) {
+    const b = document.getElementById(id);
+    if (b) b.style.display = "none";
+  });
+
   const hoje = new Date();
   calMes = hoje.getMonth();
   calAno = hoje.getFullYear();
@@ -734,6 +740,8 @@ async function alternarConcluido(id, novoEstado) {
 // No navegador nada disso roda.
 // ============================================================================
 const API_RELEASES = "https://api.github.com/repos/pvsm23/smartbalanco-android/releases/latest";
+// Link fixo: sempre serve o APK da última versão publicada.
+const LINK_APK = "https://github.com/pvsm23/smartbalanco-android/releases/latest/download/Smartbalanco.apk";
 
 // Compara "1.10" com "1.9" corretamente (comparar como texto diria que 1.10 < 1.9)
 function versaoEhMaior(nova, atual) {
@@ -892,6 +900,33 @@ async function abrirConfig() {
 
   renderizarCategoriasConfig();
   montarCodigoAcesso();
+  montarVersaoApp();
+}
+
+// Bloco de versão em Configurações: mostra a instalada e um botão que abre o
+// download da última, sem depender de esperar o aviso automático aparecer.
+async function montarVersaoApp() {
+  const alvo = document.getElementById("cfg-versao");
+  if (!alvo) return;
+
+  if (!rodandoNoAplicativo()) {
+    alvo.innerHTML = '<div class="cfg-aviso">Você está pelo navegador. ' +
+      'O aplicativo Android tem widgets e avisos de vencimento.</div>' +
+      '<button class="btn-modal confirmar" style="width:100%;" ' +
+      'onclick="baixarAtualizacao(\'' + LINK_APK + '\')">📲 Baixar o aplicativo</button>';
+    return;
+  }
+
+  let instalada = "?";
+  try {
+    const A = window.Capacitor.Plugins.App;
+    if (A && A.getInfo) instalada = (await A.getInfo()).version || "?";
+  } catch (e) {}
+
+  alvo.innerHTML =
+    '<div class="cfg-aviso">Versão instalada: <b>' + escaparHtml(instalada) + '</b></div>' +
+    '<button class="btn-modal confirmar" style="width:100%;" ' +
+    'onclick="baixarAtualizacao(\'' + LINK_APK + '\')">📲 Baixar a última versão</button>';
 }
 
 function fecharConfig() {
