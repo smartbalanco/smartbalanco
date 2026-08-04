@@ -1310,8 +1310,8 @@ function renderizarPrecisaAtencao() {
 
   el.innerHTML = urgentes.map(function (i) {
     const motivos = [];
-    if (i.prazo && i.prazo.nivel === "estourado") motivos.push("prazo vencido");
-    else if (i.prazo && i.prazo.nivel === "critico") motivos.push(i.prazo.diasRestantes + "d p/ o prazo");
+    if (i.prazo && i.prazo.nivel === "estourado") motivos.push("entrega vencida em " + (i.prazo.entrega || ""));
+    else if (i.prazo && i.prazo.nivel === "critico") motivos.push("entregar até " + (i.prazo.entrega || ""));
     if (i.situacao) motivos.push("documentação");
 
     return '<div class="trab-mem" style="cursor:pointer" onclick="abrirProcesso(\'' + i.idProcesso + '\')">' +
@@ -1336,11 +1336,15 @@ function cardCondominio(it, frente) {
   }
   if (it.prazo) {
     const n = it.prazo.nivel;
+    // A data que importa é a de ENTREGA, não a do vencimento do boleto: a
+    // entrega vem 10 dias antes, para o boleto ser emitido e chegar a tempo.
     let txt;
     if (n === "pronto") txt = "no prazo";
     else if (n === "estourado") txt = Math.abs(it.prazo.diasRestantes) + "d vencido";
-    else txt = it.prazo.diasRestantes + "d p/ dia " + it.prazo.dia;
-    selos += '<span class="trab-selo ' + n + '">' + txt + '</span>';
+    else txt = it.prazo.diasRestantes + "d · até " + (it.prazo.entrega || it.prazo.dia);
+    selos += '<span class="trab-selo ' + n + '" title="' +
+             (it.boleto ? "Boleto vence " + (it.prazo.vencimento || "") + "; entregar antes" : "Entrega") +
+             '">' + txt + '</span>';
   }
 
   const linhas = etapas.map(function (e) {
