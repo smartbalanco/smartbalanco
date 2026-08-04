@@ -305,6 +305,99 @@ function fecharEdicao() {
   edicaoAtual = null;
 }
 
+// Excluir respeita o mesmo escopo da edição: numa compra parcelada, "desta em
+// diante" ou "todas". Sem isso sobraria meia compra na planilha.
+async function excluirLancamentoApp() {
+  if (!edicaoAtual) return;
+
+  const it = edicaoAtual;
+  const partes = (it.parcela || "").toString().split("/");
+  const totalParc = partes.length === 2 ? (parseInt(partes[1]) || 1) : 1;
+
+  let texto = 'Excluir "' + (it.descricao || "") + '" (MOV-' + it.numMov + ')?';
+  if (totalParc > 1) {
+    texto += escopoEdicao === "todas"
+      ? "\n\nVai apagar TODAS as " + totalParc + " parcelas."
+      : "\n\nVai apagar desta parcela em diante.";
+  }
+  texto += "\n\nIsso não tem desfazer.";
+
+  if (!confirm(texto)) return;
+
+  try {
+    const r = await chamarServidor("excluirLancamento", {
+      numMov: it.numMov,
+      escopo: escopoEdicao
+    });
+
+    if (r.ok) {
+      fecharEdicao();
+      mostrarToast("✅ " + r.mensagem);
+      if (typeof fecharDetalhe === "function") fecharDetalhe();
+      await recarregarDados();
+      if (abaAtiva === "busca") buscarLancamentos();
+    } else {
+      document.getElementById("edt-aviso").textContent = r.mensagem || "Não foi possível excluir.";
+    }
+  } catch (e) {
+    document.getElementById("edt-aviso").textContent = "Sem conexão.";
+  }
+}
+
+// ============================================================================
+// CONFIRMAÇÃO COM ATALHO PARA EDITAR
+// ----------------------------------------------------------------------------
+// Toda inclusão, edição e liquidação termina aqui. O "Editar" ao lado da
+// mensagem existe porque é NESSE instante que se percebe o erro de digitação —
+// e sem ele o caminho seria ir na busca, procurar o lançamento e abrir.
+// ============================================================================
+function mostrarToastComEditar(msg, numMov) {
+  const t = document.getElementById("toast");
+  if (!t) return;
+
+  if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+
+  t.innerHTML = "";
+  const txt = document.createElement("span");
+  txt.textContent = msg;
+  t.appendChild(txt);
+
+  if (numMov) {
+    const b = document.createElement("button");
+    b.className = "toast-acao";
+    b.textContent = "Editar";
+    b.onclick = function () {
+      t.classList.remove("visivel");
+      abrirEdicaoPorMov(numMov);
+    };
+    t.appendChild(b);
+  }
+
+  t.classList.add("visivel");
+  // Mais tempo que o toast comum: aqui há um botão para alcançar.
+  toastTimer = setTimeout(function () { t.classList.remove("visivel"); }, 9000);
+}
+
+// A edição precisa do lançamento em mãos; vindo de uma inclusão, ele ainda não
+// está em nenhuma lista da tela, então busca no servidor pelo número.
+async function abrirEdicaoPorMov(numMov) {
+  const naTela = (resultadosBusca || []).filter(function (x) { return x.numMov === numMov; })[0];
+  if (naTela) { abrirEdicao(numMov); return; }
+
+  mostrarToast("Abrindo lançamento...");
+  try {
+    const r = await chamarServidor("buscarLancamento", { numMov: numMov });
+    if (r.ok && r.lancamento) {
+      itemDetalhe = r.lancamento;
+      abrirEdicao(numMov);
+    } else {
+      mostrarToast("❌ " + (r.mensagem || "Não encontrei o lançamento."));
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
 function definirEscopoEdicao(qual) {
   escopoEdicao = (qual === "todas") ? "todas" : "adiante";
   document.getElementById("edt-op-adiante").classList.toggle("ativa", escopoEdicao === "adiante");
@@ -338,8 +431,9 @@ async function salvarEdicao() {
     });
 
     if (r.ok) {
+      const movEditado = edicaoAtual.numMov;
       fecharEdicao();
-      mostrarToast("✅ " + r.mensagem);
+      mostrarToastComEditar("✅ " + r.mensagem, movEditado);
       limparTodoCache();
       fecharDetalhe();
       await recarregarDados();
@@ -1838,6 +1932,8 @@ function abrirCondominio(id) {
   document.getElementById("cd-boleto").checked = c ? c.boleto : false;
   document.getElementById("cd-dia-boleto").value = c && c.diaBoleto ? c.diaBoleto : "";
   document.getElementById("cd-dia-entrega").value = c && c.diaEntrega ? c.diaEntrega : "";
+  document.getElementById("cd-banco").value = c ? (c.banco || "") : "";
+  document.getElementById("cd-aprovacao").value = c ? (c.aprovacao || "") : "";
   document.getElementById("cd-obs").value = c ? c.observacao : "";
   document.getElementById("cd-ativo").checked = c ? c.ativo : true;
   document.getElementById("cd-aviso").textContent = "";
@@ -1897,7 +1993,9 @@ async function salvarCondominio() {
       diaEntrega: document.getElementById("cd-dia-entrega").value || "0",
       observacao: document.getElementById("cd-obs").value.trim(),
       frentes: document.getElementById("modal-condominio").dataset.frentes || "balancete",
-      ativo: document.getElementById("cd-ativo").checked ? "true" : "false"
+      ativo: document.getElementById("cd-ativo").checked ? "true" : "false",
+      banco: document.getElementById("cd-banco").value.trim(),
+      aprovacao: document.getElementById("cd-aprovacao").value.trim()
     });
 
     if (r.ok) {
@@ -4296,6 +4394,7 @@ let toastTimer = null;
 
 function mostrarToast(msg, fixo) {
   const t = document.getElementById("toast");
+  // textContent limpa o botão que a versão com "Editar" possa ter deixado.
   t.textContent = msg;
   t.classList.add("visivel");
 
@@ -4346,12 +4445,67 @@ async function abrirNovaDespesa() {
   document.getElementById("nd-chk-pago").checked = false;
   document.getElementById("nd-datapgto").value = hoje;
 
+  // Limpa o aviso de cópia: sem isso, abrir "nova despesa" depois de duplicar
+  // ainda diria que é cópia de outro lançamento.
+  const avisoND = document.getElementById("nd-aviso");
+  if (avisoND) avisoND.textContent = "";
+
   atualizarCamposDespesa();
 }
 
 function dataHojeISO() {
   const h = new Date();
   return h.getFullYear() + "-" + ("0" + (h.getMonth() + 1)).slice(-2) + "-" + ("0" + h.getDate()).slice(-2);
+}
+
+// ============================================================================
+// DUPLICAR LANÇAMENTO
+// ----------------------------------------------------------------------------
+// Abre o formulário de nova despesa já preenchido com os dados de um
+// lançamento existente. É um RASCUNHO: nada é gravado até você confirmar, e
+// tudo continua editável — inclusive anexar documento, que é o mesmo caminho
+// da inclusão normal.
+//
+// As DATAS não são copiadas: uma despesa recorrente repete descrição, valor,
+// método e categoria, mas nunca o vencimento do mês passado. Copiar a data
+// velha faria a cópia nascer vencida.
+// ============================================================================
+async function duplicarLancamento(numMov) {
+  let it = (resultadosBusca || []).filter(function (x) { return x.numMov === numMov; })[0] || itemDetalhe;
+
+  if (!it || it.numMov !== numMov) {
+    try {
+      const r = await chamarServidor("buscarLancamento", { numMov: numMov });
+      if (!r.ok || !r.lancamento) {
+        mostrarToast("❌ " + (r.mensagem || "Não encontrei o lançamento."));
+        return;
+      }
+      it = r.lancamento;
+    } catch (e) {
+      mostrarToast("❌ Sem conexão.");
+      return;
+    }
+  }
+
+  await abrirNovaDespesa();
+
+  document.getElementById("nd-descricao").value = it.descricao || "";
+  document.getElementById("nd-valor").value = (parseFloat(it.valor) || 0).toFixed(2);
+
+  if (listasValidas) montarSelect("nd-metodo", listasValidas.metodos, it.metodo || "");
+  definirCategoriaCampo("nd-categoria", it.categoria || "");
+
+  // Parcelas voltam a 1: o que se duplica é a compra, não o parcelamento dela.
+  document.getElementById("nd-parcelas").value = "1";
+  document.getElementById("nd-chk-pago").checked = false;
+
+  atualizarCamposDespesa();
+
+  const aviso = document.getElementById("nd-aviso");
+  if (aviso) {
+    aviso.textContent = "Cópia de MOV-" + numMov + ". Confira a data e o valor antes de confirmar.";
+  }
+  mostrarToast("⧉ Cópia de MOV-" + numMov + " — nada foi lançado ainda.");
 }
 
 function fecharModalDespesa() {
@@ -4559,7 +4713,9 @@ async function gravarNovaDespesa(params, desc) {
   try {
     const r = await chamarServidor("incluirDespesa", params);
     if (r.ok) {
-      mostrarToast("✅ " + r.mensagem);
+      // Numa compra parcelada, o atalho abre a PRIMEIRA parcela — é dela que
+      // a edição consegue alcançar o grupo inteiro.
+      mostrarToastComEditar("✅ " + r.mensagem, r.idInicial);
       await recarregarDados();
     } else {
       mostrarToast("❌ " + (r.mensagem || "Não foi possível lançar a despesa."));
@@ -7930,6 +8086,10 @@ function abrirDetalheBusca(idx) {
 
     '<button class="det-btn editar" onclick="fecharDetalhe(); abrirEdicao(' + it.numMov + ');">' +
       '✏️ Editar lançamento' +
+    '</button>' +
+
+    '<button class="det-btn editar" onclick="fecharDetalhe(); duplicarLancamento(' + it.numMov + ');">' +
+      '⧉ Duplicar este lançamento' +
     '</button>' +
 
     (!it.pago && it.tipo === "despesa"

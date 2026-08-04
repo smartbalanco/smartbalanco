@@ -2115,6 +2115,14 @@
       transition: transform 0.3s ease-out; box-shadow: 0 8px 24px rgba(0,0,0,0.25);
     }
     #toast.visivel { transform: translateX(-50%) translateY(0); }
+    /* Com o botão "Editar" o toast deixa de ser só texto centralizado. */
+    #toast:has(.toast-acao) { display: flex; align-items: center; gap: 14px; text-align: left; }
+    .toast-acao {
+      background: rgba(255,255,255,0.16); border: none; color: #fff;
+      border-radius: 9px; padding: 7px 14px; font-size: 13px; font-weight: 700;
+      font-family: inherit; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+    }
+    .toast-acao:active { background: rgba(255,255,255,0.3); }
 
     /* ========================================================================
        CAMADA NEUMORFISMO
@@ -3136,6 +3144,17 @@
           </div>
         </div>
 
+        <div class="linha-dupla">
+          <div class="campo-bloco">
+            <label for="cd-banco">Banco</label>
+            <input type="text" id="cd-banco" maxlength="30" placeholder="Ex.: Itaú" />
+          </div>
+          <div class="campo-bloco">
+            <label for="cd-aprovacao">Quem aprova</label>
+            <input type="text" id="cd-aprovacao" maxlength="40" placeholder="Ex.: Síndico" />
+          </div>
+        </div>
+
         <div class="campo-bloco">
           <label for="cd-obs">Observação</label>
           <textarea id="cd-obs" rows="2" placeholder="Particularidades deste condomínio"></textarea>
@@ -3244,6 +3263,8 @@
       <div id="nd-form" class="modal-conteudo">
 
         <div id="nd-erro"></div>
+        <!-- Preenchido ao duplicar um lançamento; vazio na inclusão normal -->
+        <div class="cfg-aviso" id="nd-aviso"></div>
 
         <div class="campo-bloco">
           <label for="nd-descricao">Descrição</label>
@@ -3595,6 +3616,9 @@
         <div class="modal-acoes">
           <button class="btn-modal cancelar" onclick="fecharEdicao()">Cancelar</button>
           <button class="btn-modal confirmar" id="edt-btn-salvar" onclick="salvarEdicao()">Salvar</button>
+        </div>
+        <div class="modal-acoes" style="margin-top:0;">
+          <button class="cd-excluir" onclick="excluirLancamentoApp()">Excluir lançamento</button>
         </div>
       </div>
     </div>
@@ -4056,7 +4080,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=47"></script>
+  <script src="app.js?v=48"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
