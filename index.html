@@ -518,7 +518,15 @@
     .trab-pendencia {
       font-size: 11px; color: #92400e; background: #fef3c7;
       border-radius: 8px; padding: 7px 9px; margin-top: 8px; line-height: 1.4;
+      cursor: pointer; white-space: pre-wrap;
     }
+    /* A lista de itens pode ter 20+ linhas: fica escondida até o toque, senão
+       um condomínio ocuparia a tela inteira. */
+    .trab-pendencia-itens { display: none; margin-top: 6px; }
+    .trab-pendencia.aberta .trab-pendencia-itens { display: block; }
+    .trab-pendencia-mais { margin-top: 5px; font-size: 10px; opacity: 0.75; }
+    .trab-pendencia.aberta .trab-pendencia-mais { display: none; }
+    .trab-selo.doc { background: #fef3c7; color: #92400e; }
     .trab-acoes-card { display: flex; gap: 8px; margin-top: 10px; }
     .trab-acoes-card button {
       flex: 1; background: var(--cinza-fundo); border: none; border-radius: 10px;
@@ -584,6 +592,51 @@
     .trab-imposto:first-child { border-top: none; }
     .trab-imposto-nome { font-weight: 700; min-width: 58px; }
     .trab-imposto-val { flex: 1; text-align: right; font-weight: 600; }
+
+    /* Roxo para não se confundir com o "+" azul do lançamento nem com o
+       verde do app: aqui é outro assunto. */
+    #btn-chat-trabalho {
+      position: fixed; right: 18px; bottom: 22px; z-index: 60; display: none;
+      width: 58px; height: 58px; border-radius: 50%; border: none;
+      background: #6d28d9; color: #fff; font-size: 24px; cursor: pointer;
+      box-shadow: 0 6px 16px rgba(109,40,217,0.4);
+      align-items: center; justify-content: center;
+    }
+    #btn-chat-trabalho:active { box-shadow: 0 2px 8px rgba(109,40,217,0.4); }
+
+    .chat-caixa { display: flex; flex-direction: column; max-height: 88vh; }
+    #cht-mensagens {
+      flex: 1; overflow-y: auto; padding: 14px 18px; min-height: 180px;
+    }
+    .cht-msg {
+      max-width: 88%; padding: 10px 13px; border-radius: 14px;
+      margin-bottom: 10px; font-size: 13px; line-height: 1.5;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .cht-msg.eu {
+      margin-left: auto; background: var(--azul); color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .cht-msg.ia {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-bottom-left-radius: 4px;
+    }
+    .cht-msg.erro { background: #fdeaea; color: var(--vermelho); }
+    /* O que foi mesmo gravado na planilha: verde, largura cheia e destacado
+       da conversa — é o que você precisa conferir de relance. */
+    .cht-msg.cht-feito {
+      max-width: 100%; background: #dcfce7; color: #14532d;
+      border-left: 3px solid var(--verde); border-radius: 8px;
+      font-size: 12px; font-weight: 600;
+    }
+    .cht-rodape { padding: 0 18px 18px; border-top: 1px solid var(--borda); padding-top: 12px; }
+    .cht-acoes { display: flex; gap: 8px; }
+    .cht-acoes button {
+      flex: 1; background: var(--cinza-fundo); border: none; border-radius: 10px;
+      box-shadow: var(--relevo-baixo); padding: 9px; font-size: 11px;
+      font-weight: 600; color: var(--cinza-texto); cursor: pointer; font-family: inherit;
+    }
+    .cht-acoes button:active { box-shadow: var(--afundado-leve); }
 
     #btn-nova-tarefa {
       position: fixed; right: 18px; bottom: 22px; z-index: 60; display: none;
@@ -2766,6 +2819,39 @@
   <button id="btn-chat-ia" onclick="trocarAba('chat')" title="Assistente IA">✨</button>
   <button id="btn-nova-despesa" onclick="abrirMenuAdicionar()" title="Adicionar">+</button>
   <button id="btn-nova-tarefa" onclick="abrirTarefa()" title="Nova anotação">+</button>
+  <button id="btn-chat-trabalho" onclick="abrirChatTrabalho()" title="Perguntar sobre os balancetes">✨</button>
+
+  <!-- ============ CHAT DOS BALANCETES ============ -->
+  <div class="modal-fundo" id="modal-chat-trabalho">
+    <div class="modal-caixa chat-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">✨ Assistente dos balancetes</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;" id="cht-sub"></div>
+        </div>
+        <button class="fechar" onclick="fecharChatTrabalho()">&times;</button>
+      </div>
+
+      <div id="cht-mensagens"></div>
+
+      <div class="cht-rodape">
+        <div class="busca-campo" style="margin-bottom:6px;">
+          <input type="text" id="cht-texto" placeholder="Pergunte sobre os balancetes..."
+                 onkeydown="if(event.key==='Enter') enviarChatTrabalho()" />
+          <button class="tf-btn" id="cht-enviar" onclick="enviarChatTrabalho()" title="Enviar">➤</button>
+        </div>
+        <div class="cht-acoes">
+          <button onclick="fixarNaMemoria('regra')">📌 Fixar como regra</button>
+          <button onclick="fixarNaMemoria('lembrete')">🔔 Fixar lembrete</button>
+        </div>
+        <div class="cfg-aviso" id="cht-aviso">
+          Peça para ela anotar ("anota que falta a nota da Enel no Villa Verde")
+          e confira o que ela gravou. O que você fixar aqui também vale para o
+          conselho do dia.
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ============ MODAL: IMPOSTOS E NOTAS DO PROCESSO ============ -->
   <div class="modal-fundo" id="modal-processo">
@@ -2868,6 +2954,10 @@
         <button class="btn-modal cancelar" style="width:100%;" onclick="procurarDuplicados()">
           Procurar repetidos
         </button>
+
+        <!-- No modo "só trabalho" as configurações gerais somem da topbar,
+             então a saída da conta precisa existir aqui. -->
+        <button class="cd-excluir" onclick="sair()">Sair da conta</button>
 
         <div class="modal-acoes">
           <button class="btn-modal confirmar" onclick="fecharConfigTrabalho()">Fechar</button>
@@ -3845,7 +3935,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=42"></script>
+  <script src="app.js?v=44"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

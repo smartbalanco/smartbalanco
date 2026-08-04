@@ -151,6 +151,7 @@ async function aoReceberLoginGoogle(resposta) {
     if (r.ok && r.sessao) {
       sessaoAtual = r.sessao;
       emailUsuarioAtual = r.usuario || emailUsuarioAtual;
+      aplicarRestricaoDaConta(r);
       salvarSessao(r.sessao, emailUsuarioAtual);
       tokenLoginAtual = null;   // não precisa mais do token do Google
 
@@ -1171,6 +1172,9 @@ function cardCondominio(it, frente) {
   let selos = "";
   if (it.frentes === "ambas") selos += '<span class="trab-selo">2 FRENTES</span>';
   if (it.boleto) selos += '<span class="trab-selo boleto">BOLETO</span>';
+  if (frente === "balancete" && it.situacao) {
+    selos += '<span class="trab-selo doc">DOC. PENDENTE</span>';
+  }
   if (it.prazo) {
     const n = it.prazo.nivel;
     let txt;
@@ -1190,9 +1194,19 @@ function cardCondominio(it, frente) {
   }).join("");
 
   // A pendência só faz sentido ao lado da conciliação, que é onde ela nasce.
-  const pend = (frente === "balancete" && it.pendencias)
-    ? '<div class="trab-pendencia">⚠ ' + escaparHtml(it.pendencias) + '</div>'
-    : '';
+  // A lista pode ter 20+ linhas, então vem recolhida: o card viraria uma
+  // parede de texto e o próximo condomínio sumiria da tela.
+  let pend = "";
+  if (frente === "balancete" && it.pendencias) {
+    const linhas = it.pendencias.split("\n");
+    const resumo = linhas[0];
+    const resto = linhas.slice(1).join("\n");
+    pend = '<div class="trab-pendencia" onclick="this.classList.toggle(\'aberta\')">' +
+             '<b>⚠ ' + escaparHtml(resumo) + '</b>' +
+             (resto ? '<div class="trab-pendencia-itens">' + escaparHtml(resto) + '</div>' +
+                      '<div class="trab-pendencia-mais">toque para ver os itens</div>' : '') +
+           '</div>';
+  }
 
   const impostos = (frente === "balancete" && it.totalRetido > 0)
     ? '<div class="trab-progresso-txt" style="margin-top:8px;">Retido: <b>' +
@@ -1340,11 +1354,20 @@ function renderizarMemoria() {
     return;
   }
 
-  el.innerHTML = lista.map(function (m) {
+  // Regras primeiro: são as que valem sempre.
+  const ordem = { regra: 0, lembrete: 1, nota: 2 };
+  const ordenada = lista.slice().sort(function (a, b) {
+    return (ordem[a.tipo] || 1) - (ordem[b.tipo] || 1);
+  });
+
+  el.innerHTML = ordenada.map(function (m) {
+    const marca = m.tipo === "regra" ? "📌 " : (m.tipo === "nota" ? "" : "🔔 ");
     return '<div class="trab-mem">' +
              '<div class="tf-check" onclick="concluirMemoria(\'' + m.id + '\')"></div>' +
-             '<div style="flex:1;">' + escaparHtml(m.texto) +
-               '<div class="trab-mem-data">' + escaparHtml(m.data) + '</div>' +
+             '<div style="flex:1;">' + marca + escaparHtml(m.texto) +
+               '<div class="trab-mem-data">' +
+                 (m.tipo === "regra" ? "regra fixa" : escaparHtml(m.data)) +
+               '</div>' +
              '</div>' +
            '</div>';
   }).join("");
@@ -1489,6 +1512,126 @@ async function salvarNotasProcesso() {
   } finally {
     btn.disabled = false;
     btn.textContent = "Salvar anotações";
+  }
+}
+
+// ---------- Chat dos balancetes ----------
+// Conversa separada do "conselho do dia", mas com a MESMA memória por trás:
+// o que você fixa aqui entra no conselho de amanhã, e o que a outra sabe
+// aparece aqui. É o mesmo assistente, dois jeitos de falar com ele.
+let chtHistorico = [];
+
+function abrirChatTrabalho() {
+  document.getElementById("modal-chat-trabalho").style.display = "flex";
+
+  const regras = ((trabDados && trabDados.memoria) || [])
+    .filter(function (m) { return m.tipo === "regra"; }).length;
+
+  document.getElementById("cht-sub").textContent =
+    competenciaPorExtenso(trabComp) +
+    (regras ? " · " + regras + " regra(s) fixada(s)" : "");
+
+  if (!chtHistorico.length) {
+    document.getElementById("cht-mensagens").innerHTML =
+      '<div class="cht-msg ia">Pergunte o que quiser sobre os balancetes: quem está ' +
+      'atrasado, o que falta em cada condomínio, documentação pendente, retenções, prazos.\n\n' +
+      'Se quiser que eu passe a seguir alguma regra sua, escreva e toque em "Fixar como regra".</div>';
+  }
+  setTimeout(function () { document.getElementById("cht-texto").focus(); }, 100);
+}
+
+function fecharChatTrabalho() {
+  document.getElementById("modal-chat-trabalho").style.display = "none";
+}
+
+function pintarMensagemChat(de, texto) {
+  const caixa = document.getElementById("cht-mensagens");
+  const div = document.createElement("div");
+  div.className = "cht-msg " + de;
+  div.textContent = texto;
+  caixa.appendChild(div);
+  caixa.scrollTop = caixa.scrollHeight;
+  return div;
+}
+
+async function enviarChatTrabalho() {
+  const campo = document.getElementById("cht-texto");
+  const btn = document.getElementById("cht-enviar");
+  const texto = campo.value.trim();
+  if (!texto) return;
+
+  pintarMensagemChat("eu", texto);
+  chtHistorico.push({ de: "eu", texto: texto });
+  campo.value = "";
+
+  btn.disabled = true;
+  const pensando = pintarMensagemChat("ia", "Pensando...");
+
+  try {
+    // POST: o histórico não caberia numa URL.
+    const r = await chamarServidorPost("trabalhoChat", {
+      texto: texto,
+      competencia: trabComp,
+      historico: JSON.stringify(chtHistorico.slice(-8))
+    });
+
+    if (r.ok) {
+      pensando.textContent = r.resposta;
+      chtHistorico.push({ de: "ia", texto: r.resposta });
+
+      // O que ela GRAVOU aparece separado da conversa: você precisa ver o que
+      // foi parar na planilha sem ter que reler a resposta inteira.
+      if (r.feitos && r.feitos.length) {
+        r.feitos.forEach(function (f) {
+          const m = pintarMensagemChat(f.tipo === "erro" ? "erro" : "feito", f.descricao);
+          if (f.tipo !== "erro") m.classList.add("cht-feito");
+        });
+        await carregarTrabalho();
+      }
+    } else {
+      pensando.className = "cht-msg erro";
+      pensando.textContent = r.mensagem || "Não consegui responder.";
+    }
+  } catch (e) {
+    pensando.className = "cht-msg erro";
+    pensando.textContent = "Sem conexão.";
+  } finally {
+    btn.disabled = false;
+    campo.focus();
+  }
+}
+
+// Fixa o que está escrito no campo — ou, se estiver vazio, a última coisa que
+// VOCÊ disse. Nunca a resposta da IA: fixar o que ela inventou como se fosse
+// regra sua é o jeito mais rápido de envenenar a memória.
+async function fixarNaMemoria(tipo) {
+  const campo = document.getElementById("cht-texto");
+  const aviso = document.getElementById("cht-aviso");
+
+  let texto = campo.value.trim();
+  if (!texto) {
+    const minhas = chtHistorico.filter(function (m) { return m.de === "eu"; });
+    texto = minhas.length ? minhas[minhas.length - 1].texto : "";
+  }
+
+  if (!texto) {
+    aviso.textContent = "Escreva primeiro o que você quer fixar.";
+    return;
+  }
+
+  try {
+    const r = await chamarServidor("trabalhoAnotarMemoria", { texto: texto, tipo: tipo });
+    if (r.ok) {
+      aviso.textContent = "✅ " + r.mensagem;
+      campo.value = "";
+      pintarMensagemChat("ia", (tipo === "regra" ? "📌 Regra fixada: " : "🔔 Lembrete fixado: ") + texto);
+      await carregarTrabalho();
+      abrirChatTrabalho();
+    } else {
+      aviso.textContent = r.mensagem || "Não consegui fixar.";
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão.";
   }
 }
 
@@ -3355,6 +3498,7 @@ async function entrarComCodigo() {
 
     if (r.ok && r.usuario) {
       emailUsuarioAtual = r.usuario;
+      aplicarRestricaoDaConta(r);
       salvarSessao(codigo, r.usuario);
       campo.value = "";
       await entrarNoApp();
@@ -3427,12 +3571,76 @@ function mostrarTelaInterna() {
   document.getElementById("tela-config-bloqueio").style.display = "none";
   document.getElementById("tela-interna").style.display = "block";
 
+  if (soTrabalho()) { aplicarModoSoTrabalho(); return; }
+
   // 👉 Os dois botões flutuantes só aparecem no dashboard
   const noDash = (abaAtiva === "dashboard");
   document.getElementById("btn-nova-despesa").style.display = noDash ? "flex" : "none";
 
   const btnIA = document.getElementById("btn-chat-ia");
   if (btnIA) btnIA.style.display = noDash ? "flex" : "none";
+}
+
+// ============================================================================
+// MODO "SÓ TRABALHO"
+// ----------------------------------------------------------------------------
+// Para o PC do escritório: abrindo com ?modo=trabalho, este navegador passa a
+// mostrar SÓ o Smarttrabalho — sem finanças pessoais, sem tarefas, sem agenda.
+//
+// A escolha fica gravada NESTE navegador, não na URL: se ficasse só na URL,
+// bastaria alguém abrir o endereço normal para ver tudo. Para voltar ao app
+// completo é preciso abrir com ?modo=completo de propósito.
+//
+// Limite honesto: isto é separação de TELA, não de permissão. A sessão é a
+// mesma e o servidor continua respondendo a tudo — quem abrir as ferramentas
+// do desenvolvedor alcança o resto. Serve para o colega que senta na sua mesa,
+// não contra alguém tentando bisbilhotar de verdade.
+// ============================================================================
+const MODO_CHAVE = "smart_modo";
+
+function soTrabalho() {
+  try { return localStorage.getItem(MODO_CHAVE) === "trabalho"; } catch (e) { return false; }
+}
+
+// A conta do escritório se restringe sozinha, sem depender do link: o servidor
+// avisa no login e o app se ajusta. Só LIGA o modo — nunca desliga, senão
+// entrar com ela e sair devolveria o app completo a quem não deveria ver.
+function aplicarRestricaoDaConta(resposta) {
+  try {
+    if (resposta && resposta.soTrabalho) localStorage.setItem(MODO_CHAVE, "trabalho");
+  } catch (e) {}
+}
+
+// Roda antes do login: a URL manda, e o que ela disser fica guardado.
+function lerModoDaURL() {
+  try {
+    const m = new URLSearchParams(location.search).get("modo");
+    if (m === "trabalho") localStorage.setItem(MODO_CHAVE, "trabalho");
+    else if (m === "completo") localStorage.removeItem(MODO_CHAVE);
+  } catch (e) {}
+}
+
+function aplicarModoSoTrabalho() {
+  // Some tudo que leva aos outros módulos.
+  ["btn-nova-despesa", "btn-chat-ia", "btn-buscar", "btn-hoje", "btn-config",
+   "nav-mes-wrap", "abas-principais", "menu-produtos"].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = "none";
+  });
+
+  // O título deixa de ser botão: não há para onde ir.
+  const topo = document.getElementById("titulo-topo");
+  if (topo) {
+    topo.onclick = null;
+    topo.style.pointerEvents = "none";
+    const seta = topo.querySelector(".seta-produtos");
+    if (seta) seta.style.display = "none";
+  }
+
+  const voltar = document.getElementById("btn-voltar");
+  if (voltar) voltar.style.display = "none";
+
+  if (abaAtiva !== "trabalho") abrirTrabalho();
 }
 
 async function sair() {
@@ -3456,6 +3664,10 @@ async function sair() {
 // INICIALIZAÇÃO + LOGIN SILENCIOSO
 // ============================================================================
 window.addEventListener("load", async function () {
+  // Antes de tudo: ?modo=trabalho decide se este navegador vê só o
+  // Smarttrabalho. Precisa vir cedo, senão o dashboard pisca na tela.
+  lerModoDaURL();
+
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("./service-worker.js").catch(function () {});
   }
@@ -3516,6 +3728,7 @@ async function validarSessaoSalva() {
     const r = await chamarServidor("login");
     if (r.ok) {
       emailUsuarioAtual = r.usuario || emailUsuarioAtual;
+      aplicarRestricaoDaConta(r);
       if (!appBloqueado) entrarNoApp();
       return true;
     }
@@ -4204,6 +4417,10 @@ let aprovacoesPreCarregadas = false;  // já buscamos as aprovações em 2º pla
 
 // ---------- Troca de aba ----------
 function trocarAba(nome) {
+  // No modo "só trabalho" não existe outro destino: qualquer caminho que
+  // tentasse levar ao Smartbalanço (atalho, widget, deep link) cai aqui.
+  if (soTrabalho() && nome !== "trabalho") nome = "trabalho";
+
   abaAtiva = nome;
 
   document.getElementById("conteudo-dash").style.display  = (nome === "dashboard")  ? "block" : "none";
@@ -4228,6 +4445,7 @@ function trocarAba(nome) {
   document.getElementById("btn-nova-despesa").style.display = noDash ? "flex" : "none";
   document.getElementById("btn-chat-ia").style.display = noDash ? "flex" : "none";
   document.getElementById("btn-nova-tarefa").style.display = (nome === "tarefas") ? "flex" : "none";
+  document.getElementById("btn-chat-trabalho").style.display = (nome === "trabalho") ? "flex" : "none";
 
   // Botão voltar (no chat e na busca)
   document.getElementById("btn-voltar").style.display =
