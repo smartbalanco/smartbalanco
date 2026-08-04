@@ -513,6 +513,34 @@
     #conteudo-trabalho { display: none; padding: 16px; max-width: 1100px; margin: 0 auto; }
     #conteudo-trabalho .nav-mes { margin-bottom: 14px; }
 
+    /* No computador: o trabalho no centro, a IA e os avisos na lateral.
+       No celular tudo empilha, e a lateral desce para o fim — primeiro o
+       que se faz, depois o que se lê. */
+    .trab-layout { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    .trab-lateral { display: flex; flex-direction: column; gap: 14px; }
+    @media (min-width: 1100px) {
+      .trab-layout { grid-template-columns: minmax(0, 2.1fr) minmax(300px, 1fr); align-items: start; }
+      /* A lateral acompanha a rolagem: com 20 condomínios na lista, o
+         conselho do dia sumiria de vista logo no começo. */
+      .trab-lateral { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+    }
+
+    /* Placar: os números que respondem "como estou?" antes de rolar nada. */
+    #trab-placar {
+      display: grid; gap: 10px; margin-bottom: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    }
+    .placar-item {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 14px; padding: 12px 14px;
+    }
+    .placar-num { font-size: 22px; font-weight: 800; line-height: 1.1; }
+    .placar-rot { font-size: 11px; color: var(--cinza-texto); margin-top: 3px; }
+    .placar-item.alerta .placar-num { color: var(--vermelho); }
+    .placar-item.atencao .placar-num { color: #b45309; }
+    .placar-item.bom .placar-num { color: var(--verde); }
+    .placar-item.neutro .placar-num { color: var(--azul); }
+
     /* As duas frentes lado a lado só quando há largura. No celular vira
        uma coluna por vez, escolhida no segmented acima. */
     .trab-colunas { display: grid; grid-template-columns: 1fr; gap: 14px; }
@@ -2558,68 +2586,76 @@
         <button class="tf-btn" onclick="abrirConfigTrabalho()" title="Configurações">&#9881;</button>
       </div>
 
-      <!-- CONSELHO DO DIA -->
-      <div class="card">
-        <div class="card-topo">
-          <h2>🧠 Conselho do dia</h2>
-          <button class="btn-ver-tudo" id="trab-btn-encolher" onclick="alternarConselho()">Encolher</button>
-          <button class="btn-ver-tudo" onclick="atualizarConselho()">Atualizar</button>
-        </div>
-        <div id="trab-conselho"><p class="vazio">Carregando...</p></div>
+      <!-- PLACAR: o que precisa saber de relance -->
+      <div id="trab-placar"></div>
 
-        <div class="busca-campo" style="margin-top:12px;">
-          <input type="text" id="trab-pergunta"
-                 placeholder="Pergunte ou conte um imprevisto..."
-                 onkeydown="if(event.key==='Enter') perguntarIA()" />
-          <button class="tf-btn" onclick="perguntarIA()" title="Perguntar">➤</button>
-        </div>
-        <label class="trab-lembrar">
-          <input type="checkbox" id="trab-lembrar" />
-          Guardar na memória dela
-        </label>
-        <div id="trab-resposta"></div>
-      </div>
+      <div class="trab-layout">
+        <!-- ---------- O TRABALHO ---------- -->
+        <div class="trab-principal">
+          <div class="busca-modos" id="trab-frentes-abas">
+            <button id="trab-frente-contas" class="ativo" onclick="trocarFrente('contas')">
+              💸 Contas a pagar
+            </button>
+            <button id="trab-frente-balancete" onclick="trocarFrente('balancete')">
+              📗 Balancetes
+            </button>
+          </div>
 
-      <!-- MEMÓRIA -->
-      <div class="card">
-        <div class="card-topo">
-          <h2>📌 Na memória dela</h2>
-          <button class="btn-ver-tudo" onclick="anotarNaMemoria()">+ Anotar</button>
+          <div class="trab-colunas">
+            <div class="trab-coluna" id="trab-coluna-contas">
+              <h3 class="trab-coluna-titulo">💸 Contas a pagar</h3>
+              <div id="trab-lista-contas"></div>
+            </div>
+            <div class="trab-coluna" id="trab-coluna-balancete">
+              <h3 class="trab-coluna-titulo">📗 Balancetes</h3>
+              <div id="trab-lista-balancete"></div>
+            </div>
+          </div>
         </div>
-        <div id="trab-memoria"></div>
-      </div>
 
-      <!-- AS DUAS FRENTES -->
-      <div class="busca-modos" id="trab-frentes-abas">
-        <button id="trab-frente-contas" class="ativo" onclick="trocarFrente('contas')">
-          💸 Contas a pagar
-        </button>
-        <button id="trab-frente-balancete" onclick="trocarFrente('balancete')">
-          📗 Balancetes
-        </button>
-      </div>
+        <!-- ---------- A IA E OS AVISOS ---------- -->
+        <aside class="trab-lateral">
+          <div class="card">
+            <div class="card-topo">
+              <h2>🧠 Conselho do dia</h2>
+              <button class="btn-ver-tudo" id="trab-btn-encolher" onclick="alternarConselho()">Encolher</button>
+              <button class="btn-ver-tudo" onclick="atualizarConselho()">Atualizar</button>
+            </div>
+            <div id="trab-conselho"><p class="vazio">Carregando...</p></div>
 
-      <div class="trab-colunas">
-        <div class="trab-coluna" id="trab-coluna-contas">
-          <h3 class="trab-coluna-titulo">💸 Contas a pagar</h3>
-          <div id="trab-lista-contas"></div>
-        </div>
-        <div class="trab-coluna" id="trab-coluna-balancete">
-          <h3 class="trab-coluna-titulo">📗 Balancetes</h3>
-          <div id="trab-lista-balancete"></div>
-        </div>
-      </div>
+            <div class="busca-campo" style="margin-top:12px;">
+              <input type="text" id="trab-pergunta"
+                     placeholder="Pergunte ou conte um imprevisto..."
+                     onkeydown="if(event.key==='Enter') perguntarIA()" />
+              <button class="tf-btn" onclick="perguntarIA()" title="Perguntar">➤</button>
+            </div>
+            <label class="trab-lembrar">
+              <input type="checkbox" id="trab-lembrar" />
+              Guardar na memória dela
+            </label>
+            <div id="trab-resposta"></div>
+          </div>
 
-      <div class="card" id="trab-rodape">
-        <div class="card-topo">
-          <h2>Resumo</h2>
-          <button class="btn-ver-tudo" onclick="abrirCondominio()">+ Condomínio</button>
-        </div>
-        <div id="trab-resumo"></div>
-        <div class="cfg-aviso">
-          Os conselhos da IA são apoio, não parecer contábil. Confira a
-          legislação vigente e a convenção de cada condomínio.
-        </div>
+          <div class="card">
+            <div class="card-topo">
+              <h2>📌 Na memória dela</h2>
+              <button class="btn-ver-tudo" onclick="anotarNaMemoria()">+ Anotar</button>
+            </div>
+            <div id="trab-memoria"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-topo">
+              <h2>Condomínios</h2>
+              <button class="btn-ver-tudo" onclick="abrirCondominio()">+ Novo</button>
+            </div>
+            <div id="trab-resumo"></div>
+            <div class="cfg-aviso">
+              Os conselhos da IA são apoio, não parecer contábil. Confira a
+              legislação vigente e a convenção de cada condomínio.
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
 
@@ -3006,6 +3042,28 @@
         </div>
 
         <div id="ct-lista"></div>
+
+        <div class="card-topo" style="margin-top:20px;">
+          <h3 style="font-size:13px;">Abrir competências em lote</h3>
+        </div>
+        <div class="cfg-aviso">
+          Abre o mês para todos os condomínios ativos de uma vez. Quem já
+          estiver aberto é ignorado.
+        </div>
+        <div class="linha-dupla">
+          <div class="campo-bloco">
+            <label for="ct-de">De</label>
+            <input type="month" id="ct-de" value="2026-01" />
+          </div>
+          <div class="campo-bloco">
+            <label for="ct-ate">Até</label>
+            <input type="month" id="ct-ate" />
+          </div>
+        </div>
+        <button class="btn-modal confirmar" style="width:100%;" onclick="abrirPeriodoTrabalho()">
+          Abrir competências
+        </button>
+        <div class="cfg-aviso" id="ct-aviso-periodo"></div>
 
         <div class="card-topo" style="margin-top:20px;">
           <h3 style="font-size:13px;">Manutenção</h3>
@@ -3998,7 +4056,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=46"></script>
+  <script src="app.js?v=47"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

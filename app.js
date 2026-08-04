@@ -1069,6 +1069,12 @@ function trocarFrente(qual) {
   aplicarFrenteVisivel();
 }
 
+// Girar o celular ou redimensionar a janela muda de qual lado o CSS manda:
+// sem reavaliar, as duas colunas ficam visíveis onde só cabe uma.
+window.addEventListener("resize", function () {
+  if (abaAtiva === "trabalho") aplicarFrenteVisivel();
+});
+
 // Em telas largas o CSS manda (as duas colunas aparecem). Aqui só se resolve
 // o caso do celular, onde uma some.
 function aplicarFrenteVisivel() {
@@ -1151,17 +1157,76 @@ function renderizarTrabalho() {
     });
   }
 
-  const prontos = d.itens.filter(function (i) { return i.total > 0 && i.feitas === i.total; }).length;
-  document.getElementById("trab-resumo").innerHTML =
-    '<div class="status-desp">' +
-      '<div><div class="lbl">Concluídos</div><div class="val paga">' +
-        prontos + " de " + d.itens.length + '</div></div>' +
-      '<div><div class="lbl">Retido no mês</div><div class="val pend">' +
-        formatarMoeda(d.totalRetido || 0) + '</div></div>' +
-    '</div>';
-
+  renderizarPlacar();
+  renderizarPrecisaAtencao();
   renderizarConselho();
   renderizarMemoria();
+}
+
+// O que responde "como estou?" antes de rolar a tela. Números, não listas:
+// com 20 condomínios, a lista só faz sentido depois de saber onde olhar.
+function renderizarPlacar() {
+  const d = trabDados;
+  const el = document.getElementById("trab-placar");
+  if (!d || !d.itens.length) { el.innerHTML = ""; return; }
+
+  const prontos = d.itens.filter(function (i) { return i.total > 0 && i.feitas === i.total; }).length;
+  const atrasados = d.itens.filter(function (i) {
+    return i.prazo && (i.prazo.nivel === "estourado" || i.prazo.nivel === "critico");
+  }).length;
+  const comDoc = d.itens.filter(function (i) { return !!i.situacao; }).length;
+
+  // Quantas etapas faltam no total: mede o tamanho do que resta, que "13 de
+  // 20 condomínios" sozinho não mostra.
+  let faltam = 0;
+  d.itens.forEach(function (i) { faltam += (i.total - i.feitas); });
+
+  function bloco(classe, num, rot) {
+    return '<div class="placar-item ' + classe + '">' +
+             '<div class="placar-num">' + num + '</div>' +
+             '<div class="placar-rot">' + rot + '</div>' +
+           '</div>';
+  }
+
+  el.innerHTML =
+    bloco(prontos === d.itens.length ? "bom" : "neutro",
+          prontos + " / " + d.itens.length, "Condomínios concluídos") +
+    bloco(atrasados ? "alerta" : "bom", atrasados, "Com prazo apertado") +
+    bloco(comDoc ? "atencao" : "bom", comDoc, "Com documentação pendente") +
+    bloco("neutro", faltam, "Etapas a fazer") +
+    bloco("neutro", formatarMoeda(d.totalRetido || 0), "Retido na competência");
+}
+
+// Na lateral, só quem precisa de você — o resto já está na lista principal.
+function renderizarPrecisaAtencao() {
+  const d = trabDados;
+  const el = document.getElementById("trab-resumo");
+  if (!d) { el.innerHTML = ""; return; }
+
+  const urgentes = d.itens.filter(function (i) {
+    return (i.prazo && (i.prazo.nivel === "estourado" || i.prazo.nivel === "critico")) || i.situacao;
+  }).slice(0, 8);
+
+  if (!urgentes.length) {
+    el.innerHTML = '<p class="vazio">' +
+      (d.itens.length ? "Nada apertado agora." : d.condominios.length + " cadastrado(s).") +
+      '</p>';
+    return;
+  }
+
+  el.innerHTML = urgentes.map(function (i) {
+    const motivos = [];
+    if (i.prazo && i.prazo.nivel === "estourado") motivos.push("prazo vencido");
+    else if (i.prazo && i.prazo.nivel === "critico") motivos.push(i.prazo.diasRestantes + "d p/ o prazo");
+    if (i.situacao) motivos.push("documentação");
+
+    return '<div class="trab-mem" style="cursor:pointer" onclick="abrirProcesso(\'' + i.idProcesso + '\')">' +
+             '<div style="flex:1;">' +
+               '<div style="font-size:12px;font-weight:600;">' + escaparHtml(i.nome) + '</div>' +
+               '<div class="trab-mem-data">' + escaparHtml(motivos.join(" · ")) + '</div>' +
+             '</div>' +
+           '</div>';
+  }).join("");
 }
 
 function cardCondominio(it, frente) {
@@ -1639,7 +1704,33 @@ async function fixarNaMemoria(tipo) {
 function abrirConfigTrabalho() {
   document.getElementById("modal-config-trabalho").style.display = "flex";
   document.getElementById("ct-busca").value = "";
+  document.getElementById("ct-aviso-periodo").textContent = "";
+  // "Até" nasce na competência da tela, que é a que se está trabalhando.
+  document.getElementById("ct-ate").value = trabComp;
   renderizarListaCondominios();
+}
+
+// Abrir mês a mês seria sete toques para montar o histórico do ano.
+async function abrirPeriodoTrabalho() {
+  const aviso = document.getElementById("ct-aviso-periodo");
+  const de = document.getElementById("ct-de").value;
+  const ate = document.getElementById("ct-ate").value;
+
+  if (!de || !ate) { aviso.textContent = "Preencha as duas competências."; return; }
+  if (de > ate) { aviso.textContent = "A primeira competência é posterior à última."; return; }
+
+  aviso.textContent = "Abrindo... isso pode levar alguns segundos.";
+
+  try {
+    const r = await chamarServidor("trabalhoAbrirPeriodo", { de: de, ate: ate });
+    aviso.textContent = r.mensagem || (r.ok ? "Pronto." : "Não consegui.");
+    if (r.ok) {
+      mostrarToast("✅ " + r.mensagem);
+      await carregarTrabalho();
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão.";
+  }
 }
 
 function fecharConfigTrabalho() {
