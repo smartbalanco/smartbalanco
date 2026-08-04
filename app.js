@@ -2933,6 +2933,11 @@ async function entrarNoApp() {
 }
 
 async function executarEntradaNoApp() {
+  // No computador, a entrada é a escolha do módulo — não o Smartbalanço.
+  // Numa tela grande dá para ver os quatro de uma vez; no celular isso seria
+  // um toque a mais toda vez, e lá o menu do topo já resolve.
+  if (abrirHubSeCouber()) return;
+
   // 1. Se houver cache deste mês, mostra IMEDIATAMENTE (sem esperar o servidor)
   const cache = lerCache(mesExibido, anoExibido);
   if (cache) {
@@ -3582,6 +3587,69 @@ function mostrarTelaInterna() {
 }
 
 // ============================================================================
+// MENU DE MÓDULOS (o "hub")
+// ----------------------------------------------------------------------------
+// Tela inicial no computador: os quatro Smarts lado a lado. O que a conta não
+// alcança aparece com cadeado em vez de sumir — saber que existe e está
+// fechado é informação; um menu que muda de tamanho conforme quem entra
+// confunde mais do que esconde.
+// ============================================================================
+const MODULOS = [
+  { id: "balanco",    icone: "💰", nome: "Smartbalanço",   desc: "Contas, cartões e relatórios" },
+  { id: "calendario", icone: "📅", nome: "Smartcalendário", desc: "Compromissos e vencimentos" },
+  { id: "tarefas",    icone: "✅", nome: "Smarttarefas",    desc: "Tarefas, lembretes e ideias" },
+  { id: "trabalho",   icone: "💼", nome: "Smarttrabalho",   desc: "Balancetes dos condomínios" }
+];
+
+function moduloLiberado(id) {
+  return soTrabalho() ? (id === "trabalho") : true;
+}
+
+// Só no computador: no celular o hub viraria um toque a mais em toda abertura.
+function abrirHubSeCouber() {
+  if (!window.matchMedia("(min-width: 900px)").matches) return false;
+  mostrarTelaInterna();
+  trocarAba("modulos");
+  return true;
+}
+
+function renderizarModulos() {
+  const alvo = document.getElementById("modulos-grid");
+  if (!alvo) return;
+
+  const restrita = soTrabalho();
+  document.getElementById("modulos-aviso").textContent = restrita
+    ? "Esta conta tem acesso apenas ao Smarttrabalho."
+    : "";
+
+  alvo.innerHTML = MODULOS.map(function (m) {
+    const livre = moduloLiberado(m.id);
+    return '<button class="modulo-card' + (livre ? "" : " trancado") + '" ' +
+             (livre ? 'onclick="abrirModulo(\'' + m.id + '\')"' : 'disabled') + '>' +
+             '<div class="modulo-icone">' + m.icone + '</div>' +
+             '<div class="modulo-nome">' + m.nome + '</div>' +
+             '<div class="modulo-desc">' + m.desc + '</div>' +
+             (livre ? '' : '<div class="modulo-cadeado">🔒 Sem acesso</div>') +
+           '</button>';
+  }).join("");
+}
+
+function abrirModulo(id) {
+  if (!moduloLiberado(id)) return;
+
+  if (id === "balanco") trocarAba("dashboard");
+  else if (id === "calendario") abrirCalendario();
+  else if (id === "tarefas") trocarAba("tarefas");
+  else if (id === "trabalho") abrirTrabalho();
+}
+
+function voltarAosModulos() {
+  const menu = document.getElementById("menu-produtos");
+  if (menu) menu.classList.remove("aberto");
+  trocarAba("modulos");
+}
+
+// ============================================================================
 // MODO "SÓ TRABALHO"
 // ----------------------------------------------------------------------------
 // Para o PC do escritório: abrindo com ?modo=trabalho, este navegador passa a
@@ -3637,10 +3705,15 @@ function aplicarModoSoTrabalho() {
     if (seta) seta.style.display = "none";
   }
 
+  // O menu do topo some, então o "‹" é o único caminho de volta ao hub — que
+  // nesta conta serve para ver o que existe e está trancado.
   const voltar = document.getElementById("btn-voltar");
-  if (voltar) voltar.style.display = "none";
+  if (voltar) {
+    voltar.onclick = voltarAosModulos;
+    voltar.style.display = (abaAtiva === "trabalho") ? "inline-block" : "none";
+  }
 
-  if (abaAtiva !== "trabalho") abrirTrabalho();
+  if (abaAtiva !== "trabalho" && abaAtiva !== "modulos") abrirTrabalho();
 }
 
 async function sair() {
@@ -4419,7 +4492,9 @@ let aprovacoesPreCarregadas = false;  // já buscamos as aprovações em 2º pla
 function trocarAba(nome) {
   // No modo "só trabalho" não existe outro destino: qualquer caminho que
   // tentasse levar ao Smartbalanço (atalho, widget, deep link) cai aqui.
-  if (soTrabalho() && nome !== "trabalho") nome = "trabalho";
+  // O hub é exceção — lá os outros módulos aparecem trancados, e é assim
+  // que se vê que existem.
+  if (soTrabalho() && nome !== "trabalho" && nome !== "modulos") nome = "trabalho";
 
   abaAtiva = nome;
 
@@ -4431,10 +4506,11 @@ function trocarAba(nome) {
   document.getElementById("conteudo-calendario").style.display = (nome === "calendario") ? "block" : "none";
   document.getElementById("conteudo-tarefas").style.display = (nome === "tarefas") ? "block" : "none";
   document.getElementById("conteudo-trabalho").style.display = (nome === "trabalho") ? "block" : "none";
+  document.getElementById("conteudo-modulos").style.display = (nome === "modulos") ? "block" : "none";
   document.getElementById("nav-mes-wrap").style.display   = (nome === "dashboard")  ? "flex"  : "none";
   document.getElementById("abas-principais").style.display =
     (nome === "chat" || nome === "busca" || nome === "calendario" ||
-     nome === "tarefas" || nome === "trabalho") ? "none" : "flex";
+     nome === "tarefas" || nome === "trabalho" || nome === "modulos") ? "none" : "flex";
 
   document.getElementById("tab-dashboard").classList.toggle("ativa", nome === "dashboard");
   document.getElementById("tab-aprovacoes").classList.toggle("ativa", nome === "aprovacoes");
@@ -4452,6 +4528,8 @@ function trocarAba(nome) {
     (nome === "chat" || nome === "busca" || nome === "calendario" ||
      nome === "tarefas" || nome === "trabalho") ? "inline-block" : "none";
 
+  if (soTrabalho()) aplicarModoSoTrabalho();
+
   // Título do topo
   // Só o texto muda: a seta do menu de produtos fica num span à parte, senão
   // seria apagada a cada troca de aba.
@@ -4461,6 +4539,7 @@ function trocarAba(nome) {
   else if (nome === "calendario") titulo.textContent = "Smartcalendário";
   else if (nome === "tarefas") titulo.textContent = "Smarttarefas";
   else if (nome === "trabalho") titulo.textContent = "Smarttrabalho";
+  else if (nome === "modulos") titulo.textContent = "Módulos";
   else titulo.textContent = "Smartbalanço";
 
   if (nome === "aprovacoes") carregarAprovacoes(false);
@@ -4468,6 +4547,7 @@ function trocarAba(nome) {
   if (nome === "chat") abrirChat();
   if (nome === "busca") abrirBusca();
   if (nome === "tarefas") carregarTarefas();
+  if (nome === "modulos") renderizarModulos();
 }
 
 // ---------- Carrega a lista ----------

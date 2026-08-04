@@ -1,7 +1,7 @@
 {
-  "name": "Smartbalanço",
-  "short_name": "Smartbalanço",
-  "description": "Gestão financeira pessoal Smartbalanço",
+  "name": "Smartintegrado",
+  "short_name": "Smartintegrado",
+  "description": "Finanças, agenda, tarefas e trabalho num lugar só",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

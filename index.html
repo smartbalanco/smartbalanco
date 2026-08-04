@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Smartbalanço</title>
+  <title>Smartintegrado</title>
 
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#1a3a5c" />
@@ -61,7 +61,16 @@
     }
     #tela-login img.logo { width: 130px; height: 130px; margin-bottom: 8px; }
     #tela-login h1 { font-size: 26px; color: var(--azul); font-weight: 700; margin-bottom: 4px; }
-    #tela-login p.sub { color: var(--cinza-texto); font-size: 14px; margin-bottom: 36px; }
+    #tela-login p.sub { color: var(--cinza-texto); font-size: 14px; margin-bottom: 22px; }
+    .login-modulos {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+      margin-bottom: 32px; max-width: 340px; margin-left: auto; margin-right: auto;
+    }
+    .login-modulos span {
+      font-size: 11px; font-weight: 600; color: var(--cinza-texto);
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 20px; padding: 7px 13px; white-space: nowrap;
+    }
     #botao-google { display: flex; justify-content: center; margin-bottom: 16px; }
     #login-erro {
       display: none; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
@@ -465,6 +474,40 @@
       font-size: 13px; cursor: pointer; color: var(--cinza-texto);
     }
     .tf-btn:active { box-shadow: var(--afundado-leve); }
+
+    /* ---- MENU DE MÓDULOS ---- */
+    #conteudo-modulos { display: none; padding: 40px 20px; max-width: 900px; margin: 0 auto; }
+    .modulos-topo { text-align: center; margin-bottom: 26px; }
+    .modulos-topo h2 { font-size: 20px; margin-bottom: 6px; }
+    .modulos-topo p { font-size: 13px; color: var(--cinza-texto); }
+
+    #modulos-grid {
+      display: grid; gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    }
+    .modulo-card {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-alto);
+      border: none; border-radius: 18px; padding: 26px 18px;
+      cursor: pointer; font-family: inherit; text-align: center;
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      transition: transform 0.12s;
+    }
+    .modulo-card:hover { transform: translateY(-3px); }
+    .modulo-card:active { box-shadow: var(--afundado); transform: none; }
+    .modulo-icone { font-size: 34px; }
+    .modulo-nome { font-size: 15px; font-weight: 700; color: var(--azul); }
+    .modulo-desc { font-size: 11px; color: var(--cinza-texto); line-height: 1.35; }
+
+    /* Trancado continua visível: some o relevo, o conteúdo desbota e o
+       cadeado explica. Esconder o card faria parecer que o módulo não existe. */
+    .modulo-card.trancado {
+      cursor: not-allowed; box-shadow: var(--afundado-leve); opacity: 0.55;
+    }
+    .modulo-card.trancado:hover { transform: none; }
+    .modulo-cadeado {
+      margin-top: 6px; font-size: 10px; font-weight: 700;
+      color: var(--cinza-texto); letter-spacing: 0.3px;
+    }
 
     /* ---- SMARTTRABALHO ---- */
     #conteudo-trabalho { display: none; padding: 16px; max-width: 1100px; margin: 0 auto; }
@@ -2228,9 +2271,19 @@
   </div>
 
   <div id="tela-login">
-    <img src="icon-512.png" class="logo" alt="Smartbalanço" />
-    <h1>Smartbalanço</h1>
-    <p class="sub">Gestão financeira pessoal</p>
+    <img src="icon-512.png" class="logo" alt="Smartintegrado" />
+    <h1>Smartintegrado</h1>
+    <p class="sub">Finanças, agenda e trabalho num lugar só</p>
+
+    <!-- Os quatro módulos já na entrada: o app deixou de ser só finanças, e a
+         tela de login era a última que ainda dizia o contrário. -->
+    <div class="login-modulos">
+      <span>💰 Balanço</span>
+      <span>📅 Calendário</span>
+      <span>✅ Tarefas</span>
+      <span>💼 Trabalho</span>
+    </div>
+
     <div id="botao-google"></div>
     <div id="login-erro"></div>
 
@@ -2246,7 +2299,7 @@
       </div>
     </div>
 
-    <div class="rodape-login">Acesso restrito &middot; Smartbalanço 2.0</div>
+    <div class="rodape-login">Acesso restrito &middot; Smartintegrado</div>
   </div>
 
 
@@ -2288,7 +2341,7 @@
 
   <!-- ============ TELA: BLOQUEIO (ao voltar) ============ -->
   <div id="tela-bloqueio">
-    <img src="icon-192.png" class="bl-logo" alt="Smartbalanço" />
+    <img src="icon-192.png" class="bl-logo" alt="Smartintegrado" />
     <h2>Smartbalanço</h2>
     <p class="bl-sub">Desbloqueie para continuar</p>
 
@@ -2318,6 +2371,7 @@
             <span id="titulo-texto">Smartbalanço</span><span class="seta-produtos">▾</span>
           </button>
           <div id="menu-produtos">
+            <button onclick="voltarAosModulos()">🧭 Módulos</button>
             <button onclick="irParaProduto('balanco')">💰 Smartbalanço</button>
             <button onclick="irParaProduto('calendario')">📅 Smartcalendário</button>
             <button onclick="irParaProduto('tarefas')">✅ Smarttarefas</button>
@@ -2482,6 +2536,15 @@
         </div>
         <div id="tf-lista"></div>
       </div>
+    </div>
+
+    <!-- ============ MENU DE MÓDULOS ============ -->
+    <div id="conteudo-modulos">
+      <div class="modulos-topo">
+        <h2>Escolha o módulo</h2>
+        <p id="modulos-aviso"></p>
+      </div>
+      <div id="modulos-grid"></div>
     </div>
 
     <!-- ============ SMARTTRABALHO ============ -->
@@ -3935,7 +3998,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=44"></script>
+  <script src="app.js?v=46"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
