@@ -1816,10 +1816,12 @@ function pintarProposta(p) {
   };
 
   const bConfirmar = document.createElement("button");
-  bConfirmar.className = "principal";
-  bConfirmar.textContent = "Confirmar";
+  // Remover e substituir apagam: o botão avisa antes de ser tocado.
+  const destrutiva = (p.modo === "remover" || p.modo === "substituir");
+  bConfirmar.className = destrutiva ? "principal perigo" : "principal";
+  bConfirmar.textContent = destrutiva ? "Confirmar e apagar" : "Confirmar";
   bConfirmar.onclick = async function () {
-    const dados = { tipo: p.tipo, competenciaTela: trabComp };
+    const dados = { tipo: p.tipo, modo: p.modo || "", competenciaTela: trabComp };
     campos.querySelectorAll("input").forEach(function (i) { dados[i.dataset.chave] = i.value.trim(); });
 
     if (!dados.texto) { resumo.textContent = "⚠ A anotação não pode ficar vazia."; return; }
