@@ -1742,14 +1742,11 @@ async function enviarChatTrabalho() {
       pensando.textContent = r.resposta;
       chtHistorico.push({ de: "ia", texto: r.resposta });
 
-      // O que ela GRAVOU aparece separado da conversa: você precisa ver o que
-      // foi parar na planilha sem ter que reler a resposta inteira.
-      if (r.feitos && r.feitos.length) {
-        r.feitos.forEach(function (f) {
-          const m = pintarMensagemChat(f.tipo === "erro" ? "erro" : "feito", f.descricao);
-          if (f.tipo !== "erro") m.classList.add("cht-feito");
-        });
-        await carregarTrabalho();
+      // Ela propõe, você decide: cada ação vira um cartão com o que vai
+      // acontecer e três saídas — editar, confirmar ou cancelar. Nada foi
+      // gravado até você tocar em Confirmar.
+      if (r.propostas && r.propostas.length) {
+        r.propostas.forEach(function (p) { pintarProposta(p); });
       }
     } else {
       pensando.className = "cht-msg erro";
@@ -1762,6 +1759,116 @@ async function enviarChatTrabalho() {
     btn.disabled = false;
     campo.focus();
   }
+}
+
+// ============================================================================
+// PROPOSTA DA IA: EDITAR · CONFIRMAR · CANCELAR
+// ----------------------------------------------------------------------------
+// Nada que a IA sugere é gravado antes de você confirmar. O cartão diz por
+// extenso o que vai acontecer, e "Editar" abre os campos — porque o erro dela
+// costuma ser o condomínio ou o mês, não o texto da anotação.
+// ============================================================================
+function pintarProposta(p) {
+  const caixa = document.getElementById("cht-mensagens");
+  const div = document.createElement("div");
+  div.className = "cht-proposta" + (p.pronta ? "" : " incompleta");
+
+  const resumo = document.createElement("div");
+  resumo.className = "cht-prop-resumo";
+  resumo.textContent = (p.pronta ? "Vou fazer isto: " : "⚠ ") + p.resumo;
+  div.appendChild(resumo);
+
+  // Campos de edição, escondidos até você pedir
+  const campos = document.createElement("div");
+  campos.className = "cht-prop-campos";
+  campos.style.display = p.pronta ? "none" : "block";
+
+  function campo(rotulo, valor, chave) {
+    const bloco = document.createElement("div");
+    bloco.className = "campo-bloco";
+    const lab = document.createElement("label");
+    lab.textContent = rotulo;
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.value = valor || "";
+    inp.dataset.chave = chave;
+    bloco.appendChild(lab);
+    bloco.appendChild(inp);
+    campos.appendChild(bloco);
+  }
+
+  campo("Anotação", p.texto, "texto");
+  if (p.tipo === "pendencia") {
+    campo("Condomínio", p.condominio, "condominio");
+    campo("Competência (aaaa-mm)", p.competencia, "competencia");
+  }
+  div.appendChild(campos);
+
+  const acoes = document.createElement("div");
+  acoes.className = "cht-prop-acoes";
+
+  const bEditar = document.createElement("button");
+  bEditar.textContent = "Editar";
+  bEditar.onclick = function () {
+    const aberto = campos.style.display !== "none";
+    campos.style.display = aberto ? "none" : "block";
+    bEditar.textContent = aberto ? "Editar" : "Ocultar";
+  };
+
+  const bConfirmar = document.createElement("button");
+  bConfirmar.className = "principal";
+  bConfirmar.textContent = "Confirmar";
+  bConfirmar.onclick = async function () {
+    const dados = { tipo: p.tipo, competenciaTela: trabComp };
+    campos.querySelectorAll("input").forEach(function (i) { dados[i.dataset.chave] = i.value.trim(); });
+
+    if (!dados.texto) { resumo.textContent = "⚠ A anotação não pode ficar vazia."; return; }
+
+    bConfirmar.disabled = true;
+    bConfirmar.textContent = "Gravando...";
+
+    try {
+      const r = await chamarServidor("trabalhoAplicarAcao", dados);
+      if (r.ok) {
+        div.className = "cht-proposta feita";
+        div.innerHTML = "";
+        const ok = document.createElement("div");
+        ok.className = "cht-prop-resumo";
+        ok.textContent = "✅ " + r.mensagem;
+        div.appendChild(ok);
+        await carregarTrabalho();
+      } else {
+        resumo.textContent = "⚠ " + (r.mensagem || "Não consegui gravar.");
+        campos.style.display = "block";
+        bEditar.textContent = "Ocultar";
+        bConfirmar.disabled = false;
+        bConfirmar.textContent = "Confirmar";
+      }
+    } catch (e) {
+      resumo.textContent = "⚠ Sem conexão. Nada foi gravado.";
+      bConfirmar.disabled = false;
+      bConfirmar.textContent = "Confirmar";
+    }
+  };
+
+  const bCancelar = document.createElement("button");
+  bCancelar.textContent = "Cancelar";
+  bCancelar.onclick = function () {
+    div.className = "cht-proposta cancelada";
+    div.innerHTML = "";
+    const x = document.createElement("div");
+    x.className = "cht-prop-resumo";
+    x.textContent = "Cancelado — nada foi gravado.";
+    div.appendChild(x);
+  };
+
+  acoes.appendChild(bEditar);
+  acoes.appendChild(bCancelar);
+  acoes.appendChild(bConfirmar);
+  div.appendChild(acoes);
+
+  caixa.appendChild(div);
+  caixa.scrollTop = caixa.scrollHeight;
 }
 
 // Fixa o que está escrito no campo — ou, se estiver vazio, a última coisa que

@@ -700,6 +700,32 @@
       border-left: 3px solid var(--verde); border-radius: 8px;
       font-size: 12px; font-weight: 600;
     }
+    /* Proposta da IA: larga e destacada, porque exige uma decisão sua */
+    .cht-proposta {
+      background: #fff8e6; border: 1px solid #f5d78e; border-radius: 12px;
+      padding: 12px; margin-bottom: 12px; font-size: 12px; line-height: 1.5;
+    }
+    .cht-proposta.incompleta { background: #fdeaea; border-color: #f3b0b0; }
+    .cht-proposta.feita { background: #dcfce7; border-color: #86e0aa; }
+    .cht-proposta.cancelada { background: var(--cinza-fundo); border-color: var(--borda); opacity: 0.7; }
+    .cht-prop-resumo { font-weight: 600; color: #7a5a12; }
+    .cht-proposta.incompleta .cht-prop-resumo { color: var(--vermelho); }
+    .cht-proposta.feita .cht-prop-resumo { color: #14532d; }
+    .cht-proposta.cancelada .cht-prop-resumo { color: var(--cinza-texto); font-weight: 500; }
+    .cht-prop-campos { margin-top: 10px; }
+    .cht-prop-campos .campo-bloco { margin-bottom: 8px; }
+    .cht-prop-campos label { font-size: 11px; }
+    .cht-prop-campos input { font-size: 13px; padding: 8px 10px; }
+    .cht-prop-acoes { display: flex; gap: 8px; margin-top: 10px; }
+    .cht-prop-acoes button {
+      flex: 1; padding: 9px; border: none; border-radius: 9px; cursor: pointer;
+      font-family: inherit; font-size: 12px; font-weight: 700;
+      background: rgba(0,0,0,0.06); color: #5b4a1f;
+    }
+    /* Confirmar é o único colorido: as outras duas saídas não gravam nada. */
+    .cht-prop-acoes button.principal { background: var(--verde); color: #fff; }
+    .cht-prop-acoes button:disabled { opacity: 0.6; cursor: default; }
+
     .cht-rodape { padding: 0 18px 18px; border-top: 1px solid var(--borda); padding-top: 12px; }
     .cht-acoes { display: flex; gap: 8px; }
     .cht-acoes button {
@@ -4080,7 +4106,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=49"></script>
+  <script src="app.js?v=50"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
