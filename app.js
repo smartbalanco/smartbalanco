@@ -212,41 +212,140 @@ function alternarItensFatura(idLista, botao) {
   }
 }
 
-async function liquidarFaturaNaTela(indice) {
+// A fatura liquidava direto num confirm(), sem lugar para o comprovante — que
+// é justamente o documento mais importante do mês. Agora abre uma gaveta com
+// a data do pagamento e o anexo, como na liquidação de uma despesa avulsa.
+let faturaLiquidando = null;
+
+function liquidarFaturaNaTela(indice) {
   const f = faturasNaTela[indice];
   if (!f) return;
 
-  // Vindo do widget ou do calendário, valor e quantidade podem não ser
-  // conhecidos — nesse caso o texto não inventa números.
+  faturaLiquidando = f;
+
   let detalhe;
-  if (f.qtd > 0) detalhe = formatarMoeda(f.valor) + " em " + f.qtd + " compra(s).";
-  else if (f.valor > 0) detalhe = formatarMoeda(f.valor) + ".";
-  else detalhe = "Todas as compras em aberto dessa fatura.";
+  if (f.qtd > 0) detalhe = formatarMoeda(f.valor) + " em " + f.qtd + " compra(s)";
+  else if (f.valor > 0) detalhe = formatarMoeda(f.valor);
+  else detalhe = "Todas as compras em aberto dessa fatura";
 
-  const confirmou = confirm(
-    "Liquidar a " + f.descricao + "?\n\n" + detalhe + "\n\n" +
-    "Todas ficarão com a data de pagamento de hoje."
-  );
-  if (!confirmou) return;
+  document.getElementById("modal-fatura").style.display = "flex";
+  document.getElementById("lf-titulo").textContent = f.descricao;
+  document.getElementById("lf-detalhe").textContent =
+    detalhe + (f.vencimento ? " · vence " + formatarDataBR(f.vencimento) : "");
+  document.getElementById("lf-datapgto").value = dataHojeISO();
+  document.getElementById("lf-aviso").textContent = "";
 
-  mostrarToast("⏳ Liquidando " + f.descricao + "...", true);
+  limparComprovanteFatura();
+}
+
+function formatarDataBR(iso) {
+  const p = (iso || "").split("-");
+  return p.length === 3 ? p[2] + "/" + p[1] + "/" + p[0] : iso;
+}
+
+function fecharLiquidarFatura() {
+  document.getElementById("modal-fatura").style.display = "none";
+  faturaLiquidando = null;
+  limparComprovanteFatura();
+}
+
+function limparComprovanteFatura() {
+  comprovanteFatura = null;
+  const el = document.getElementById("lf-comprovante-nome");
+  if (el) el.textContent = "";
+  const inp = document.getElementById("lf-arquivo");
+  if (inp) inp.value = "";
+}
+
+let comprovanteFatura = null;
+
+function escolherComprovanteFatura(input) {
+  const arq = input.files && input.files[0];
+  if (!arq) return;
+
+  // 6 MB é o teto do que o Apps Script aceita por requisição.
+  if (arq.size > 6 * 1024 * 1024) {
+    document.getElementById("lf-aviso").textContent = "Arquivo maior que 6 MB.";
+    input.value = "";
+    return;
+  }
+
+  const leitor = new FileReader();
+  leitor.onload = function () {
+    comprovanteFatura = {
+      nome: arq.name,
+      mime: arq.type || "application/octet-stream",
+      base64: String(leitor.result).split(",")[1] || ""
+    };
+    document.getElementById("lf-comprovante-nome").textContent = "📎 " + arq.name;
+    document.getElementById("lf-aviso").textContent = "";
+  };
+  leitor.readAsDataURL(arq);
+}
+
+async function confirmarLiquidarFatura() {
+  const f = faturaLiquidando;
+  if (!f) return;
+
+  const btn = document.getElementById("lf-btn-confirmar");
+  const dataPgto = document.getElementById("lf-datapgto").value;
+  if (!dataPgto) {
+    document.getElementById("lf-aviso").textContent = "Informe a data do pagamento.";
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Liquidando...";
 
   try {
     const r = await chamarServidor("liquidarFatura", {
       cartao: f.cartao,
       vencimento: f.vencimento,
-      dataPagamento: dataHojeISO()
+      dataPagamento: dataPgto
     });
 
-    if (r.ok) {
-      mostrarToast("✅ " + r.mensagem);
-      limparTodoCache();
-      await recarregarDados();
-    } else {
-      mostrarToast("❌ " + (r.mensagem || "Não foi possível liquidar."));
+    if (!r.ok) {
+      document.getElementById("lf-aviso").textContent = r.mensagem || "Não foi possível liquidar.";
+      btn.disabled = false;
+      btn.textContent = "Liquidar fatura";
+      return;
     }
+
+    // Guarda o anexo ANTES de fechar: fecharLiquidarFatura() limpa o
+    // comprovante, e sem isto ele era descartado sem aviso.
+    const anexo = comprovanteFatura;
+    const descricaoFatura = f.descricao;
+
+    fecharLiquidarFatura();
+    mostrarToast("✅ " + r.mensagem);
+    limparTodoCache();
+
+    // O comprovante vai DEPOIS da liquidação: se o arquivo falhar, a fatura
+    // já está liquidada e dá para anexar de novo — o contrário deixaria o
+    // documento guardado apontando para uma fatura ainda em aberto.
+    if (anexo) {
+      mostrarToast("⏳ Anexando o comprovante...", true);
+      try {
+        const a = await chamarServidorPost("arquivarDocumento", {
+          arquivoBase64: anexo.base64,
+          nomeArquivo: anexo.nome,
+          mimeType: anexo.mime,
+          descricao: "Comprovante " + descricaoFatura,
+          dataDocumento: dataPgto
+        });
+        mostrarToast(a.ok ? "✅ Comprovante anexado."
+                          : "⚠ Fatura liquidada, mas o comprovante não subiu.");
+      } catch (e) {
+        mostrarToast("⚠ Fatura liquidada, mas o comprovante não subiu.");
+      }
+    }
+
+    await recarregarDados();
+
   } catch (e) {
-    mostrarToast("❌ Sem conexão. Nada foi alterado.");
+    document.getElementById("lf-aviso").textContent = "Sem conexão. Nada foi alterado.";
+    btn.disabled = false;
+    btn.textContent = "Liquidar fatura";
   }
 }
 
@@ -7658,8 +7757,26 @@ async function sugerirDespesasParaVincular() {
       return;
     }
 
+    // As faturas vêm somadas por cartão + vencimento, como em "contas a
+    // vencer": o comprovante traz o total da fatura, não o de cada compra.
+    faturasSugeridas = r.sugestoes.filter(function (s) { return s.ehFatura; });
+
     let html = '<div class="cfg-aviso">Despesas em aberto com valor parecido:</div>';
     r.sugestoes.forEach(function (s) {
+      if (s.ehFatura) {
+        const idx = faturasSugeridas.indexOf(s);
+        html +=
+          '<button type="button" class="sug-item" onclick="escolherFaturaSugerida(' + idx + ')">' +
+            '<span class="sug-info">' +
+              '<b>💳 ' + escaparHtml(s.descricao) + '</b>' +
+              '<span class="sug-sub">vence ' + escaparHtml(s.vencimento) +
+                ' · ' + escaparHtml(s.parcela) + '</span>' +
+            '</span>' +
+            '<span class="sug-valor' + (s.exato ? " exato" : "") + '">' + formatarMoeda(s.valor) + '</span>' +
+          '</button>';
+        return;
+      }
+
       const detalhe = [s.vencimento ? "vence " + s.vencimento : "", s.metodo, s.parcela]
         .filter(function (x) { return x; }).join(" · ");
 
@@ -7682,6 +7799,39 @@ async function sugerirDespesasParaVincular() {
 function escolherSugestao(numMov) {
   document.getElementById("dr-nummov").value = numMov;
   buscarDespesaPorMov();   // já mostra a despesa e a opção de atualizar o valor
+}
+
+// Fatura escolhida a partir do comprovante. Guardada aqui porque ela não tem
+// Nº Mov — o que a identifica é o par cartão + vencimento.
+let faturasSugeridas = [];
+let faturaEscolhida = null;
+
+function escolherFaturaSugerida(indice) {
+  const f = faturasSugeridas[indice];
+  if (!f) return;
+
+  faturaEscolhida = f;
+  document.getElementById("dr-nummov").value = "";
+
+  const bloco = document.getElementById("dr-despesa-encontrada");
+  bloco.style.display = "block";
+  bloco.innerHTML =
+    '<div class="dr-achou">' +
+      '<b>💳 ' + escaparHtml(f.descricao) + '</b><br>' +
+      '<span class="dr-achou-sub">Vence ' + escaparHtml(f.vencimento) +
+        ' · ' + escaparHtml(f.parcela) + ' · ' + formatarMoeda(f.valor) + '</span><br>' +
+      '<span class="dr-achou-sub">O comprovante será anexado à fatura inteira, ' +
+        'e todas as compras dela serão liquidadas de uma vez.</span>' +
+    '</div>' +
+    '<button type="button" class="btn-modal cancelar" style="width:100%;margin-top:8px;" ' +
+      'onclick="limparFaturaEscolhida()">Escolher outra despesa</button>';
+}
+
+function limparFaturaEscolhida() {
+  faturaEscolhida = null;
+  document.getElementById("dr-despesa-encontrada").style.display = "none";
+  document.getElementById("dr-despesa-encontrada").innerHTML = "";
+  sugerirDespesasParaVincular();
 }
 
 let buscaMovTimer = null;
@@ -7798,6 +7948,12 @@ async function confirmarDocumento() {
 
   if (ehArquivar) {
     if (document.getElementById("dr-chk-vincular").checked) {
+      // Fatura escolhida: não há Nº Mov, o que identifica é cartão + vencimento.
+      if (faturaEscolhida) {
+        dados.faturaCartao = faturaEscolhida.cartao;
+        dados.faturaVencimento = faturaEscolhida.vencimentoISO;
+        dados._liquidarFatura = true;
+      } else {
       const num = document.getElementById("dr-nummov").value.trim();
       if (!num) {
         mostrarErroDoc("Informe o Nº de movimentação.");
@@ -7811,6 +7967,7 @@ async function confirmarDocumento() {
       const chk = document.getElementById("dr-chk-atualizar-valor");
       dados._atualizarValorPara = (chk && chk.checked && dadosExtraidos)
         ? parseFloat(dadosExtraidos.valor_total) : 0;
+      }
     }
   } else {
     // Modo lançar: valida os campos
@@ -7842,6 +7999,26 @@ async function confirmarDocumento() {
       // Valor do documento manda na despesa vinculada, quando pedido
       if (dados._atualizarValorPara > 0 && dados.numMovVinculo) {
         await atualizarValorPeloDocumento(dados.numMovVinculo, dados._atualizarValorPara);
+      }
+
+      // Fatura: o documento já subiu e ficou vinculado; agora liquida as
+      // compras. Nesta ordem de propósito — se a liquidação falhar, o
+      // comprovante continua guardado e dá para tentar de novo.
+      if (dados._liquidarFatura) {
+        const f = faturaEscolhida;
+        faturaEscolhida = null;
+        try {
+          const lf = await chamarServidor("liquidarFatura", {
+            cartao: f.cartao,
+            vencimento: f.vencimentoISO,
+            dataPagamento: dataHojeISO()
+          });
+          mostrarToast(lf.ok ? "✅ " + lf.mensagem
+                             : "⚠ Documento guardado, mas a fatura não liquidou: " +
+                               (lf.mensagem || ""));
+        } catch (e) {
+          mostrarToast("⚠ Documento guardado, mas a fatura não liquidou (sem conexão).");
+        }
       }
 
       if (!ehArquivar) checarPendentesAprovacao();

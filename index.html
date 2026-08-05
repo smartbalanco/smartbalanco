@@ -2848,6 +2848,44 @@
 
 
   <!-- ============ MODAL DE LIQUIDAÇÃO ============ -->
+  <!-- ============ LIQUIDAR FATURA DO CARTÃO ============ -->
+  <div class="modal-fundo" id="modal-fatura">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo" id="lf-titulo">Fatura</div>
+          <div class="mt-mov" id="lf-detalhe"></div>
+        </div>
+        <button class="fechar" onclick="fecharLiquidarFatura()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <div class="campo-bloco campo-data-destaque">
+          <label for="lf-datapgto">Data do pagamento</label>
+          <input type="date" id="lf-datapgto" />
+        </div>
+
+        <div class="campo-bloco">
+          <label>Comprovante (opcional)</label>
+          <input type="file" id="lf-arquivo" accept="image/*,application/pdf"
+                 onchange="escolherComprovanteFatura(this)" />
+          <div class="cfg-aviso" id="lf-comprovante-nome"></div>
+        </div>
+
+        <div class="cfg-aviso">
+          Todas as compras em aberto dessa fatura ficam com essa data de pagamento.
+        </div>
+        <div class="cfg-aviso" id="lf-aviso"></div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharLiquidarFatura()">Cancelar</button>
+          <button class="btn-modal confirmar" id="lf-btn-confirmar"
+                  onclick="confirmarLiquidarFatura()">Liquidar fatura</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-fundo" id="modal-liquidar">
     <div class="modal-caixa">
 
@@ -4108,7 +4146,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=51"></script>
+  <script src="app.js?v=52"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
