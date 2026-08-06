@@ -4238,10 +4238,33 @@ window.addEventListener("load", async function () {
   const salva = lerSessaoSalva();
 
   // Este navegador foi aberto PELO aplicativo só para logar. Se já existe
-  // sessão aqui, devolve na hora — sem fazer o usuário logar de novo.
+  // sessão aqui, aproveita — mas só depois de CONFERIR se ela ainda vale.
+  //
+  // Devolver sem conferir criava um beco sem saída: o navegador entregava uma
+  // sessão morta em milissegundos, o app a recusava, e a tentativa seguinte
+  // repetia exatamente o mesmo caminho. Parecia que a conta tinha perdido o
+  // acesso; na verdade o login de verdade nunca chegava a acontecer.
   if (ehLoginParaAplicativo() && salva.sessao) {
-    devolverSessaoAoAplicativo(salva.sessao);
-    return;
+    sessaoAtual = salva.sessao;
+    let vale = false;
+
+    try {
+      const r = await chamarServidor("login");
+      if (r.ok && r.sessao) { devolverSessaoAoAplicativo(r.sessao); return; }
+      vale = false;
+    } catch (e) {
+      // Sem rede não dá para afirmar que a sessão morreu; devolve e deixa o
+      // app decidir, que é o comportamento antigo.
+      devolverSessaoAoAplicativo(salva.sessao);
+      return;
+    }
+
+    if (!vale) {
+      apagarSessao();
+      sessaoAtual = null;
+      emailUsuarioAtual = null;
+      // Segue para o login normal, com o botão do Google.
+    }
   }
 
   if (salva.sessao) {

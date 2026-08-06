@@ -5,7 +5,7 @@
 // os celulares a baixarem a versão nova.
 // ============================================================================
 
-const CACHE_NOME = "smartbalanco-v54";
+const CACHE_NOME = "smartbalanco-v55";
 
 // Arquivos que fazem o "esqueleto" do app funcionar mesmo offline.
 const ARQUIVOS_ESSENCIAIS = [
