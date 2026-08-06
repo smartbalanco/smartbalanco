@@ -3661,7 +3661,28 @@ function mostrarCarregando(msg) {
   if (b) b.style.display = "none";
 }
 
+// Rede de segurança: se este navegador está restrito ao Smarttrabalho, a tela
+// de login diz isso e oferece a saída. Sem este aviso, ficar preso parece
+// falta de acesso da conta — que é exatamente o que aconteceu.
+function mostrarAvisoModoRestrito() {
+  const alvo = document.getElementById("tela-login");
+  if (!alvo || !soTrabalho()) return;
+  if (document.getElementById("aviso-modo-restrito")) return;
+
+  const div = document.createElement("div");
+  div.id = "aviso-modo-restrito";
+  div.className = "cfg-aviso";
+  div.style.cssText = "max-width:320px;margin:14px auto 0;text-align:center;";
+  div.innerHTML =
+    'Este navegador está no modo <b>só Smarttrabalho</b>. ' +
+    '<a href="?modo=completo" style="color:var(--azul);font-weight:700;">Voltar ao app completo</a>';
+
+  const rodape = alvo.querySelector(".rodape-login");
+  alvo.insertBefore(div, rodape || null);
+}
+
 function mostrarTelaLogin() {
+  mostrarAvisoModoRestrito();
   document.getElementById("tela-carregando").style.display = "none";
   document.getElementById("tela-interna").style.display = "none";
   document.getElementById("tela-login").style.display = "flex";
@@ -4068,15 +4089,29 @@ function voltarAosModulos() {
 const MODO_CHAVE = "smart_modo";
 
 function soTrabalho() {
-  try { return localStorage.getItem(MODO_CHAVE) === "trabalho"; } catch (e) { return false; }
+  try {
+    const m = localStorage.getItem(MODO_CHAVE);
+    return m === "trabalho" || m === "conta";
+  } catch (e) { return false; }
 }
 
 // A conta do escritório se restringe sozinha, sem depender do link: o servidor
-// avisa no login e o app se ajusta. Só LIGA o modo — nunca desliga, senão
-// entrar com ela e sair devolveria o app completo a quem não deveria ver.
+// avisa no login e o app se ajusta.
+//
+// São DOIS modos gravados, e a diferença importa: "trabalho" você ligou de
+// propósito pelo link e só sai pelo link; "conta" acompanha quem está logado
+// e sai sozinho ao entrar com a conta pessoal.
+//
+// Antes isto só ligava, nunca desligava — então uma única entrada com a conta
+// do escritório deixava o navegador restrito para sempre, inclusive para você.
+// A trava que vale é a do servidor; esta aqui é conforto de tela.
 function aplicarRestricaoDaConta(resposta) {
   try {
-    if (resposta && resposta.soTrabalho) localStorage.setItem(MODO_CHAVE, "trabalho");
+    const atual = localStorage.getItem(MODO_CHAVE);
+    if (atual === "trabalho") return;   // escolha manual, não se mexe
+
+    if (resposta && resposta.soTrabalho) localStorage.setItem(MODO_CHAVE, "conta");
+    else if (atual === "conta") localStorage.removeItem(MODO_CHAVE);
   } catch (e) {}
 }
 
