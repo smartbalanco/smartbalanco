@@ -179,16 +179,31 @@ async function aoReceberLoginGoogle(resposta) {
 async function chamarServidor(acao, paramsExtras) {
   paramsExtras = paramsExtras || {};
 
-  // Prioridade: sessão de 30 dias. Token do Google só no 1º login.
+  // Manda os DOIS quando existem. O servidor tenta a sessão primeiro e cai no
+  // token se ela não valer.
+  //
+  // Antes era `else if`: com uma sessão inválida gravada, o token do login
+  // novo nunca era enviado, e o app ficava preso repetindo a credencial morta
+  // — o Google logava, voltava, e nada mudava.
   const base = { acao: acao };
   if (sessaoAtual) base.sessao = sessaoAtual;
-  else if (tokenLoginAtual) base.token = tokenLoginAtual;
+  if (tokenLoginAtual) base.token = tokenLoginAtual;
 
   const params = new URLSearchParams(Object.assign(base, paramsExtras));
   const url = API_URL + "?" + params.toString();
   const resp = await fetch(url);
   if (!resp.ok) throw new Error("Falha na conexão (HTTP " + resp.status + ").");
-  return await resp.json();
+
+  const dados = await resp.json();
+
+  // Sessão recusada: apaga na hora. Guardá-la só faria a próxima chamada
+  // repetir o mesmo erro, e é isso que trava o login.
+  if (dados && dados.erro === "NAO_AUTORIZADO" && sessaoAtual) {
+    sessaoAtual = null;
+    apagarSessao();
+  }
+
+  return dados;
 }
 
 // ============================================================================
@@ -3990,6 +4005,28 @@ function mostrarErroLogin(msg) {
   const el = document.getElementById("login-erro");
   el.textContent = msg;
   el.style.display = "block";
+
+  // Saída manual: qualquer credencial velha guardada neste aparelho pode estar
+  // atrapalhando o login novo. O botão apaga tudo e recomeça do zero.
+  if (!document.getElementById("btn-limpar-acesso")) {
+    const b = document.createElement("button");
+    b.id = "btn-limpar-acesso";
+    b.textContent = "Limpar dados de acesso e tentar de novo";
+    b.style.cssText = "display:block;margin:12px auto 0;background:none;border:none;" +
+                      "color:var(--cinza-texto);font-size:12px;font-family:inherit;" +
+                      "text-decoration:underline;cursor:pointer;";
+    b.onclick = function () {
+      try {
+        apagarSessao();
+        localStorage.removeItem(MODO_CHAVE);
+      } catch (e) {}
+      sessaoAtual = null;
+      tokenLoginAtual = null;
+      emailUsuarioAtual = null;
+      location.href = location.pathname + "?modo=completo";
+    };
+    el.parentNode.insertBefore(b, el.nextSibling);
+  }
 }
 
 function mostrarTelaInterna() {
