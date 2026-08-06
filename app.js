@@ -3696,6 +3696,8 @@ function mostrarAvisoModoRestrito() {
   alvo.insertBefore(div, rodape || null);
 }
 
+let preparandoLoginGoogle = false;
+
 function mostrarTelaLogin() {
   mostrarAvisoModoRestrito();
   document.getElementById("tela-carregando").style.display = "none";
@@ -3703,6 +3705,17 @@ function mostrarTelaLogin() {
   document.getElementById("tela-login").style.display = "flex";
   const b = document.getElementById("btn-nova-despesa");
   if (b) b.style.display = "none";
+
+  // Garante o botão do Google. Quem o desenha é prepararLoginGoogle(), mas os
+  // caminhos de erro (sessão inválida, sem autorização) chamavam esta tela
+  // direto — e ela aparecia SEM botão nenhum, sem como entrar.
+  // O guard existe porque prepararLoginGoogle() termina chamando esta função.
+  const alvo = document.getElementById("botao-google");
+  if (alvo && !alvo.innerHTML.trim() && !preparandoLoginGoogle) {
+    preparandoLoginGoogle = true;
+    try { prepararLoginGoogle(); } catch (e) {}
+    preparandoLoginGoogle = false;
+  }
 }
 
 // ============================================================================
@@ -4356,6 +4369,20 @@ function prepararLoginGoogle() {
     );
   } catch (e) {
     console.warn("Google Sign-In não carregou:", e);
+
+    // A biblioteca do Google falhou (rede, bloqueio, script fora do ar). Sem
+    // isto o espaço do botão fica VAZIO e não há como entrar — foi assim que
+    // a tela apareceu só com a mensagem de erro.
+    const alvo = document.getElementById("botao-google");
+    if (alvo && !alvo.innerHTML.trim()) {
+      alvo.innerHTML =
+        '<button id="btn-google-app" onclick="location.reload()">' +
+          'Recarregar para entrar com Google' +
+        '</button>' +
+        '<div class="cfg-aviso" style="margin-top:8px;">' +
+          'O login do Google não carregou. Recarregue, ou use o código de acesso.' +
+        '</div>';
+    }
   }
 
   mostrarTelaLogin();
