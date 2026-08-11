@@ -475,6 +475,30 @@
     }
     .tf-btn:active { box-shadow: var(--afundado-leve); }
 
+    /* ---- CONFERIR E APROVAR TUDO ---- */
+    #aprov-barra-tudo {
+      display: none; align-items: center; justify-content: space-between;
+      gap: 10px; margin: 0 0 12px; padding: 12px 14px;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 14px;
+    }
+    #aprov-contagem { font-size: 12px; font-weight: 600; color: var(--cinza-texto); }
+    #aprov-barra-tudo button {
+      background: var(--azul); color: #fff; border: none; border-radius: 10px;
+      padding: 9px 14px; font-size: 12px; font-weight: 700; cursor: pointer;
+      font-family: inherit; white-space: nowrap;
+    }
+
+    .conf-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 0; border-bottom: 1px solid var(--borda);
+    }
+    .conf-item:last-child { border-bottom: none; }
+    .conf-info { flex: 1; min-width: 0; }
+    .conf-desc { font-size: 13px; font-weight: 600; word-break: break-word; }
+    .conf-sub { font-size: 11px; color: var(--cinza-texto); margin-top: 2px; }
+    .conf-valor { font-size: 13px; font-weight: 700; white-space: nowrap; }
+
     /* ---- MENU DE MÓDULOS ---- */
     #conteudo-modulos { display: none; padding: 40px 20px; max-width: 900px; margin: 0 auto; }
     .modulos-topo { text-align: center; margin-bottom: 26px; }
@@ -2538,6 +2562,10 @@
 
     <!-- ============ CONTEÚDO: APROVAÇÕES ============ -->
     <div id="conteudo-aprov">
+      <div id="aprov-barra-tudo">
+        <span id="aprov-contagem"></span>
+        <button onclick="abrirConferencia()">Conferir e aprovar tudo</button>
+      </div>
       <div id="lista-aprovacoes"></div>
     </div>
 
@@ -2848,6 +2876,35 @@
 
 
   <!-- ============ MODAL DE LIQUIDAÇÃO ============ -->
+  <!-- ============ CONFERIR E APROVAR TUDO ============ -->
+  <div class="modal-fundo" id="modal-conferir">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Conferir antes de aprovar</div>
+          <div class="mt-mov" id="conf-resumo"></div>
+        </div>
+        <button class="fechar" onclick="fecharConferencia()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <div id="conf-lista"></div>
+
+        <div class="cfg-aviso">
+          Todos entram como estão. Para corrigir algum, feche e abra o
+          lançamento antes.
+        </div>
+        <div class="cfg-aviso" id="conf-aviso"></div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharConferencia()">Cancelar</button>
+          <button class="btn-modal confirmar" id="conf-btn-aprovar"
+                  onclick="aprovarTudoDeUmaVez()">Aprovar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ LIQUIDAR FATURA DO CARTÃO ============ -->
   <div class="modal-fundo" id="modal-fatura">
     <div class="modal-caixa">
@@ -4146,7 +4203,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=56"></script>
+  <script src="app.js?v=57"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

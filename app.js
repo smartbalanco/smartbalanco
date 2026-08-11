@@ -5160,11 +5160,112 @@ async function carregarAprovacoes(forcar) {
   }
 }
 
+// ============================================================================
+// CONFERIR E APROVAR TUDO
+// ----------------------------------------------------------------------------
+// A conferência vem ANTES da aprovação, e é a tela inteira: descrição, valor,
+// parcelas, método e categoria de cada lançamento. Aprovar em massa sem ver o
+// que entra é como assinar sem ler.
+// ============================================================================
+function abrirConferencia() {
+  if (!gruposAprovacao.length) return;
+
+  const total = gruposAprovacao.reduce(function (s, g) {
+    return s + (parseFloat(g.valorTotal) || 0);
+  }, 0);
+
+  const linhas = gruposAprovacao.map(function (g) {
+    const detalhe = [
+      g.totalParcelas > 1 ? g.totalParcelas + "x" : "",
+      g.metodo, g.categoria
+    ].filter(function (x) { return x; }).join(" · ");
+
+    return '<div class="conf-item">' +
+             '<div class="conf-info">' +
+               '<div class="conf-desc">' + escaparHtml(g.descricao || "") + '</div>' +
+               (detalhe ? '<div class="conf-sub">' + escaparHtml(detalhe) + '</div>' : '') +
+             '</div>' +
+             '<div class="conf-valor">' + formatarMoeda(g.valorTotal) + '</div>' +
+           '</div>';
+  }).join("");
+
+  document.getElementById("modal-conferir").style.display = "flex";
+  document.getElementById("conf-resumo").textContent =
+    gruposAprovacao.length + " lançamento(s) · " + formatarMoeda(total);
+  document.getElementById("conf-lista").innerHTML = linhas;
+  document.getElementById("conf-aviso").textContent = "";
+
+  const btn = document.getElementById("conf-btn-aprovar");
+  btn.disabled = false;
+  btn.textContent = "Aprovar os " + gruposAprovacao.length;
+}
+
+function fecharConferencia() {
+  document.getElementById("modal-conferir").style.display = "none";
+}
+
+async function aprovarTudoDeUmaVez() {
+  const btn = document.getElementById("conf-btn-aprovar");
+  const aviso = document.getElementById("conf-aviso");
+  const quantos = gruposAprovacao.length;
+
+  btn.disabled = true;
+  btn.textContent = "Aprovando...";
+  aviso.textContent = "Isso pode levar alguns segundos.";
+
+  try {
+    // Manda quantos você conferiu: se a lista mudou nesse meio-tempo, o
+    // servidor recusa em vez de aprovar algo que ninguém viu.
+    const r = await chamarServidor("aprovarTodos", { quantidade: quantos });
+
+    if (r.ok) {
+      fecharConferencia();
+      mostrarToast("✅ " + r.mensagem);
+
+      if (r.falhas && r.falhas.length) {
+        // Falha parcial não pode virar só um número: sem saber QUAL não
+        // entrou, não há como agir.
+        setTimeout(function () {
+          alert("Não entraram:\n\n" + r.falhas.join("\n"));
+        }, 600);
+      }
+
+      limparTodoCache();
+      await carregarAprovacoes(true);
+      await recarregarDados();
+    } else {
+      aviso.textContent = r.mensagem || "Não foi possível aprovar.";
+      btn.disabled = false;
+      btn.textContent = "Aprovar os " + quantos;
+      if (r.erro === "MUDOU") await carregarAprovacoes(true);
+    }
+  } catch (e) {
+    aviso.textContent = "Sem conexão. Confira a lista antes de tentar de novo — " +
+                        "parte pode ter sido aprovada.";
+    btn.disabled = false;
+    btn.textContent = "Aprovar os " + quantos;
+  }
+}
+
 function renderizarAprovacoes() {
   const lista = document.getElementById("lista-aprovacoes");
   lista.innerHTML = "";
 
   atualizarBadgeAprovacoes(gruposAprovacao.length);
+
+  // Barra de conferência: só aparece quando há mais de um, porque para um
+  // lançamento só o botão do próprio card já resolve.
+  const barra = document.getElementById("aprov-barra-tudo");
+  if (barra) {
+    barra.style.display = gruposAprovacao.length > 1 ? "flex" : "none";
+    const cont = document.getElementById("aprov-contagem");
+    if (cont) {
+      const total = gruposAprovacao.reduce(function (s, g) {
+        return s + (parseFloat(g.valorTotal) || 0);
+      }, 0);
+      cont.textContent = gruposAprovacao.length + " pendentes · " + formatarMoeda(total);
+    }
+  }
 
   if (gruposAprovacao.length === 0) {
     lista.innerHTML =
