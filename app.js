@@ -3030,7 +3030,11 @@ async function gerarFixasApp() {
   btn.textContent = "...";
 
   try {
-    const r = await chamarServidor("gerarFixasDoMes", { mes: mes.value, ano: ano.value });
+    // Pedido por você vai direto para Transações — conferir de novo em
+    // Aprovações seria olhar duas vezes a mesma lista.
+    const r = await chamarServidor("gerarFixasDoMes", {
+      mes: mes.value, ano: ano.value, destino: "transacoes"
+    });
 
     if (r.ok) {
       mostrarToast("✅ " + r.mensagem);
