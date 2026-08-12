@@ -3822,6 +3822,8 @@ function tratarAtalhoDeTela(url) {
     "novo-manual": function () { quandoTelaPronta(function () { escolherAcao("manual"); }); },
     "novo-documento": function () { quandoTelaPronta(function () { escolherAcao("lancar"); }); },
     "novo-arquivar": function () { quandoTelaPronta(function () { escolherAcao("arquivar"); }); },
+    // Vem do widget do microfone: abre direto a conversa, sem passar pelo menu.
+    "voz": function () { quandoTelaPronta(function () { abrirLancarFalando(); }); },
     "novo": function () { abrirMenuAdicionarQuandoPronto(); },
     "chat": function () { quandoTelaPronta(function () { trocarAba("chat"); }); },
     "busca": function () { quandoTelaPronta(function () { trocarAba("busca"); abrirBusca(); }); },
@@ -4794,6 +4796,235 @@ async function abrirNovaDespesa() {
 function dataHojeISO() {
   const h = new Date();
   return h.getFullYear() + "-" + ("0" + (h.getMonth() + 1)).slice(-2) + "-" + ("0" + h.getDate()).slice(-2);
+}
+
+// ============================================================================
+// LANÇAR FALANDO
+// ----------------------------------------------------------------------------
+// Você fala, a IA extrai o que deu e PERGUNTA o que falta — em voz alta, uma
+// coisa de cada vez. Nada é lançado sem você conferir na tela: valor e método
+// errados viram lançamento errado, e corrigir depois custa mais.
+//
+// O reconhecimento de fala é do próprio navegador. Onde ele não existe (parte
+// das WebView de aplicativo), o campo de texto assume — e ali o microfone do
+// teclado resolve, que é o mesmo gesto.
+// ============================================================================
+let vozReconhecimento = null;
+let vozOuvindo = false;
+let vozJaSei = {};
+let vozDados = null;
+
+function temReconhecimentoDeVoz() {
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+
+function abrirLancarFalando() {
+  fecharMenuAdicionar();
+  document.getElementById("modal-voz").style.display = "flex";
+
+  vozJaSei = {};
+  vozDados = null;
+  document.getElementById("voz-conversa").innerHTML = "";
+  document.getElementById("voz-texto").value = "";
+  document.getElementById("voz-resumo").style.display = "none";
+  document.getElementById("voz-aviso").textContent = "";
+
+  const semVoz = !temReconhecimentoDeVoz();
+  document.getElementById("voz-btn-mic").style.display = semVoz ? "none" : "flex";
+  document.getElementById("voz-sem-microfone").style.display = semVoz ? "block" : "none";
+
+  falarNaTela("ia", "Pode falar. Por exemplo: “comprei pão hoje no cartão XP, doze reais”.");
+}
+
+function fecharLancarFalando() {
+  pararDeOuvir();
+  try { window.speechSynthesis.cancel(); } catch (e) {}
+  document.getElementById("modal-voz").style.display = "none";
+}
+
+function falarNaTela(quem, texto) {
+  const caixa = document.getElementById("voz-conversa");
+  const div = document.createElement("div");
+  div.className = "voz-msg " + quem;
+  div.textContent = texto;
+  caixa.appendChild(div);
+  caixa.scrollTop = caixa.scrollHeight;
+}
+
+// Lê a pergunta em voz alta. É o que fecha o ciclo: falar e ouvir de volta,
+// sem precisar olhar a tela no meio da rua.
+function falarEmVozAlta(texto) {
+  try {
+    if (!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const f = new SpeechSynthesisUtterance(texto);
+    f.lang = "pt-BR";
+    f.rate = 1.05;
+    window.speechSynthesis.speak(f);
+  } catch (e) {}
+}
+
+function alternarMicrofone() {
+  if (vozOuvindo) { pararDeOuvir(); return; }
+
+  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Rec) return;
+
+  try { window.speechSynthesis.cancel(); } catch (e) {}
+
+  vozReconhecimento = new Rec();
+  vozReconhecimento.lang = "pt-BR";
+  vozReconhecimento.continuous = false;
+  vozReconhecimento.interimResults = false;
+
+  vozReconhecimento.onstart = function () {
+    vozOuvindo = true;
+    const b = document.getElementById("voz-btn-mic");
+    b.classList.add("ouvindo");
+    b.textContent = "⏹";
+    document.getElementById("voz-aviso").textContent = "Ouvindo...";
+  };
+
+  vozReconhecimento.onresult = function (e) {
+    const dito = e.results[0][0].transcript;
+    document.getElementById("voz-texto").value = dito;
+    enviarFala(dito);
+  };
+
+  vozReconhecimento.onerror = function (e) {
+    document.getElementById("voz-aviso").textContent =
+      e.error === "not-allowed"
+        ? "Preciso da permissão do microfone. Libere nas configurações do navegador."
+        : "Não consegui ouvir. Tente de novo ou escreva.";
+    pararDeOuvir();
+  };
+
+  vozReconhecimento.onend = function () { pararDeOuvir(); };
+
+  try { vozReconhecimento.start(); } catch (e) {
+    document.getElementById("voz-aviso").textContent = "Não consegui abrir o microfone.";
+  }
+}
+
+function pararDeOuvir() {
+  vozOuvindo = false;
+  const b = document.getElementById("voz-btn-mic");
+  if (b) { b.classList.remove("ouvindo"); b.textContent = "🎤"; }
+  const av = document.getElementById("voz-aviso");
+  if (av && av.textContent === "Ouvindo...") av.textContent = "";
+  try { if (vozReconhecimento) vozReconhecimento.stop(); } catch (e) {}
+}
+
+function enviarFalaEscrita() {
+  const t = document.getElementById("voz-texto").value.trim();
+  if (t) enviarFala(t);
+}
+
+async function enviarFala(texto) {
+  falarNaTela("eu", texto);
+  document.getElementById("voz-texto").value = "";
+  document.getElementById("voz-aviso").textContent = "Entendendo...";
+
+  try {
+    const r = await chamarServidor("interpretarDespesaFalada", {
+      texto: texto,
+      jaSei: JSON.stringify(vozJaSei)
+    });
+
+    if (!r.ok) {
+      document.getElementById("voz-aviso").textContent = r.mensagem || "Não entendi.";
+      return;
+    }
+
+    // O que ela já entendeu vira a base da próxima rodada — assim você
+    // completa aos poucos, sem repetir o que já disse.
+    vozJaSei = r.dados;
+    vozDados = r.dados;
+    document.getElementById("voz-aviso").textContent = "";
+
+    if (r.completo) {
+      falarNaTela("ia", "Entendi. Confira antes de lançar.");
+      falarEmVozAlta("Confira antes de lançar.");
+      mostrarResumoVoz(r.dados);
+    } else {
+      falarNaTela("ia", r.pergunta);
+      falarEmVozAlta(r.pergunta);
+      document.getElementById("voz-resumo").style.display = "none";
+    }
+  } catch (e) {
+    document.getElementById("voz-aviso").textContent = "Sem conexão.";
+  }
+}
+
+function mostrarResumoVoz(d) {
+  const el = document.getElementById("voz-resumo");
+  el.style.display = "block";
+
+  const linha = function (rot, val) {
+    return '<div class="voz-campo"><span>' + rot + "</span><b>" + escaparHtml(val) + "</b></div>";
+  };
+
+  el.innerHTML =
+    linha("O quê", d.descricao) +
+    linha("Valor", formatarMoeda(d.valor)) +
+    linha("Como", d.metodo) +
+    linha("Categoria", d.categoria) +
+    linha("Data", (d.dataCompra || "").split("-").reverse().join("/")) +
+    (d.parcelas > 1 ? linha("Parcelas", d.parcelas + "x") : "") +
+    '<div class="voz-acoes">' +
+      '<button onclick="corrigirNoFormulario()">Corrigir</button>' +
+      '<button class="principal" onclick="lancarPelaVoz()">Lançar</button>' +
+    '</div>';
+}
+
+// Abre o formulário normal com tudo preenchido: quando algo saiu errado, o
+// caminho conhecido é melhor do que insistir na conversa.
+async function corrigirNoFormulario() {
+  const d = vozDados;
+  if (!d) return;
+
+  fecharLancarFalando();
+  await abrirNovaDespesa();
+
+  document.getElementById("nd-descricao").value = d.descricao || "";
+  document.getElementById("nd-valor").value = (parseFloat(d.valor) || 0).toFixed(2);
+  if (listasValidas) montarSelect("nd-metodo", listasValidas.metodos, d.metodo || "");
+  definirCategoriaCampo("nd-categoria", d.categoria || "");
+  if (d.dataCompra) document.getElementById("nd-datacompra").value = d.dataCompra;
+  document.getElementById("nd-parcelas").value = d.parcelas || 1;
+  atualizarCamposDespesa();
+}
+
+async function lancarPelaVoz() {
+  const d = vozDados;
+  if (!d) return;
+
+  const btn = document.querySelector("#voz-resumo .principal");
+  if (btn) { btn.disabled = true; btn.textContent = "Lançando..."; }
+
+  try {
+    const r = await chamarServidor("incluirDespesa", {
+      descricao: d.descricao,
+      valorTotal: d.valor,
+      metodo: d.metodo,
+      categoria: d.categoria,
+      dataCompra: d.dataCompra,
+      totalParcelas: d.parcelas || 1,
+      jaPago: d.jaPago ? "true" : "false"
+    });
+
+    if (r.ok) {
+      fecharLancarFalando();
+      mostrarToastComEditar("✅ " + r.mensagem, r.idInicial);
+      await recarregarDados();
+    } else {
+      document.getElementById("voz-aviso").textContent = r.mensagem || "Não deu para lançar.";
+      if (btn) { btn.disabled = false; btn.textContent = "Lançar"; }
+    }
+  } catch (e) {
+    document.getElementById("voz-aviso").textContent = "Sem conexão. Nada foi lançado.";
+    if (btn) { btn.disabled = false; btn.textContent = "Lançar"; }
+  }
 }
 
 // ============================================================================

@@ -475,6 +475,48 @@
     }
     .tf-btn:active { box-shadow: var(--afundado-leve); }
 
+    /* ---- LANÇAR FALANDO ---- */
+    #voz-conversa { min-height: 90px; max-height: 34vh; overflow-y: auto; margin-bottom: 14px; }
+    .voz-msg {
+      max-width: 88%; padding: 10px 13px; border-radius: 14px; margin-bottom: 8px;
+      font-size: 13px; line-height: 1.45; word-break: break-word;
+    }
+    .voz-msg.eu { margin-left: auto; background: var(--azul); color: #fff; border-bottom-right-radius: 4px; }
+    .voz-msg.ia { background: var(--cinza-fundo); box-shadow: var(--relevo-baixo); border-bottom-left-radius: 4px; }
+
+    #voz-btn-mic {
+      display: flex; align-items: center; justify-content: center;
+      width: 76px; height: 76px; margin: 4px auto 0; border: none; border-radius: 50%;
+      background: var(--azul); color: #fff; font-size: 30px; cursor: pointer;
+      box-shadow: 0 6px 16px rgba(26,58,92,0.35);
+    }
+    /* Pulsa enquanto ouve: sem isso não dá para saber se está gravando. */
+    #voz-btn-mic.ouvindo { background: var(--vermelho); animation: voz-pulso 1.2s infinite; }
+    @keyframes voz-pulso {
+      0%   { box-shadow: 0 0 0 0 rgba(185,28,28,0.5); }
+      70%  { box-shadow: 0 0 0 16px rgba(185,28,28,0); }
+      100% { box-shadow: 0 0 0 0 rgba(185,28,28,0); }
+    }
+
+    #voz-resumo {
+      margin-top: 14px; padding: 12px; border-radius: 12px;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+    }
+    .voz-campo {
+      display: flex; justify-content: space-between; gap: 10px;
+      padding: 7px 0; border-bottom: 1px solid var(--borda); font-size: 13px;
+    }
+    .voz-campo:last-of-type { border-bottom: none; }
+    .voz-campo span { color: var(--cinza-texto); }
+    .voz-acoes { display: flex; gap: 8px; margin-top: 12px; }
+    .voz-acoes button {
+      flex: 1; padding: 11px; border: none; border-radius: 10px; cursor: pointer;
+      font-family: inherit; font-size: 13px; font-weight: 700;
+      background: rgba(0,0,0,0.06); color: var(--cinza-texto);
+    }
+    .voz-acoes button.principal { background: var(--verde); color: #fff; }
+    .ma-icone.falar { background: #ede9fe; }
+
     /* ---- CONFERIR E APROVAR TUDO ---- */
     #aprov-barra-tudo {
       display: none; align-items: center; justify-content: space-between;
@@ -2876,6 +2918,39 @@
 
 
   <!-- ============ MODAL DE LIQUIDAÇÃO ============ -->
+  <!-- ============ LANÇAR FALANDO ============ -->
+  <div class="modal-fundo" id="modal-voz">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">🎤 Lançar falando</div>
+          <div class="mt-mov">Fale; eu pergunto o que faltar</div>
+        </div>
+        <button class="fechar" onclick="fecharLancarFalando()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <div id="voz-conversa"></div>
+
+        <button id="voz-btn-mic" onclick="alternarMicrofone()">🎤</button>
+
+        <div class="cfg-aviso" id="voz-sem-microfone" style="display:none;">
+          Este aparelho não deixa o app ouvir direto. Escreva abaixo — ou toque
+          no microfone do próprio teclado, que dá no mesmo.
+        </div>
+
+        <div class="busca-campo" style="margin-top:10px;">
+          <input type="text" id="voz-texto" placeholder="...ou escreva aqui"
+                 onkeydown="if(event.key==='Enter') enviarFalaEscrita()" />
+          <button class="tf-btn" onclick="enviarFalaEscrita()" title="Enviar">➤</button>
+        </div>
+
+        <div class="cfg-aviso" id="voz-aviso"></div>
+        <div id="voz-resumo" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ CONFERIR E APROVAR TUDO ============ -->
   <div class="modal-fundo" id="modal-conferir">
     <div class="modal-caixa">
@@ -3968,6 +4043,14 @@
     <div class="ma-caixa">
       <div class="ma-alca"></div>
 
+      <button class="ma-opcao" onclick="abrirLancarFalando()">
+        <span class="ma-icone falar">🎤</span>
+        <span class="ma-txt">
+          <b>Lançar falando</b>
+          <span>Fale a despesa; eu pergunto o que faltar</span>
+        </span>
+      </button>
+
       <button class="ma-opcao" onclick="escolherAcao('manual')">
         <span class="ma-icone manual">✍️</span>
         <span class="ma-txt">
@@ -4203,7 +4286,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=58"></script>
+  <script src="app.js?v=59"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
