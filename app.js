@@ -630,16 +630,32 @@ async function agendarNotificacoesContas(contas) {
       const venc = dataDeDiaMes(c.data);
       if (!venc) return;
 
-      // Aviso às 9h do dia anterior ao vencimento
-      const quando = new Date(venc.getFullYear(), venc.getMonth(), venc.getDate() - 1, 9, 0, 0);
-      if (quando <= agora) return;   // já passou: não adianta agendar
+      // Dois avisos por conta: na véspera para dar tempo de resolver, e no
+      // próprio dia porque é nele que o pagamento vence. Só a véspera deixava
+      // passar quem não abriu o app naquele dia.
+      //
+      // Os ids saem de faixas separadas (i e i+500) para os dois não se
+      // sobrescreverem — o plugin usa o id como chave.
+      const vespera = new Date(venc.getFullYear(), venc.getMonth(), venc.getDate() - 1, 9, 0, 0);
+      const noDia   = new Date(venc.getFullYear(), venc.getMonth(), venc.getDate(), 8, 0, 0);
 
-      aAgendar.push({
-        id: ID_BASE_NOTIFICACAO + i,
-        title: c.ehFatura ? "Fatura vence amanhã" : "Conta vence amanhã",
-        body: c.descricao + " · " + formatarMoeda(c.valor),
-        schedule: { at: quando, allowWhileIdle: true }
-      });
+      if (vespera > agora) {
+        aAgendar.push({
+          id: ID_BASE_NOTIFICACAO + i,
+          title: c.ehFatura ? "Fatura vence amanhã" : "Conta vence amanhã",
+          body: c.descricao + " · " + formatarMoeda(c.valor),
+          schedule: { at: vespera, allowWhileIdle: true }
+        });
+      }
+
+      if (noDia > agora) {
+        aAgendar.push({
+          id: ID_BASE_NOTIFICACAO + 500 + i,
+          title: c.ehFatura ? "⚠️ Fatura vence HOJE" : "⚠️ Conta vence HOJE",
+          body: c.descricao + " · " + formatarMoeda(c.valor),
+          schedule: { at: noDia, allowWhileIdle: true }
+        });
+      }
     });
 
     if (aAgendar.length > 0) await LN.schedule({ notifications: aAgendar });
@@ -2929,8 +2945,29 @@ async function salvarVencimentoCartao(indice) {
 
   try {
     const r = await chamarServidor("salvarCartaoConfig", { cartao: c.nome, diaVencimento: dia });
-    mostrarToast((r.ok ? "✅ " : "❌ ") + r.mensagem);
-    if (r.ok) await carregarCartoesConfig();
+    if (!r.ok) { mostrarToast("❌ " + r.mensagem); return; }
+
+    mostrarToast("✅ " + r.mensagem);
+    await carregarCartoesConfig();
+
+    // Salvar o dia novo e ver a lista velha intacta parece que nada
+    // aconteceu. Oferecer o alinhamento aqui, com o cartão já atualizado, é o
+    // momento em que a pergunta faz sentido — em vez de esperar você notar um
+    // botão a mais no card.
+    const atualizado = cartoesConfig.filter(function (x) { return x.nome === c.nome; })[0];
+    if (!atualizado || !atualizado.emAberto) return;
+
+    const fora = (atualizado.diasEncontrados || [])
+      .filter(function (d) { return d.dia !== dia; })
+      .reduce(function (s, d) { return s + d.quantas; }, 0);
+
+    if (!fora) return;
+
+    const indiceNovo = cartoesConfig.indexOf(atualizado);
+    if (confirm(fora + " compra(s) em aberto do " + c.nome + " ainda vencem em " +
+                "outro dia.\n\nQuer passá-las para o dia " + dia + " agora?")) {
+      await alinharCartao(indiceNovo);
+    }
   } catch (e) {
     mostrarToast("❌ Sem conexão.");
   }
@@ -2945,6 +2982,8 @@ async function alinharCartao(indice) {
   mostrarToast("Conferindo...");
 
   try {
+    // Sem competencia, o servidor limita ao mes atual em diante: mes fechado
+    // nao se remexe.
     const s = await chamarServidor("alinharVencimentosDoCartao", {
       cartao: c.nome, dia: c.diaVencimento, simular: "true"
     });
@@ -3653,7 +3692,15 @@ function preencherDashboard(d) {
 
     d.contasAVencer.forEach(function (c) {
       const item = document.createElement("div");
-      item.className = "linha-item";
+      // Vencida ganha faixa vermelha: é a que exige ação hoje, e antes ela
+      // simplesmente não aparecia nesta lista.
+      item.className = "linha-item" + (c.diasVencida > 0 ? " vencida" : "");
+
+      const selo = c.diasVencida > 0
+        ? '<span class="selo-vencida">' +
+          (c.diasVencida === 1 ? "venceu ontem" : "vencida há " + c.diasVencida + " dias") +
+          '</span>'
+        : "";
 
       // ---- Fatura de cartão: as compras vêm somadas numa linha só ----
       if (c.ehFatura) {
@@ -3675,7 +3722,7 @@ function preencherDashboard(d) {
 
         item.innerHTML =
           '<div class="li-esq">' +
-            '<div><b class="li-data">' + c.data + '</b> 💳 ' + escaparHtml(c.descricao) + '</div>' +
+            '<div><b class="li-data">' + c.data + '</b> 💳 ' + escaparHtml(c.descricao) + selo + '</div>' +
             '<div class="li-mov fatura-toggle" onclick="alternarItensFatura(\'' + idItens + '\', this)">' +
               (c.itens || []).length + ' compras · ver' +
             '</div>' +
@@ -3699,7 +3746,7 @@ function preencherDashboard(d) {
 
       item.innerHTML =
         '<div class="li-esq">' +
-          '<div><b class="li-data">' + c.data + '</b> ' + escaparHtml(c.descricao) + '</div>' +
+          '<div><b class="li-data">' + c.data + '</b> ' + escaparHtml(c.descricao) + selo + '</div>' +
           '<div class="li-mov">MOV-' + c.numMov + '</div>' +
         '</div>' +
         '<div class="li-dir">' +
