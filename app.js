@@ -3994,6 +3994,8 @@ function tratarAtalhoDeTela(url) {
     "novo-arquivar": function () { quandoTelaPronta(function () { escolherAcao("arquivar"); }); },
     // Vem do widget do microfone: abre direto a conversa, sem passar pelo menu.
     "voz": function () { quandoTelaPronta(function () { abrirLancarFalando(); }); },
+    // Vem do aviso "Anotei: R$ ..." do leitor de notificações.
+    "capturadas": function () { quandoTelaPronta(function () { abrirComprasCapturadas(); }); },
     "novo": function () { abrirMenuAdicionarQuandoPronto(); },
     "chat": function () { quandoTelaPronta(function () { trocarAba("chat"); }); },
     "busca": function () { quandoTelaPronta(function () { trocarAba("busca"); abrirBusca(); }); },
@@ -4416,6 +4418,7 @@ window.addEventListener("load", async function () {
   verificarAtualizacaoApp();
   verificarAtalhoDeAbertura();
   verificarDocumentoCompartilhado();
+  verificarComprasCapturadas();
 
   // Com o app já aberto, o compartilhamento chega pelo onNewIntent do
   // Android e esta página não recarrega — só descobre ao voltar à tona.
@@ -4966,6 +4969,306 @@ async function abrirNovaDespesa() {
 function dataHojeISO() {
   const h = new Date();
   return h.getFullYear() + "-" + ("0" + (h.getMonth() + 1)).slice(-2) + "-" + ("0" + h.getDate()).slice(-2);
+}
+
+// ============================================================================
+// MELHORAR O PRÉ-LANÇAMENTO COM A FOTO DO COMPROVANTE
+// ----------------------------------------------------------------------------
+// A notificação do banco dá valor e estabelecimento — nada mais. A foto do
+// comprovante tem o resto: itens, forma de pagamento, às vezes o CNPJ. Aqui
+// ela passa pelo mesmo OCR + IA da leitura de documento, e o que voltar
+// preenche o pré-lançamento.
+//
+// O valor lido da notificação PREVALECE sobre o da foto: ele veio do banco,
+// que é a fonte do que foi realmente cobrado. A foto entra para melhorar
+// descrição e categoria, não para corrigir o que já é certo.
+// ============================================================================
+let preLancamentoAlvo = null;
+
+function anexarFotoAoPreLancamento(chave) {
+  preLancamentoAlvo = chave;
+
+  const inp = document.getElementById("pre-foto-arquivo");
+  if (inp) { inp.value = ""; inp.click(); }
+}
+
+async function processarFotoDoPreLancamento(input) {
+  const arq = input.files && input.files[0];
+  if (!arq || !preLancamentoAlvo) return;
+
+  const grupo = gruposAprovacao.filter(function (g) { return g.chave === preLancamentoAlvo; })[0];
+  if (!grupo) return;
+
+  if (arq.size > 6 * 1024 * 1024) {
+    mostrarToast("❌ Arquivo maior que 6 MB.");
+    return;
+  }
+
+  mostrarToast("⏳ Lendo o comprovante...", true);
+
+  const leitor = new FileReader();
+  leitor.onload = async function () {
+    const base64 = String(leitor.result).split(",")[1] || "";
+
+    try {
+      const r = await chamarServidorPost("analisarDocumento", {
+        arquivo: base64,
+        mimeType: arq.type || "image/jpeg",
+        observacao: "Comprovante de: " + grupo.descricao
+      });
+
+      if (!r.ok) { mostrarToast("❌ " + (r.mensagem || "Não consegui ler.")); return; }
+
+      const d = r.dados || {};
+
+      // Abre a edição do grupo já com o que a foto acrescentou. Não grava
+      // sozinho: a foto pode ser de outra compra, e só você sabe.
+      abrirEdicaoAprovacaoPorChave(grupo.chave, {
+        descricao: d.descricao || grupo.descricao,
+        categoria: d.categoria || grupo.categoria,
+        metodo: d.metodo || grupo.metodo
+      });
+
+      mostrarToast("✅ Li o comprovante. Confira e salve.");
+
+    } catch (e) {
+      mostrarToast("❌ Sem conexão.");
+    }
+  };
+  leitor.readAsDataURL(arq);
+}
+
+// Abre a edição do grupo e sobrescreve os campos com o que veio da foto.
+function abrirEdicaoAprovacaoPorChave(chave, novos) {
+  const idx = gruposAprovacao.findIndex(function (g) { return g.chave === chave; });
+  if (idx < 0) return;
+
+  abrirEdicaoAprovacao(idx);
+
+  setTimeout(function () {
+    if (novos.descricao) {
+      const c = document.getElementById("ea-descricao");
+      if (c) c.value = novos.descricao;
+    }
+    if (novos.categoria && typeof definirCategoriaCampo === "function") {
+      definirCategoriaCampo("ea-categoria", novos.categoria);
+    }
+    if (novos.metodo) {
+      const m = document.getElementById("ea-metodo");
+      if (m) m.value = novos.metodo;
+    }
+  }, 300);
+}
+
+// ============================================================================
+// COMPRAS CAPTURADAS DAS NOTIFICAÇÕES DO BANCO
+// ----------------------------------------------------------------------------
+// O serviço nativo lê as notificações dos apps de banco e guarda numa fila no
+// próprio aparelho. Aqui essa fila vira lançamento — passando SEMPRE por
+// Aprovações, nunca direto para Transações.
+//
+// Por que Aprovações: a leitura vem de um texto curto de notificação, sem
+// categoria e com o nome do estabelecimento como o banco escreveu ("PAG*PADAR
+// IA CENT"). Isso precisa de olho humano antes de virar dado.
+// ============================================================================
+let comprasCapturadas = [];
+
+function pluginNotificacoesBanco() {
+  try {
+    const P = window.Capacitor && window.Capacitor.Plugins;
+    return (P && P.NotificacoesBanco) ? P.NotificacoesBanco : null;
+  } catch (e) { return null; }
+}
+
+// Chamado na abertura do app: se houver compras na fila, avisa discretamente.
+async function verificarComprasCapturadas() {
+  const P = pluginNotificacoesBanco();
+  if (!P) return;
+
+  try {
+    const r = await P.listar();
+    comprasCapturadas = (r && r.itens) ? r.itens : [];
+    if (!comprasCapturadas.length) return;
+
+    mostrarToastComAcaoGenerica(
+      "💳 " + comprasCapturadas.length + " compra(s) detectada(s)",
+      "Ver",
+      abrirComprasCapturadas
+    );
+  } catch (e) {
+    // Fila indisponível não é erro que mereça interromper a abertura do app.
+  }
+}
+
+// Igual ao toast com "Editar", mas com rótulo e ação livres.
+function mostrarToastComAcaoGenerica(msg, rotulo, aoTocar) {
+  const t = document.getElementById("toast");
+  if (!t) return;
+
+  if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+
+  t.innerHTML = "";
+  const txt = document.createElement("span");
+  txt.textContent = msg;
+  t.appendChild(txt);
+
+  const b = document.createElement("button");
+  b.className = "toast-acao";
+  b.textContent = rotulo;
+  b.onclick = function () { t.classList.remove("visivel"); aoTocar(); };
+  t.appendChild(b);
+
+  t.classList.add("visivel");
+  toastTimer = setTimeout(function () { t.classList.remove("visivel"); }, 12000);
+}
+
+async function abrirComprasCapturadas() {
+  const modal = document.getElementById("modal-capturadas");
+  modal.style.display = "flex";
+  document.getElementById("cap-aviso").textContent = "";
+
+  const P = pluginNotificacoesBanco();
+
+  // Sem permissão a lista nunca vai encher: explica e oferece a tela onde ela
+  // é concedida, porque o Android não deixa pedir por diálogo.
+  if (P) {
+    try {
+      const perm = await P.temPermissao();
+      document.getElementById("cap-sem-permissao").style.display = perm.tem ? "none" : "block";
+    } catch (e) {}
+    try {
+      const r = await P.listar();
+      comprasCapturadas = (r && r.itens) ? r.itens : [];
+    } catch (e) {}
+  } else {
+    document.getElementById("cap-sem-permissao").style.display = "none";
+  }
+
+  renderizarComprasCapturadas();
+}
+
+function fecharComprasCapturadas() {
+  document.getElementById("modal-capturadas").style.display = "none";
+}
+
+async function pedirPermissaoNotificacoes() {
+  const P = pluginNotificacoesBanco();
+  if (!P) return;
+  try {
+    await P.pedirPermissao();
+    document.getElementById("cap-aviso").textContent =
+      "Procure 'Smartintegrado' na lista e ligue. Depois volte aqui.";
+  } catch (e) {
+    document.getElementById("cap-aviso").textContent = "Não consegui abrir as configurações.";
+  }
+}
+
+function renderizarComprasCapturadas() {
+  const alvo = document.getElementById("cap-lista");
+
+  if (!comprasCapturadas.length) {
+    alvo.innerHTML = '<p class="vazio">Nenhuma compra capturada ainda. ' +
+      'Elas aparecem aqui sozinhas quando o banco notificar.</p>';
+    document.getElementById("cap-btn-enviar").style.display = "none";
+    return;
+  }
+
+  document.getElementById("cap-btn-enviar").style.display = "block";
+  document.getElementById("cap-btn-enviar").textContent =
+    "Enviar " + comprasCapturadas.length + " para Aprovações";
+
+  alvo.innerHTML = comprasCapturadas.map(function (c, i) {
+    const quando = c.quando ? new Date(c.quando) : null;
+    const hora = quando
+      ? ("0" + quando.getDate()).slice(-2) + "/" + ("0" + (quando.getMonth() + 1)).slice(-2) +
+        " " + ("0" + quando.getHours()).slice(-2) + ":" + ("0" + quando.getMinutes()).slice(-2)
+      : "";
+
+    return '<div class="cap-item">' +
+             '<div class="cap-topo">' +
+               '<b>' + escaparHtml(c.estabelecimento || c.titulo || "Compra") + '</b>' +
+               '<span class="cap-valor">R$ ' + escaparHtml(c.valor || "") + '</span>' +
+             '</div>' +
+             '<div class="cap-sub">' + escaparHtml(c.app || "") +
+               (hora ? " · " + hora : "") + '</div>' +
+             // O texto original fica à vista: é ele que permite conferir se a
+             // leitura pegou o valor certo.
+             '<div class="cap-original">' + escaparHtml(c.texto || "") + '</div>' +
+             '<button class="cap-descartar" onclick="descartarCaptura(' + i + ')">Descartar</button>' +
+           '</div>';
+  }).join("");
+}
+
+function descartarCaptura(indice) {
+  comprasCapturadas.splice(indice, 1);
+  renderizarComprasCapturadas();
+}
+
+async function enviarCapturadasParaAprovacoes() {
+  if (!comprasCapturadas.length) return;
+
+  const btn = document.getElementById("cap-btn-enviar");
+  const aviso = document.getElementById("cap-aviso");
+  btn.disabled = true;
+  btn.textContent = "Enviando...";
+
+  let enviadas = 0;
+  const falhas = [];
+
+  for (let i = 0; i < comprasCapturadas.length; i++) {
+    const c = comprasCapturadas[i];
+    const valor = (c.valor || "").replace(/\./g, "").replace(",", ".");
+    const quando = c.quando ? new Date(c.quando) : new Date();
+
+    try {
+      const r = await chamarServidor("lancarCompraDeNotificacao", {
+        descricao: c.estabelecimento || c.titulo || "Compra no cartão",
+        valor: valor,
+        metodo: metodoDoBanco(c.app),
+        categoria: "",              // fica em branco: quem classifica é você
+        dataCompra: quando.getFullYear() + "-" +
+                    ("0" + (quando.getMonth() + 1)).slice(-2) + "-" +
+                    ("0" + quando.getDate()).slice(-2),
+        banco: c.app
+      });
+
+      if (r.ok) enviadas++;
+      else falhas.push((c.estabelecimento || "compra") + ": " + (r.mensagem || "falhou"));
+    } catch (e) {
+      falhas.push((c.estabelecimento || "compra") + ": sem conexão");
+      break;   // rede caiu: parar evita repetir o erro em todas
+    }
+  }
+
+  // A fila só é limpa quando TUDO entrou. Limpar com falha perderia a compra.
+  if (enviadas && !falhas.length) {
+    const P = pluginNotificacoesBanco();
+    if (P) { try { await P.limpar(); } catch (e) {} }
+    comprasCapturadas = [];
+    fecharComprasCapturadas();
+    mostrarToast("✅ " + enviadas + " compra(s) em Aprovações.");
+    checarPendentesAprovacao();
+  } else {
+    aviso.textContent = enviadas + " enviada(s), " + falhas.length + " com problema: " +
+                        falhas.slice(0, 3).join(" · ");
+    btn.disabled = false;
+    renderizarComprasCapturadas();
+  }
+}
+
+// O nome do banco vira o método do lançamento. Sem correspondência exata, cai
+// em branco e você escolhe na aprovação — melhor que inventar um método que
+// não existe na planilha.
+function metodoDoBanco(app) {
+  if (!listasValidas || !listasValidas.metodos) return "";
+  const alvo = (app || "").toLowerCase();
+
+  const achado = listasValidas.metodos.filter(function (m) {
+    const n = m.toLowerCase();
+    return alvo && (n.indexOf(alvo) >= 0 || alvo.indexOf(n.replace(/cart(ã|a)o\s*/, "")) >= 0);
+  })[0];
+
+  return achado || "";
 }
 
 // ============================================================================
@@ -5692,8 +5995,22 @@ function renderizarAprovacoes() {
       : "À vista";
 
     const card = document.createElement("div");
-    card.className = "card card-aprov";
+    // Pré-lançamento sai amarelo: veio de leitura automática (notificação do
+    // banco) e ainda não passou por olho humano. A cor é o aviso — no meio de
+    // uma lista de aprovações, ele exige mais atenção que os outros.
+    card.className = "card card-aprov" + (g.preLancamento ? " pre-lancamento" : "");
+
+    const avisoPre = g.preLancamento
+      ? '<div class="ap-pre-aviso">' +
+          '<b>⚡ Pré-lançamento</b> · lido da notificação do banco. ' +
+          'Confira antes de aprovar.' +
+          '<button class="ap-pre-foto" onclick="anexarFotoAoPreLancamento(\'' +
+            g.chave + '\')">📷 Melhorar com foto do comprovante</button>' +
+        '</div>'
+      : '';
+
     card.innerHTML =
+      avisoPre +
       '<div class="ap-topo">' +
         '<div class="ap-desc">' + escaparHtml(g.descricao) + '</div>' +
         '<div class="ap-mov">' + faixa + '</div>' +

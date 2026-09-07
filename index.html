@@ -475,6 +475,44 @@
     }
     .tf-btn:active { box-shadow: var(--afundado-leve); }
 
+    /* ---- Pre-lancamento (leitura automatica, ainda nao conferida) ---- */
+    .card-aprov.pre-lancamento {
+      border: 1px solid #f5d78e;
+      background: linear-gradient(180deg, #fff8e6 0%, var(--surf) 120px);
+    }
+    .ap-pre-aviso {
+      background: #fff3d1; border-radius: 10px; padding: 10px 12px;
+      margin-bottom: 12px; font-size: 11px; color: #7a5a12; line-height: 1.45;
+    }
+    .ap-pre-aviso b { color: #7a5a12; }
+    .ap-pre-foto {
+      display: block; width: 100%; margin-top: 9px; padding: 9px;
+      background: rgba(0,0,0,0.06); border: none; border-radius: 9px;
+      font-size: 11px; font-weight: 700; color: #7a5a12;
+      font-family: inherit; cursor: pointer;
+    }
+    .ap-pre-foto:active { background: rgba(0,0,0,0.12); }
+
+    /* ---- Compras detectadas nas notificações ---- */
+    .cap-item {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 12px; padding: 12px; margin-bottom: 10px;
+    }
+    .cap-topo { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
+    .cap-valor { font-weight: 700; color: var(--vermelho); white-space: nowrap; }
+    .cap-sub { font-size: 11px; color: var(--cinza-texto); margin-top: 3px; }
+    /* O texto original da notificação: é por ele que se confere se a leitura
+       pegou o valor certo, e é o que me permite corrigir a extração depois. */
+    .cap-original {
+      font-size: 10px; color: var(--cinza-texto); margin-top: 7px;
+      padding: 6px 8px; background: rgba(0,0,0,0.04); border-radius: 7px;
+      line-height: 1.35; word-break: break-word;
+    }
+    .cap-descartar {
+      margin-top: 8px; background: none; border: none; color: var(--cinza-texto);
+      font-size: 11px; font-family: inherit; cursor: pointer; text-decoration: underline;
+    }
+
     /* ---- Conta vencida ---- */
     /* Faixa à esquerda em vez de fundo vermelho inteiro: com várias vencidas,
        o vermelho cheio vira uma mancha e nada se destaca. */
@@ -2964,6 +3002,47 @@
 
 
   <!-- ============ MODAL DE LIQUIDAÇÃO ============ -->
+  <!-- Foto do comprovante para melhorar um pre-lancamento. Fica fora dos
+       cards porque eles sao recriados a cada carga da lista. -->
+  <input type="file" id="pre-foto-arquivo" accept="image/*,application/pdf"
+         style="display:none" onchange="processarFotoDoPreLancamento(this)" />
+
+  <!-- ============ COMPRAS DETECTADAS NAS NOTIFICAÇÕES ============ -->
+  <div class="modal-fundo" id="modal-capturadas">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">💳 Compras detectadas</div>
+          <div class="mt-mov">Lidas das notificações do banco</div>
+        </div>
+        <button class="fechar" onclick="fecharComprasCapturadas()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <div class="cfg-aviso" id="cap-sem-permissao" style="display:none;">
+          Para detectar as compras, o app precisa da permissão de ler
+          notificações. Ela é concedida numa tela do Android, não aqui.
+          <button class="btn-modal confirmar" style="width:100%;margin-top:8px;"
+                  onclick="pedirPermissaoNotificacoes()">Abrir configurações</button>
+        </div>
+
+        <div id="cap-lista"></div>
+        <div class="cfg-aviso" id="cap-aviso"></div>
+
+        <div class="cfg-aviso">
+          Vão todas para <b>Aprovações</b>, sem categoria — é lá que você
+          confere e classifica antes de virar lançamento.
+        </div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharComprasCapturadas()">Fechar</button>
+          <button class="btn-modal confirmar" id="cap-btn-enviar"
+                  onclick="enviarCapturadasParaAprovacoes()">Enviar para Aprovações</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ LANÇAR FALANDO ============ -->
   <div class="modal-fundo" id="modal-voz">
     <div class="modal-caixa">
@@ -4346,7 +4425,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=61"></script>
+  <script src="app.js?v=62"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
