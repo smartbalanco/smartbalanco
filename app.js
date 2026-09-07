@@ -5140,11 +5140,80 @@ async function abrirComprasCapturadas() {
       const r = await P.listar();
       comprasCapturadas = (r && r.itens) ? r.itens : [];
     } catch (e) {}
+    pintarDiagnosticoCaptura(P);
   } else {
     document.getElementById("cap-sem-permissao").style.display = "none";
+    document.getElementById("cap-diagnostico").innerHTML = "";
   }
 
   renderizarComprasCapturadas();
+}
+
+// Mostra se a captura está funcionando, sem depender de ter havido compra.
+//
+// A linha que importa é a "última notificação lida": ela prova que o serviço
+// está recebendo. Fila vazia com leitura recente significa que não houve
+// compra; fila vazia sem leitura nenhuma significa que a permissão não está
+// valendo. Sem essa linha, os dois casos parecem iguais na tela.
+async function pintarDiagnosticoCaptura(P) {
+  const alvo = document.getElementById("cap-diagnostico");
+  if (!alvo) return;
+
+  let d;
+  try {
+    d = await P.diagnostico();
+  } catch (e) {
+    alvo.innerHTML = "";   // versão antiga do app, sem esse método
+    return;
+  }
+
+  function linha(rotulo, valor, classe) {
+    return '<div class="cap-diag-linha">' +
+             '<span class="cap-diag-rot">' + rotulo + '</span>' +
+             '<span class="cap-diag-val ' + (classe || "") + '">' + valor + '</span>' +
+           '</div>';
+  }
+
+  let html = '<div class="cap-diag">';
+  html += linha("Permissão de ler notificações",
+                d.temPermissao ? "concedida" : "faltando",
+                d.temPermissao ? "ok" : "nao");
+  html += linha("Bancos observados", "XP e Inter");
+  html += linha("Última notificação lida",
+                tempoRelativoCurto(d.ultimaVista),
+                d.ultimaVista ? "ok" : "nao");
+
+  // O que foi descartado fica à vista: se uma compra de verdade parar de ser
+  // reconhecida (o banco muda o texto), o sintoma aparece aqui em vez de ser
+  // silêncio até a fatura chegar.
+  const ign = (d.ignorados || []).slice(-5).reverse();
+  if (ign.length) {
+    html += '<div class="cap-ignorados">';
+    html += '<div class="cap-diag-rot" style="margin-bottom:4px">' +
+              'Ignoradas por não serem compra no crédito:</div>';
+    ign.forEach(function (i) {
+      html += '<div class="cap-ign-item"><b>' + escaparHtml(i.app || "") + '</b> · ' +
+                escaparHtml(String(i.texto || "").slice(0, 70)) +
+                '<br><span class="cap-ign-motivo">' + escaparHtml(i.motivo || "") + '</span>' +
+              '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  alvo.innerHTML = html;
+}
+
+// "há 3 min", "há 2 h", "ontem". Zero vira "nenhuma ainda", que é o estado
+// que denuncia a permissão desligada.
+function tempoRelativoCurto(quando) {
+  if (!quando) return "nenhuma ainda";
+  const seg = Math.max(0, Math.floor((Date.now() - Number(quando)) / 1000));
+  if (seg < 60) return "agora há pouco";
+  if (seg < 3600) return "há " + Math.floor(seg / 60) + " min";
+  if (seg < 86400) return "há " + Math.floor(seg / 3600) + " h";
+  const dias = Math.floor(seg / 86400);
+  return dias === 1 ? "ontem" : "há " + dias + " dias";
 }
 
 function fecharComprasCapturadas() {

@@ -475,6 +475,30 @@
     }
     .tf-btn:active { box-shadow: var(--afundado-leve); }
 
+    /* ---- Diagnóstico da captura de notificações ---- */
+    .cap-diag {
+      background: var(--surf2); border-radius: 12px;
+      padding: 12px 14px; margin-bottom: 14px; font-size: 12px;
+    }
+    .cap-diag-linha {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 5px 0; gap: 10px;
+    }
+    .cap-diag-rot { color: var(--fraco); }
+    .cap-diag-val { font-weight: 700; text-align: right; }
+    .cap-diag-val.ok  { color: var(--verde); }
+    .cap-diag-val.nao { color: var(--erro); }
+    .cap-ignorados {
+      margin-top: 10px; padding-top: 10px;
+      border-top: 1px solid var(--linha);
+    }
+    .cap-ign-item {
+      padding: 7px 0; font-size: 11px; color: var(--fraco);
+      line-height: 1.45;
+    }
+    .cap-ign-item b { color: var(--txt); font-weight: 600; }
+    .cap-ign-motivo { color: var(--erro); }
+
     /* ---- Pre-lancamento (leitura automatica, ainda nao conferida) ---- */
     .card-aprov.pre-lancamento {
       border: 1px solid #f5d78e;
@@ -3026,6 +3050,11 @@
                   onclick="pedirPermissaoNotificacoes()">Abrir configurações</button>
         </div>
 
+        <!-- Diz se a captura está viva sem depender de ter havido compra:
+             fila vazia sozinha não distingue "não comprei" de "não está
+             funcionando". -->
+        <div id="cap-diagnostico"></div>
+
         <div id="cap-lista"></div>
         <div class="cfg-aviso" id="cap-aviso"></div>
 
@@ -4425,7 +4454,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=62"></script>
+  <script src="app.js?v=63"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
