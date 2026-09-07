@@ -2854,6 +2854,129 @@ function renderizarCategoriasConfig() {
 // ============================================================================
 let fixasCarregadas = [];
 
+// ============================================================================
+// VENCIMENTO DOS CARTÕES
+// ----------------------------------------------------------------------------
+// Mudar o dia aqui NÃO remarca o que já está lançado — e é bom que não
+// remarque: fatura já conferida com o banco não pode se mexer sozinha. O
+// realinhamento é um segundo passo, com prévia do que muda.
+// ============================================================================
+let cartoesConfig = [];
+
+function alternarSecaoCartoes() {
+  const secao = document.getElementById("cfg-secao-cartoes");
+  const rotulo = document.getElementById("cfg-cart-rotulo");
+  const abriu = secao.style.display === "none";
+
+  secao.style.display = abriu ? "block" : "none";
+  rotulo.textContent = abriu ? "💳 Ocultar cartões" : "💳 Vencimento dos cartões";
+
+  if (abriu) carregarCartoesConfig();
+}
+
+async function carregarCartoesConfig() {
+  const alvo = document.getElementById("cfg-lista-cartoes");
+  alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+
+  try {
+    const r = await chamarServidor("listarCartoesConfig");
+    if (!r.ok) { alvo.innerHTML = '<p class="vazio">' + escaparHtml(r.mensagem || "Falhou.") + '</p>'; return; }
+
+    cartoesConfig = r.cartoes || [];
+    if (!cartoesConfig.length) {
+      alvo.innerHTML = '<p class="vazio">Nenhum cartão configurado.</p>';
+      return;
+    }
+
+    alvo.innerHTML = cartoesConfig.map(function (c, i) {
+      // Mostra os dias que APARECEM nas compras em aberto: é assim que se
+      // enxerga a parcela cadastrada fora do dia certo, sem procurar uma a uma.
+      const fora = (c.diasEncontrados || []).filter(function (d) { return d.dia !== c.diaVencimento; });
+      const aviso = fora.length
+        ? '<div class="cart-fora">⚠ ' +
+            fora.map(function (d) { return d.quantas + " no dia " + d.dia; }).join(" · ") +
+          '</div>'
+        : '';
+
+      return '<div class="cart-item">' +
+        '<div class="cart-nome">' + escaparHtml(c.nome) + '</div>' +
+        '<div class="cart-linha">' +
+          '<label>Vence dia</label>' +
+          '<input type="number" min="1" max="31" id="cart-venc-' + i + '" value="' + c.diaVencimento + '" />' +
+          '<button onclick="salvarVencimentoCartao(' + i + ')">Salvar</button>' +
+        '</div>' +
+        '<div class="cart-sub">' + c.emAberto + ' compra(s) em aberto</div>' +
+        aviso +
+        (c.emAberto > 0
+          ? '<button class="cart-alinhar" onclick="alinharCartao(' + i + ')">' +
+              'Alinhar as compras em aberto ao dia ' + c.diaVencimento +
+            '</button>'
+          : '') +
+      '</div>';
+    }).join("");
+
+  } catch (e) {
+    alvo.innerHTML = '<p class="vazio">Sem conexão.</p>';
+  }
+}
+
+async function salvarVencimentoCartao(indice) {
+  const c = cartoesConfig[indice];
+  if (!c) return;
+
+  const dia = parseInt(document.getElementById("cart-venc-" + indice).value);
+  if (!dia || dia < 1 || dia > 31) { mostrarToast("❌ Dia deve ser de 1 a 31."); return; }
+
+  try {
+    const r = await chamarServidor("salvarCartaoConfig", { cartao: c.nome, diaVencimento: dia });
+    mostrarToast((r.ok ? "✅ " : "❌ ") + r.mensagem);
+    if (r.ok) await carregarCartoesConfig();
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
+// Mostra o que muda ANTES de mudar: remarcar vencimento em massa sem ver a
+// lista é o tipo de coisa que só se descobre errada no extrato.
+async function alinharCartao(indice) {
+  const c = cartoesConfig[indice];
+  if (!c) return;
+
+  mostrarToast("Conferindo...");
+
+  try {
+    const s = await chamarServidor("alinharVencimentosDoCartao", {
+      cartao: c.nome, dia: c.diaVencimento, simular: "true"
+    });
+
+    if (!s.ok) { mostrarToast("ℹ️ " + (s.mensagem || "Nada a alinhar.")); return; }
+
+    const amostra = (s.itens || []).slice(0, 8)
+      .map(function (i) { return "• " + i.descricao + ": " + i.de + " → " + i.para; })
+      .join("\n");
+
+    const texto = s.quantidade + " compra(s) do " + c.nome +
+      " passam para o dia " + c.diaVencimento + ":\n\n" + amostra +
+      (s.quantidade > 8 ? "\n... e mais " + (s.quantidade - 8) : "") +
+      "\n\nTotal: " + formatarMoeda(s.total) + "\n\nConfirmar?";
+
+    if (!confirm(texto)) return;
+
+    const r = await chamarServidor("alinharVencimentosDoCartao", {
+      cartao: c.nome, dia: c.diaVencimento
+    });
+
+    mostrarToast((r.ok ? "✅ " : "❌ ") + r.mensagem);
+    if (r.ok) {
+      limparTodoCache();
+      await carregarCartoesConfig();
+      await recarregarDados();
+    }
+  } catch (e) {
+    mostrarToast("❌ Sem conexão.");
+  }
+}
+
 function alternarSecaoFixas() {
   const secao = document.getElementById("cfg-secao-fixas");
   const rotulo = document.getElementById("cfg-fix-rotulo");

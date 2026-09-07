@@ -475,6 +475,35 @@
     }
     .tf-btn:active { box-shadow: var(--afundado-leve); }
 
+    /* ---- Vencimento dos cartoes ---- */
+    .cart-item {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 12px; padding: 12px; margin-top: 10px;
+    }
+    .cart-nome { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+    .cart-linha { display: flex; align-items: center; gap: 8px; }
+    .cart-linha label { font-size: 12px; color: var(--cinza-texto); }
+    .cart-linha input {
+      width: 62px; padding: 8px; border: 1px solid var(--borda);
+      border-radius: 8px; font-size: 14px; font-family: inherit; text-align: center;
+    }
+    .cart-linha button {
+      margin-left: auto; background: var(--azul); color: #fff; border: none;
+      border-radius: 9px; padding: 8px 14px; font-size: 12px; font-weight: 700;
+      font-family: inherit; cursor: pointer;
+    }
+    .cart-sub { font-size: 11px; color: var(--cinza-texto); margin-top: 7px; }
+    /* Dias fora do vencimento configurado: e o sinal de parcela cadastrada errada */
+    .cart-fora {
+      font-size: 11px; color: #92400e; background: #fef3c7;
+      border-radius: 8px; padding: 6px 9px; margin-top: 7px;
+    }
+    .cart-alinhar {
+      width: 100%; margin-top: 9px; padding: 9px; border: none; border-radius: 9px;
+      background: rgba(0,0,0,0.06); color: var(--cinza-texto);
+      font-size: 11px; font-weight: 700; font-family: inherit; cursor: pointer;
+    }
+
     /* ---- LANÇAR FALANDO ---- */
     #voz-conversa { min-height: 90px; max-height: 34vh; overflow-y: auto; margin-bottom: 14px; }
     .voz-msg {
@@ -3864,6 +3893,20 @@
           <div id="cfg-categorias"></div>
         </div>
 
+        <div class="cfg-grupo-titulo" style="margin-top:22px;">Cartões</div>
+        <button class="btn-modal cancelar" style="width:100%;" onclick="alternarSecaoCartoes()">
+          <span id="cfg-cart-rotulo">💳 Vencimento dos cartões</span>
+        </button>
+
+        <div id="cfg-secao-cartoes" style="display:none;">
+          <div class="cfg-aviso">
+            O dia do vencimento decide em qual fatura cada compra nova cai.
+            Mudar aqui não mexe no que já está lançado — para isso, use
+            &quot;Alinhar as compras em aberto&quot;.
+          </div>
+          <div id="cfg-lista-cartoes"></div>
+        </div>
+
         <div class="cfg-grupo-titulo" style="margin-top:22px;">Despesas fixas</div>
         <button class="btn-modal cancelar" style="width:100%;" onclick="alternarSecaoFixas()">
           <span id="cfg-fix-rotulo">🔁 Gerenciar despesas fixas</span>
@@ -4286,7 +4329,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=59"></script>
+  <script src="app.js?v=60"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
