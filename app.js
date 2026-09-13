@@ -4228,6 +4228,13 @@ function mostrarTelaInterna() {
 
   if (soTrabalho()) { aplicarModoSoTrabalho(); return; }
 
+  // Aqui, e não no load: a sessão já está em mãos. Antes isto rodava antes do
+  // login resolver, e o envio das compras capturadas ia sem credencial.
+  if (!capturadasJaVerificadas) {
+    capturadasJaVerificadas = true;
+    verificarComprasCapturadas();
+  }
+
   // 👉 Os dois botões flutuantes só aparecem no dashboard
   const noDash = (abaAtiva === "dashboard");
   document.getElementById("btn-nova-despesa").style.display = noDash ? "flex" : "none";
@@ -4418,7 +4425,6 @@ window.addEventListener("load", async function () {
   verificarAtualizacaoApp();
   verificarAtalhoDeAbertura();
   verificarDocumentoCompartilhado();
-  verificarComprasCapturadas();
 
   // Com o app já aberto, o compartilhamento chega pelo onNewIntent do
   // Android e esta página não recarrega — só descobre ao voltar à tona.
@@ -5072,6 +5078,7 @@ function abrirEdicaoAprovacaoPorChave(chave, novos) {
 // IA CENT"). Isso precisa de olho humano antes de virar dado.
 // ============================================================================
 let comprasCapturadas = [];
+let capturadasJaVerificadas = false;   // mostrarTelaInterna roda mais de uma vez
 
 function pluginNotificacoesBanco() {
   try {
@@ -5124,6 +5131,81 @@ async function verificarComprasCapturadas() {
 
   } catch (e) {
     // Fila indisponível não é erro que mereça interromper a abertura do app.
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Relê o que está na barra de notificações agora e manda para Aprovações.
+//
+// O caminho automático depende de o serviço estar ligado NO INSTANTE em que o
+// banco notifica. Se ele estava desligado — app recém-atualizado, aparelho
+// recém-ligado, permissão religada agora —, aquela entrega já passou e não
+// volta. Enquanto o aviso do banco continuar na barra, este botão o recupera.
+//
+// O resultado é dito em etapas de propósito: "14 na barra, nenhuma dos seus
+// bancos" aponta para o problema; "não achei nada" não aponta para lugar
+// nenhum.
+// ----------------------------------------------------------------------------
+async function varrerNotificacoesAgora() {
+  const P = pluginNotificacoesBanco();
+  const btn = document.getElementById("cap-btn-varrer");
+  const aviso = document.getElementById("cap-aviso");
+
+  if (!P) {
+    aviso.textContent = "Isto só funciona dentro do aplicativo, não pelo navegador.";
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Lendo...";
+  aviso.textContent = "";
+
+  try {
+    const r = await P.varrerAgora();
+
+    if (!r.ok) {
+      aviso.textContent = "⚠️ " + (r.motivo || "Não consegui ler.") +
+        " Desligue e religue a permissão de acesso a notificações.";
+      return;
+    }
+
+    const resumo = r.naBarra + " na barra · " + r.dosBancos + " do XP ou Inter · " +
+                   r.capturadas + " nova(s)";
+
+    // Recarrega a fila e tenta mandar o que houver.
+    const lista = await P.listar();
+    comprasCapturadas = (lista && lista.itens) ? lista.itens : [];
+    renderizarComprasCapturadas();
+
+    if (!comprasCapturadas.length) {
+      aviso.textContent = r.dosBancos === 0
+        ? resumo + ". Nenhuma notificação dos seus bancos está na barra — " +
+          "se você já dispensou o aviso da compra, ele não volta."
+        : resumo + ". As notificações do banco que estão na barra não são " +
+          "compra no crédito.";
+      return;
+    }
+
+    const res = await mandarCapturadas();
+
+    if (res.enviadas && !res.falhas.length) {
+      fecharComprasCapturadas();
+      mostrarToast("✅ " + res.enviadas + " compra(s) em Aprovações.");
+      checarPendentesAprovacao();
+      return;
+    }
+    if (!res.enviadas && !res.falhas.length) {
+      aviso.textContent = resumo + ". Já estavam em Aprovações.";
+      renderizarComprasCapturadas();
+      return;
+    }
+    aviso.textContent = "⚠️ " + res.falhas.slice(0, 2).join(" · ");
+
+  } catch (e) {
+    aviso.textContent = "⚠️ " + (e && e.message ? e.message : "Falhou a leitura.");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔄 Ler as notificações que estão na barra agora";
   }
 }
 

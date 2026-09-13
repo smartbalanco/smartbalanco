@@ -488,6 +488,14 @@
     .dc-titulo { font-size: 13px; font-weight: 700; }
     .dc-sub { font-size: 11px; opacity: .8; line-height: 1.35; }
 
+    .cap-varrer {
+      display: block; width: 100%; margin-bottom: 14px; padding: 11px;
+      background: var(--surf2); color: var(--txt); border: none;
+      border-radius: 11px; font-family: inherit; font-size: 12px;
+      font-weight: 600; cursor: pointer;
+    }
+    .cap-varrer:disabled { opacity: .5; cursor: default; }
+
     /* ---- Diagnóstico da captura de notificações ---- */
     .cap-diag {
       background: var(--surf2); border-radius: 12px;
@@ -3068,6 +3076,13 @@
              funcionando". -->
         <div id="cap-diagnostico"></div>
 
+        <!-- Relê o que ainda está na barra de notificações. Existe porque o
+             caminho normal é cego: o Android entrega cada notificação uma vez
+             só, e a que chegou com o serviço desligado se perdeu sem rastro. -->
+        <button class="cap-varrer" id="cap-btn-varrer" onclick="varrerNotificacoesAgora()">
+          🔄 Ler as notificações que estão na barra agora
+        </button>
+
         <div id="cap-lista"></div>
         <div class="cfg-aviso" id="cap-aviso"></div>
 
@@ -4483,7 +4498,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=66"></script>
+  <script src="app.js?v=67"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
