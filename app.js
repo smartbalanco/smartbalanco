@@ -3579,7 +3579,39 @@ async function irParaMesAtual() {
   await recarregarDados();
 }
 
+// Compara a versão que ESTA página carregou com a que o servidor serve agora.
+//
+// Existe porque o ↻ recarregava dados, não a página: depois de uma publicação
+// que mexesse no HTML, apertá-lo não trazia a tela nova, e não havia nada no
+// app que trouxesse. Quem só usa o aplicativo não tem "atualizar a página".
+async function conferirPaginaNova() {
+  try {
+    const resp = await fetch("./index.html", { cache: "reload" });
+    if (!resp.ok) return false;
+
+    const html = await resp.text();
+    const servida = (html.match(/app\.js\?v=(\d+)/) || [])[1];
+
+    // A versão desta página está na própria tag que a carregou.
+    const tag = document.querySelector('script[src*="app.js?v="]');
+    const minha = tag ? (tag.getAttribute("src").match(/v=(\d+)/) || [])[1] : null;
+
+    return !!(servida && minha && servida !== minha);
+  } catch (e) {
+    return false;   // sem rede: não é hora de falar de atualização
+  }
+}
+
 async function recarregarDados() {
+  // Antes dos dados: se a própria tela está velha, recarregar dados não
+  // adianta — o que o usuário procura pode nem existir neste HTML.
+  conferirPaginaNova().then(function (temNova) {
+    if (!temNova) return;
+    mostrarToastComAcaoGenerica("Há uma versão nova do app", "Atualizar", function () {
+      location.reload();
+    });
+  });
+
   const btn = document.getElementById("btn-atualizar");
   if (btn) btn.classList.add("girando");
 
