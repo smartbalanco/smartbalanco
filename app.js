@@ -5178,6 +5178,13 @@ async function pintarDiagnosticoCaptura(P) {
   html += linha("Permissão de ler notificações",
                 d.temPermissao ? "concedida" : "faltando",
                 d.temPermissao ? "ok" : "nao");
+  // Permissão concedida e serviço CONECTADO são coisas diferentes: atualizar o
+  // app derruba a conexão, e ela costuma só voltar religando a permissão. Sem
+  // esta linha, esse caso se disfarça de "não comprei nada".
+  html += linha("Serviço ligado",
+                d.conectadoDesde ? "sim, desde " + tempoRelativoCurto(d.conectadoDesde)
+                                 : "não",
+                d.conectadoDesde ? "ok" : "nao");
   html += linha("Bancos observados", "XP e Inter");
   html += linha("Última notificação lida",
                 tempoRelativoCurto(d.ultimaVista),
@@ -5198,6 +5205,10 @@ async function pintarDiagnosticoCaptura(P) {
               '</div>';
     });
     html += '</div>';
+  }
+  if (d.pacotes) {
+    html += '<div class="cap-diag-rot" style="margin-top:8px;font-size:10px;opacity:.7">' +
+              'Lendo de: ' + escaparHtml(d.pacotes) + '</div>';
   }
   html += '</div>';
 
