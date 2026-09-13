@@ -5090,14 +5090,92 @@ async function verificarComprasCapturadas() {
     comprasCapturadas = (r && r.itens) ? r.itens : [];
     if (!comprasCapturadas.length) return;
 
+    // Manda sozinho. Antes isto só mostrava um aviso, e a compra só chegava a
+    // Aprovações depois de tocar em "Ver" e depois em "Enviar" -- dois toques
+    // que existiam por causa de como a coisa foi construída (uma fila no
+    // aparelho), não por uma decisão que valesse a pena pedir.
+    //
+    // Mandar sozinho é seguro porque o destino é APROVAÇÕES, que é justamente
+    // onde se confere: a compra entra como cartão amarelo e não vira lançamento
+    // nenhum antes de você aprovar.
+    const res = await mandarCapturadas();
+
+    if (!res.enviadas && !res.falhas.length) return;   // só duplicadas: nada a dizer
+
+    if (res.enviadas && !res.falhas.length) {
+      mostrarToastComAcaoGenerica(
+        "✅ " + res.enviadas + " compra(s) em Aprovações",
+        "Ver",
+        function () { trocarAba("aprovacoes"); }
+      );
+      checarPendentesAprovacao();
+      return;
+    }
+
+    // Falhou: o aviso diz o motivo e a fila continua intacta, para tentar de
+    // novo. Silêncio aqui foi o que fez dois dias de captura parecerem que o
+    // recurso não funcionava.
     mostrarToastComAcaoGenerica(
-      "💳 " + comprasCapturadas.length + " compra(s) detectada(s)",
+      "⚠ " + res.falhas.length + " compra(s) não entraram: " +
+        (res.falhas[0] || "erro desconhecido"),
       "Ver",
       abrirComprasCapturadas
     );
+
   } catch (e) {
     // Fila indisponível não é erro que mereça interromper a abertura do app.
   }
+}
+
+// ----------------------------------------------------------------------------
+// Envia a fila para Aprovações. Só a mecânica: quem cuida de tela é quem chama,
+// porque isto roda tanto na abertura do app (sem modal nenhum aberto) quanto
+// pelo botão da lista.
+//
+// A fila só é limpa quando TUDO entrou — limpar com falha perderia a compra, e
+// ela não existe em nenhum outro lugar.
+// ----------------------------------------------------------------------------
+async function mandarCapturadas() {
+  let enviadas = 0;
+  let jaEstavam = 0;      // recusadas por já existirem: resolvidas, não falhas
+  const falhas = [];
+
+  for (let i = 0; i < comprasCapturadas.length; i++) {
+    const c = comprasCapturadas[i];
+    const valor = (c.valor || "").replace(/\./g, "").replace(",", ".");
+    const quando = c.quando ? new Date(c.quando) : new Date();
+
+    try {
+      const r = await chamarServidor("lancarCompraDeNotificacao", {
+        descricao: c.estabelecimento || c.titulo || "Compra no cartão",
+        valor: valor,
+        metodo: metodoDoBanco(c.app),
+        categoria: "",              // fica em branco: quem classifica é você
+        dataCompra: quando.getFullYear() + "-" +
+                    ("0" + (quando.getMonth() + 1)).slice(-2) + "-" +
+                    ("0" + quando.getDate()).slice(-2),
+        banco: c.app
+      });
+
+      if (r.ok) enviadas++;
+      else if (r.erro === "DUPLICADA") jaEstavam++;
+      else falhas.push((c.estabelecimento || "compra") + ": " + (r.mensagem || "falhou"));
+    } catch (e) {
+      falhas.push((c.estabelecimento || "compra") + ": sem conexão");
+      break;   // rede caiu: parar evita repetir o erro em todas
+    }
+  }
+
+  // Limpa quando nada ficou pendente de verdade. O que entrou agora e o que já
+  // estava lá contam igual: nos dois casos a compra está em Aprovações.
+  if ((enviadas || jaEstavam) && !falhas.length) {
+    const P = pluginNotificacoesBanco();
+    if (P) { try { await P.limpar(); } catch (e) {} }
+    comprasCapturadas = [];
+    limparTodoCache();
+  }
+
+  return { enviadas: enviadas, jaEstavam: jaEstavam, falhas: falhas };
 }
 
 // Igual ao toast com "Editar", mas com rótulo e ação livres.
@@ -5292,48 +5370,19 @@ async function enviarCapturadasParaAprovacoes() {
   btn.disabled = true;
   btn.textContent = "Enviando...";
 
-  let enviadas = 0;
-  const falhas = [];
+  const res = await mandarCapturadas();
 
-  for (let i = 0; i < comprasCapturadas.length; i++) {
-    const c = comprasCapturadas[i];
-    const valor = (c.valor || "").replace(/\./g, "").replace(",", ".");
-    const quando = c.quando ? new Date(c.quando) : new Date();
-
-    try {
-      const r = await chamarServidor("lancarCompraDeNotificacao", {
-        descricao: c.estabelecimento || c.titulo || "Compra no cartão",
-        valor: valor,
-        metodo: metodoDoBanco(c.app),
-        categoria: "",              // fica em branco: quem classifica é você
-        dataCompra: quando.getFullYear() + "-" +
-                    ("0" + (quando.getMonth() + 1)).slice(-2) + "-" +
-                    ("0" + quando.getDate()).slice(-2),
-        banco: c.app
-      });
-
-      if (r.ok) enviadas++;
-      else falhas.push((c.estabelecimento || "compra") + ": " + (r.mensagem || "falhou"));
-    } catch (e) {
-      falhas.push((c.estabelecimento || "compra") + ": sem conexão");
-      break;   // rede caiu: parar evita repetir o erro em todas
-    }
-  }
-
-  // A fila só é limpa quando TUDO entrou. Limpar com falha perderia a compra.
-  if (enviadas && !falhas.length) {
-    const P = pluginNotificacoesBanco();
-    if (P) { try { await P.limpar(); } catch (e) {} }
-    comprasCapturadas = [];
+  if (res.enviadas && !res.falhas.length) {
     fecharComprasCapturadas();
-    mostrarToast("✅ " + enviadas + " compra(s) em Aprovações.");
+    mostrarToast("✅ " + res.enviadas + " compra(s) em Aprovações.");
     checarPendentesAprovacao();
-  } else {
-    aviso.textContent = enviadas + " enviada(s), " + falhas.length + " com problema: " +
-                        falhas.slice(0, 3).join(" · ");
-    btn.disabled = false;
-    renderizarComprasCapturadas();
+    return;
   }
+
+  aviso.textContent = res.enviadas + " enviada(s), " + res.falhas.length +
+                      " com problema: " + res.falhas.slice(0, 3).join(" · ");
+  btn.disabled = false;
+  renderizarComprasCapturadas();
 }
 
 // O nome do banco vira o método do lançamento. Sem correspondência exata, cai
