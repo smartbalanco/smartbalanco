@@ -475,6 +475,19 @@
     }
     .tf-btn:active { box-shadow: var(--afundado-leve); }
 
+    /* ---- Os dois caminhos do lançamento por documento ---- */
+    .doc-caminhos { display: flex; flex-direction: column; gap: 9px; margin-top: 4px; }
+    .doc-caminho {
+      display: flex; flex-direction: column; gap: 3px;
+      width: 100%; padding: 13px 15px; text-align: left;
+      border: none; border-radius: 12px; cursor: pointer;
+      font-family: inherit; background: var(--verde); color: var(--verde-tinta);
+    }
+    .doc-caminho.alt { background: var(--surf2); color: var(--txt); }
+    .doc-caminho:disabled { opacity: .45; cursor: default; }
+    .dc-titulo { font-size: 13px; font-weight: 700; }
+    .dc-sub { font-size: 11px; opacity: .8; line-height: 1.35; }
+
     /* ---- Diagnóstico da captura de notificações ---- */
     .cap-diag {
       background: var(--surf2); border-radius: 12px;
@@ -4287,10 +4300,26 @@
                  placeholder="Ex: 12x cartão XP, mercado do mês..." />
         </div>
 
+        <!-- Dois caminhos para o mesmo documento, e a diferença não é a
+             análise (as duas usam a mesma IA) e sim ONDE a compra cai e QUEM
+             confere. Por isso cada botão diz o destino: sem essa linha, os
+             nomes sozinhos não distinguem um do outro. -->
+        <div class="doc-caminhos" id="doc-caminhos">
+          <button class="doc-caminho" id="doc-btn-analisar"
+                  onclick="analisarDocumento()" disabled>
+            <span class="dc-titulo">🔍 Analisar e revisar</span>
+            <span class="dc-sub">Você confere aqui e já entra lançado</span>
+          </button>
+
+          <button class="doc-caminho alt" id="doc-btn-auto"
+                  onclick="lancarAutomaticoDoDocumento()" disabled>
+            <span class="dc-titulo">⚡ Lançar automático</span>
+            <span class="dc-sub">Cai em Aprovações para conferir depois</span>
+          </button>
+        </div>
+
         <div class="modal-acoes">
           <button class="btn-modal cancelar" onclick="fecharModalDoc()">Cancelar</button>
-          <button class="btn-modal confirmar" id="doc-btn-analisar"
-                  onclick="analisarDocumento()" disabled>🧠 Analisar</button>
         </div>
       </div>
 
@@ -4454,7 +4483,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=63"></script>
+  <script src="app.js?v=64"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

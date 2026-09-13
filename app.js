@@ -798,7 +798,7 @@ function usarCompartilhado(comoFazer) {
                      '<div class="dp-nome">' + escaparHtml(doc.nome) + '</div>';
   }
   prev.style.display = "block";
-  document.getElementById("doc-btn-analisar").disabled = false;
+  habilitarCaminhosDoDocumento(true);
 }
 
 // ============================================================================
@@ -8547,7 +8547,7 @@ function abrirSeletorArquivo() {
   document.getElementById("doc-erro").style.display = "none";
   document.getElementById("doc-preview").style.display = "none";
   document.getElementById("doc-observacao").value = "";
-  document.getElementById("doc-btn-analisar").disabled = true;
+  habilitarCaminhosDoDocumento(false);
 
   // O botão de confirmar fica desabilitado durante o envio e o modal fecha
   // antes da resposta chegar. Sem religar aqui, o 2º lançamento pegava o
@@ -8555,7 +8555,7 @@ function abrirSeletorArquivo() {
   const btnConfirmar = document.getElementById("dr-btn-confirmar");
   btnConfirmar.disabled = false;
   btnConfirmar.textContent =
-    modoDocumento === "lancar" ? "📥 Enviar para aprovação" : "📎 Arquivar no e-mail";
+    modoDocumento === "lancar" ? "✅ Lançar" : "📎 Arquivar no e-mail";
 
   document.getElementById("doc-input-camera").value = "";
   document.getElementById("doc-input-arquivo").value = "";
@@ -8601,7 +8601,7 @@ function aoEscolherArquivo(input) {
     }
     prev.style.display = "block";
 
-    document.getElementById("doc-btn-analisar").disabled = false;
+    habilitarCaminhosDoDocumento(true);
   };
   leitor.readAsDataURL(file);
 }
@@ -8936,6 +8936,74 @@ function buscarDespesaPorMov() {
   }, 600);
 }
 
+// Liga ou desliga os dois caminhos de uma vez. Eles dependem da mesma coisa --
+// haver arquivo escolhido -- então tratar um sem o outro só cria o estado em
+// que metade da tela responde.
+function habilitarCaminhosDoDocumento(ligado) {
+  ["doc-btn-analisar", "doc-btn-auto"].forEach(function (id) {
+    const b = document.getElementById(id);
+    if (b) b.disabled = !ligado;
+  });
+}
+
+// ============================================================================
+// LANÇAR AUTOMÁTICO
+// ----------------------------------------------------------------------------
+// Manda o documento e deixa a IA lançar sozinha, sem parar na tela de revisão.
+// A compra cai em Aprovações como pré-lançamento (o cartão amarelo), que é onde
+// a conferência acontece depois.
+//
+// É uma chamada só: o servidor analisa e grava na mesma ida. Analisar e depois
+// gravar faria a foto subir duas vezes.
+// ============================================================================
+async function lancarAutomaticoDoDocumento() {
+  if (!arquivoAtual) return;
+
+  habilitarCaminhosDoDocumento(false);
+  document.getElementById("doc-etapa-arquivo").style.display = "none";
+  document.getElementById("doc-etapa-lendo").style.display = "block";
+
+  try {
+    const r = await chamarServidorPost("lancarAutomatico", {
+      arquivo: arquivoAtual.base64,
+      mimeType: arquivoAtual.mimeType,
+      observacao: document.getElementById("doc-observacao").value.trim()
+    });
+
+    if (!r.ok) {
+      // Falhou o automático, mas a foto continua em mãos: volta para a escolha
+      // em vez de obrigar a fotografar tudo de novo.
+      document.getElementById("doc-etapa-lendo").style.display = "none";
+      document.getElementById("doc-etapa-arquivo").style.display = "block";
+      habilitarCaminhosDoDocumento(true);
+      mostrarErroDoc((r.mensagem || "Não consegui lançar.") +
+                     ' Tente "Analisar e revisar".');
+      return;
+    }
+
+    fecharModalDoc();
+    mostrarToast("✅ " + r.mensagem);
+
+    // Campo que a IA não conseguiu preencher é dito na hora, com nome. Descobrir
+    // isso só na hora de aprovar, dias depois, é quando já não se lembra do que
+    // era a compra.
+    if (r.faltando && r.faltando.length) {
+      setTimeout(function () {
+        mostrarToast("⚠ Ficou sem " + r.faltando.join(" e ") + ". Complete em Aprovações.");
+      }, 2600);
+    }
+
+    limparTodoCache();
+    checarPendentesAprovacao();
+
+  } catch (e) {
+    document.getElementById("doc-etapa-lendo").style.display = "none";
+    document.getElementById("doc-etapa-arquivo").style.display = "block";
+    habilitarCaminhosDoDocumento(true);
+    mostrarErroDoc("Sem conexão. Tente de novo.");
+  }
+}
+
 // ============================================================================
 // CONFIRMAR (lançar ou arquivar)
 // ============================================================================
@@ -8985,8 +9053,12 @@ async function confirmarDocumento() {
     }
   } else {
     // Modo lançar: valida os campos
-    if (!dados.descricao) { mostrarErroDoc("Informe a descrição."); btn.disabled = false; btn.textContent = "📥 Enviar para aprovação"; return; }
-    if (!dados.categoria) { mostrarErroDoc("Escolha a categoria."); btn.disabled = false; btn.textContent = "📥 Enviar para aprovação"; return; }
+    if (!dados.descricao) { mostrarErroDoc("Informe a descrição."); btn.disabled = false; btn.textContent = "✅ Lançar"; return; }
+    if (!dados.categoria) { mostrarErroDoc("Escolha a categoria."); btn.disabled = false; btn.textContent = "✅ Lançar"; return; }
+
+    // Você acabou de ver e corrigir o que a IA leu. Passar por Aprovações
+    // agora seria pedir a mesma conferência de novo, na mesma tarde.
+    dados.destino = "transacoes";
 
     dados.metodo = document.getElementById("dr-metodo").value;
     dados.totalParcelas = document.getElementById("dr-parcelas").value;
@@ -8995,7 +9067,7 @@ async function confirmarDocumento() {
     dados.jaPago = jaPago ? "true" : "false";
     if (jaPago) dados.dataPagamento = document.getElementById("dr-datapgto").value;
 
-    if (!dados.metodo) { mostrarErroDoc("Escolha o método."); btn.disabled = false; btn.textContent = "📥 Enviar para aprovação"; return; }
+    if (!dados.metodo) { mostrarErroDoc("Escolha o método."); btn.disabled = false; btn.textContent = "✅ Lançar"; return; }
   }
 
   const desc = dados.descricao || "documento";
