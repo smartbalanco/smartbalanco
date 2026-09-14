@@ -5353,7 +5353,7 @@ async function pintarDiagnosticoCaptura(P) {
 
   let d;
   try {
-    d = await P.diagnostico();
+    d = ultimoDiagnostico = await P.diagnostico();
   } catch (e) {
     alvo.innerHTML = "";   // versão antiga do app, sem esse método
     return;
@@ -5378,6 +5378,9 @@ async function pintarDiagnosticoCaptura(P) {
                                  : "não",
                 d.conectadoDesde ? "ok" : "nao");
   html += linha("Bancos observados", "XP e Inter");
+  html += linha("Esperando envio",
+                (d.naFila || 0) + (d.naFila === 1 ? " compra" : " compras"),
+                d.naFila ? "ok" : "");
   html += linha("Última notificação lida",
                 tempoRelativoCurto(d.ultimaVista),
                 d.ultimaVista ? "ok" : "nao");
@@ -5405,6 +5408,66 @@ async function pintarDiagnosticoCaptura(P) {
   html += '</div>';
 
   alvo.innerHTML = html;
+}
+
+let ultimoDiagnostico = null;
+
+// Junta num texto só tudo que decide se a captura funciona, para poder ser
+// colado numa conversa. Descrever isso a cada rodada -- "o que diz a linha
+// tal?" -- custou várias idas e vindas sem fechar o diagnóstico.
+//
+// Vai o texto ORIGINAL das notificações junto: é ele que diz se o filtro
+// descartou uma compra de verdade, e nenhuma outra informação substitui.
+async function copiarDiagnosticoCaptura() {
+  const d = ultimoDiagnostico || {};
+  const l = [];
+
+  l.push("=== Captura de notificações ===");
+  l.push("Permissão: " + (d.temPermissao ? "concedida" : "FALTANDO"));
+  l.push("Serviço ligado: " + (d.conectadoDesde
+        ? "sim (" + tempoRelativoCurto(d.conectadoDesde) + ")" : "NÃO"));
+  l.push("Última notificação lida: " + tempoRelativoCurto(d.ultimaVista));
+  l.push("Lendo de: " + (d.pacotes || "?"));
+  l.push("Versão da tela: " + (versaoDaPagina() || "?"));
+  l.push("");
+
+  l.push("Na fila (" + comprasCapturadas.length + "):");
+  if (!comprasCapturadas.length) l.push("  (vazia)");
+  comprasCapturadas.forEach(function (c) {
+    l.push("  - " + (c.app || "?") + " | R$ " + (c.valor || "?") +
+           " | " + (c.estabelecimento || "sem lugar"));
+    l.push("    texto: " + (c.texto || "(vazio)"));
+  });
+  l.push("");
+
+  const ign = d.ignorados || [];
+  l.push("Ignoradas (" + ign.length + "):");
+  if (!ign.length) l.push("  (nenhuma)");
+  ign.slice(-8).forEach(function (i) {
+    l.push("  - " + (i.app || "?") + " | " + (i.motivo || "?"));
+    l.push("    texto: " + (i.texto || "(vazio)"));
+  });
+
+  const texto = l.join("\n");
+
+  try {
+    await navigator.clipboard.writeText(texto);
+    mostrarToast("✅ Diagnóstico copiado. É só colar.");
+  } catch (e) {
+    // A área de transferência falha em WebView em alguns aparelhos. Mostrar o
+    // texto ainda permite copiar à mão -- melhor que um erro sem saída.
+    const aviso = document.getElementById("cap-aviso");
+    aviso.textContent = texto;
+    aviso.style.whiteSpace = "pre-wrap";
+    aviso.style.userSelect = "text";
+    mostrarToast("Copie o texto que apareceu abaixo.");
+  }
+}
+
+// A versão que ESTA página carregou, lida da tag que a trouxe.
+function versaoDaPagina() {
+  const tag = document.querySelector('script[src*="app.js?v="]');
+  return tag ? (tag.getAttribute("src").match(/v=(\d+)/) || [])[1] : null;
 }
 
 // "há 3 min", "há 2 h", "ontem". Zero vira "nenhuma ainda", que é o estado

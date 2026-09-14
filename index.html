@@ -3083,6 +3083,12 @@
           🔄 Ler as notificações que estão na barra agora
         </button>
 
+        <!-- Junta tudo que esta tela sabe num texto só. Descrever isto por
+             conversa custou várias idas e vindas sem fechar o diagnóstico. -->
+        <button class="cap-varrer" id="cap-btn-copiar" onclick="copiarDiagnosticoCaptura()">
+          📋 Copiar diagnóstico
+        </button>
+
         <div id="cap-lista"></div>
         <div class="cfg-aviso" id="cap-aviso"></div>
 
@@ -4509,7 +4515,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=69"></script>
+  <script src="app.js?v=70"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
