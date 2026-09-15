@@ -520,10 +520,23 @@
     .cap-ign-item b { color: var(--txt); font-weight: 600; }
     .cap-ign-motivo { color: var(--erro); }
 
+    /* ---- Veio da notificação do cartão ---- */
+    /* !important porque a "camada UI moderna", no fim deste arquivo, força
+       background e border em todo .card com !important. Sem isto o cartão sai
+       cinza igual aos outros -- foi o que aconteceu com o amarelo, que passou
+       versões inteiras sem nunca ter aparecido amarelo. */
+    .card-aprov.do-cartao {
+      border: 1px solid #a9c8f0 !important;
+      background: linear-gradient(180deg, #eaf2fd 0%, #f7f9fc 130px) !important;
+    }
+    .ap-pre-aviso.do-cartao { background: #dfeafb; color: #1f4a7a; }
+    .ap-pre-aviso.do-cartao b { color: #1f4a7a; }
+    .ap-pre-aviso.do-cartao .ap-pre-foto { color: #1f4a7a; }
+
     /* ---- Pre-lancamento (leitura automatica, ainda nao conferida) ---- */
     .card-aprov.pre-lancamento {
-      border: 1px solid #f5d78e;
-      background: linear-gradient(180deg, #fff8e6 0%, var(--surf) 120px);
+      border: 1px solid #f5d78e !important;
+      background: linear-gradient(180deg, #fff8e6 0%, #fdfbf5 130px) !important;
     }
     .ap-pre-aviso {
       background: #fff3d1; border-radius: 10px; padding: 10px 12px;
@@ -4515,7 +4528,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=70"></script>
+  <script src="app.js?v=71"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

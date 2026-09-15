@@ -5139,7 +5139,14 @@ async function verificarComprasCapturadas() {
     // nenhum antes de você aprovar.
     const res = await mandarCapturadas();
 
-    if (!res.enviadas && !res.falhas.length) return;   // só duplicadas: nada a dizer
+    // Só duplicadas: diz, em vez de calar. Some da fila de qualquer jeito, e
+    // silêncio aqui parece que a compra se perdeu.
+    if (!res.enviadas && !res.falhas.length) {
+      if (res.jaEstavam) {
+        mostrarToast("✓ " + res.jaEstavam + " compra(s) já estavam em Aprovações.");
+      }
+      return;
+    }
 
     if (res.enviadas && !res.falhas.length) {
       mostrarToastComAcaoGenerica(
@@ -5263,6 +5270,12 @@ async function mandarCapturadas() {
       const r = await chamarServidor("lancarCompraDeNotificacao", {
         descricao: c.estabelecimento || c.titulo || "Compra no cartão",
         valor: valor,
+        // O identificador da notificação é o que distingue "mandei de novo" de
+        // "comprei duas vezes a mesma coisa". Sem ele, dois cafés no mesmo
+        // lugar e no mesmo dia viravam um só.
+        idNotificacao: c.assinatura || "",
+        // Pode sair vazio quando a lista de métodos ainda não chegou; o
+        // servidor descobre pelo banco. Ver metodoPeloBanco.
         metodo: metodoDoBanco(c.app),
         categoria: "",              // fica em branco: quem classifica é você
         dataCompra: quando.getFullYear() + "-" +
@@ -6304,16 +6317,24 @@ function renderizarAprovacoes() {
     // Pré-lançamento sai amarelo: veio de leitura automática (notificação do
     // banco) e ainda não passou por olho humano. A cor é o aviso — no meio de
     // uma lista de aprovações, ele exige mais atenção que os outros.
-    card.className = "card card-aprov" + (g.preLancamento ? " pre-lancamento" : "");
+    // Duas origens automáticas, duas aparências. As duas pedem conferência, mas
+    // erram de jeitos diferentes: a foto erra a categoria, a notificação erra o
+    // nome do estabelecimento ("PAG*PADAR IA CENT"). Saber qual é de relance
+    // muda o que você vai conferir.
+    const daNotificacao = (g.origem === "notificacao");
+    card.className = "card card-aprov" +
+      (g.preLancamento ? (daNotificacao ? " do-cartao" : " pre-lancamento") : "");
 
-    const avisoPre = g.preLancamento
-      ? '<div class="ap-pre-aviso">' +
-          '<b>⚡ Pré-lançamento</b> · lido da notificação do banco. ' +
-          'Confira antes de aprovar.' +
-          '<button class="ap-pre-foto" onclick="anexarFotoAoPreLancamento(\'' +
-            g.chave + '\')">📷 Melhorar com foto do comprovante</button>' +
-        '</div>'
-      : '';
+    const avisoPre = !g.preLancamento ? '' :
+      '<div class="ap-pre-aviso' + (daNotificacao ? ' do-cartao' : '') + '">' +
+        (daNotificacao
+          ? '<b>💳 Automático do cartão</b> · lido da notificação do banco. ' +
+            'Confira o nome e a categoria antes de aprovar.'
+          : '<b>⚡ Pré-lançamento</b> · lido do documento. ' +
+            'Confira antes de aprovar.') +
+        '<button class="ap-pre-foto" onclick="anexarFotoAoPreLancamento(\'' +
+          g.chave + '\')">📷 Melhorar com foto do comprovante</button>' +
+      '</div>';
 
     card.innerHTML =
       avisoPre +
