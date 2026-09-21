@@ -928,6 +928,41 @@ async function alimentarWidgetAgenda() {
   }
 }
 
+// ============================================================================
+// WIDGET DE CALENDÁRIO
+// ----------------------------------------------------------------------------
+// Busca o resumo do mês e entrega ao widget, junto da credencial que o botão
+// "atualizar" dele usa para buscar sozinho depois.
+//
+// Roda quando o app carrega dados novos. Sem isso o widget ficaria preso ao
+// ciclo de meia hora do Android e mostraria número velho logo depois de você
+// liquidar uma conta aqui dentro.
+// ============================================================================
+async function alimentarWidgetCalendario() {
+  const W = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Widget;
+  if (!W || !W.guardarResumo) return;   // navegador, ou APK antigo
+
+  try {
+    const r = await chamarServidor("resumoWidget");
+    if (!r || !r.ok) return;
+
+    await W.guardarResumo({ resumo: JSON.stringify(r) });
+
+    // A credencial vai junto, e só quando existe sessão de verdade. Passar
+    // vazio APAGA a guardada: credencial velha faria o serviço do widget
+    // tentar em silêncio e falhar para sempre.
+    if (W.guardarCredencial) {
+      await W.guardarCredencial({
+        url: sessaoAtual ? API_URL : "",
+        sessao: sessaoAtual || ""
+      });
+    }
+  } catch (e) {
+    // Widget é conveniência: falhar aqui não pode atrapalhar o app.
+    console.warn("Widget de calendário não atualizado:", e);
+  }
+}
+
 function desenharGradeCalendario() {
   const grade = document.getElementById("cal-grade");
   const primeiro = new Date(calAno, calMes, 1);
@@ -4266,6 +4301,10 @@ function mostrarTelaInterna() {
     capturadasJaVerificadas = true;
     verificarComprasCapturadas();
   }
+
+  // O widget é alimentado aqui pelo mesmo motivo das compras capturadas: a
+  // sessão já está em mãos, e é ela que o widget precisa guardar.
+  alimentarWidgetCalendario();
 
   // 👉 Os dois botões flutuantes só aparecem no dashboard
   const noDash = (abaAtiva === "dashboard");
