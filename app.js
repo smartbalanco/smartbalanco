@@ -980,6 +980,8 @@ let topicoAberto = null;
 let planoFiltroPessoa = "";          // "" = todos
 let planoPessoas = ["Paulo"];
 let planoPerguntas = {};
+let planoPerguntasPresente = {};
+let planoSigiloConfigurado = false;
 let planoCofrePorPessoa = {};
 
 const NOMES_TOPICOS = {
@@ -997,7 +999,10 @@ async function carregarPlanos() {
     planosCarregados = r.planos || [];
     planoPessoas = r.pessoas || planoPessoas;
     planoPerguntas = r.perguntas || {};
+    planoPerguntasPresente = r.perguntasPresente || {};
+    planoSigiloConfigurado = r.sigiloConfigurado === true;
     planoCofrePorPessoa = r.cofrePorPessoa || {};
+    pintarRevisoes(r.revisoes || []);
 
     pintarCofre(r.cofre || 0);
     pintarFiltroPessoas();
@@ -1274,7 +1279,8 @@ function abrirPlano(i) {
   document.getElementById("modal-plano").style.display = "flex";
   document.getElementById("pl-titulo").textContent = planoAberto.titulo;
   document.getElementById("pl-sub").textContent =
-    formatarMoeda(planoAberto.valor) + " · " + planoAberto.pessoa +
+    formatarMoeda(planoAberto.valor) + " · " +
+    (planoAberto.tipo === "presente" ? "🎁 presente para " : "") + planoAberto.pessoa +
     (planoAberto.diasFaltando ? " · faltam " + planoAberto.diasFaltando + " dias" : "");
   pintarFicha();
 }
@@ -1297,7 +1303,8 @@ function pintarFicha() {
   let html = "";
   for (let n = 1; n <= 7; n++) {
     const automatico = TOPICOS_AUTOMATICOS.indexOf(n) >= 0;
-    const perguntas = planoPerguntas[String(n)] || [];
+    const conjunto = (p.tipo === "presente") ? planoPerguntasPresente : planoPerguntas;
+    const perguntas = conjunto[String(n)] || [];
     const feito = automatico || perguntasCompletas(perguntas, p.respostas);
     const aberto = topicoAberto === n;
 
@@ -1328,6 +1335,7 @@ function pintarFicha() {
         corpo += '<button class="btn-modal confirmar" style="width:100%; margin-top:8px;" ' +
           'onclick="event.stopPropagation(); salvarTopico(' + n + ')">Salvar</button>';
       }
+      if (n === 2) corpo += simuladorHtml(p);
       if (n === 4) {
         corpo += '<button class="btn-modal cancelar" style="width:100%; margin-top:6px;" ' +
           'onclick="event.stopPropagation(); abrirLinks()">🔗 Onde comprar (' +
@@ -1407,7 +1415,8 @@ function alternarTopico(n) {
 
 async function salvarTopico(n) {
   if (!planoAberto) return;
-  const perguntas = planoPerguntas[String(n)] || [];
+  const conjunto = (planoAberto.tipo === "presente") ? planoPerguntasPresente : planoPerguntas;
+  const perguntas = conjunto[String(n)] || [];
 
   perguntas.forEach(function (q) {
     const el = document.getElementById("resp-" + q.c);
@@ -1445,8 +1454,8 @@ function pintarAcoesDoPlano() {
   document.getElementById("pl-acoes").innerHTML =
     '<button class="btn-modal cancelar" style="flex:1;" onclick="decidir(&quot;reprovar&quot;)">Desisti</button>' +
     '<button class="btn-modal cancelar" style="flex:1;" onclick="decidir(&quot;adiar&quot;)">+30 dias</button>' +
-    '<button class="btn-modal confirmar" style="flex:1;" onclick="decidir(&quot;aprovar&quot;)">' +
-      (p.veredito.situacao === "pronto" ? "Comprar" : "Comprar mesmo assim") + '</button>' +
+    '<button class="btn-modal confirmar" style="flex:1;" onclick="abrirComprar()">' +
+      (p.veredito.situacao === "pronto" ? "Compra feita" : "Comprei mesmo assim") + '</button>' +
     '<button class="cd-excluir" style="width:100%; margin-top:6px;" ' +
       'onclick="excluirPlanoApp()">Apagar este plano</button>';
 }
@@ -1498,6 +1507,219 @@ async function decidir(decisao) {
     limparTodoCache();
     carregarPlanos();
 
+  } catch (e) {
+    mostrarToast("⚠ Sem conexão.");
+  }
+}
+
+// ------------------------------------------------------------- simulação
+/**
+ * Como ficam os próximos meses se a compra for parcelada.
+ *
+ * Mostra o que JÁ está comprometido em cada mês e o que a parcela nova
+ * acrescenta. Um total solto ("R$ 890 em parcelas") não responde a pergunta
+ * que importa, que é se ainda vai caber em março.
+ */
+function simuladorHtml(p) {
+  const sim = p.simulacao;
+  let h = '<div class="simulador" onclick="event.stopPropagation()">' +
+    '<div class="sim-linha1">' +
+      '<label for="sim-parcelas">Simular em</label>' +
+      '<input type="number" id="sim-parcelas" min="1" max="24" step="1" value="' +
+        (p.parcelas || 1) + '" onchange="mudarParcelas()" />' +
+      '<span>vezes</span>' +
+    '</div>';
+
+  if (!sim || !sim.meses || !sim.meses.length) return h + '</div>';
+
+  h += '<div class="sim-valor">' + sim.parcelas + 'x de <b>' +
+       formatarMoeda(sim.valorParcela) + '</b></div>';
+
+  sim.meses.forEach(function (m) {
+    const largura = Math.min(100, Math.round(m.total / Math.max(1, m.total, 1) * 100));
+    h += '<div class="sim-mes">' +
+        '<span class="sim-rot">' + m.rotulo + '</span>' +
+        '<span class="sim-barra"><span style="width:' +
+          (m.jaComprometido / Math.max(m.total, 1) * 100) + '%"></span></span>' +
+        '<span class="sim-num" style="color:' + (m.cabe ? "var(--txt)" : "#b91c1c") + '">' +
+          formatarMoeda(m.total) + '</span>' +
+      '</div>';
+  });
+
+  const apertados = sim.meses.filter(function (m) { return !m.cabe; }).length;
+  if (apertados) {
+    h += '<div class="sim-aviso">' + apertados +
+         (apertados === 1 ? " mês fica" : " meses ficam") +
+         ' acima do que sobra hoje. A barra escura é o que já estava comprometido.</div>';
+  }
+  return h + '</div>';
+}
+
+async function mudarParcelas() {
+  const campo = document.getElementById("sim-parcelas");
+  if (!campo || !planoAberto) return;
+
+  const n = Math.max(1, Math.min(24, parseInt(campo.value) || 1));
+  try {
+    const r = await chamarServidor("salvarPlano", { id: planoAberto.id, parcelas: n });
+    if (!r.ok) { mostrarToast("⚠ " + r.mensagem); return; }
+
+    const idAtual = planoAberto.id;
+    await carregarPlanos();
+    const atual = planosCarregados.filter(function (x) { return x.id === idAtual; })[0];
+    if (atual) { planoAberto = atual; topicoAberto = 2; pintarFicha(); }
+  } catch (e) {
+    mostrarToast("⚠ Sem conexão.");
+  }
+}
+
+// ------------------------------------------------------------ compra feita
+/**
+ * Vira lançamento, com os dados do plano já preenchidos.
+ *
+ * Confirma antes de gravar: o plano sabe o quê e quanto, mas não sabe em qual
+ * cartão você passou nem em que categoria isso entra -- e adivinhar essas
+ * duas seria lançar errado com cara de certo.
+ */
+function abrirComprar() {
+  if (!planoAberto) return;
+  const p = planoAberto;
+
+  document.getElementById("modal-comprar").style.display = "flex";
+  document.getElementById("cp-descricao").value = p.titulo;
+
+  // O menor preço achado vale mais que o valor do plano: é o preço de hoje,
+  // não o do dia em que a vontade apareceu.
+  document.getElementById("cp-valor").value =
+    Number(p.menorPreco || p.valor).toFixed(2);
+
+  document.getElementById("cp-parcelas").value = p.parcelas || 1;
+  document.getElementById("cp-data").value = dataHojeISO();
+  document.getElementById("cp-pago").checked = false;
+  document.getElementById("cp-aviso").style.display = "none";
+
+  const sel = document.getElementById("cp-metodo");
+  const metodos = (listasValidas && listasValidas.metodos) || [];
+  sel.innerHTML = '<option value="">escolha...</option>' + metodos.map(function (m) {
+    return '<option value="' + escaparHtml(m) + '">' + escaparHtml(m) + '</option>';
+  }).join("");
+
+  document.getElementById("cp-categoria").value = "";
+}
+
+function fecharComprar() {
+  document.getElementById("modal-comprar").style.display = "none";
+}
+
+async function confirmarCompraDoPlano() {
+  if (!planoAberto) return;
+
+  const dados = {
+    id: planoAberto.id,
+    decisao: "aprovar",
+    valorFinal: document.getElementById("cp-valor").value,
+    totalParcelas: document.getElementById("cp-parcelas").value || 1,
+    metodo: document.getElementById("cp-metodo").value,
+    categoria: document.getElementById("cp-categoria").value.trim(),
+    dataCompra: document.getElementById("cp-data").value,
+    jaPago: document.getElementById("cp-pago").checked ? "true" : "false"
+  };
+  if (dados.jaPago === "true") dados.dataPagamento = dados.dataCompra;
+
+  const aviso = document.getElementById("cp-aviso");
+  if (!dados.metodo)    { aviso.textContent = "Escolha o método."; aviso.style.display = "block"; return; }
+  if (!dados.categoria) { aviso.textContent = "Escolha a categoria."; aviso.style.display = "block"; return; }
+  if (!(parseFloat(dados.valorFinal) > 0)) {
+    aviso.textContent = "Informe o valor pago."; aviso.style.display = "block"; return;
+  }
+
+  // Comprar antes da carência vencer é permitido, mas não em silêncio.
+  if (!planoAberto.carenciaVencida &&
+      !confirm("Ainda faltam " + planoAberto.diasFaltando +
+               " dias de carência. Lançar mesmo assim?")) return;
+
+  const btn = document.getElementById("cp-btn");
+  btn.disabled = true;
+  btn.textContent = "Lançando...";
+
+  try {
+    const r = await chamarServidor("decidirPlano", dados);
+    if (!r.ok) { aviso.textContent = "⚠️ " + r.mensagem; aviso.style.display = "block"; return; }
+
+    fecharComprar();
+    fecharPlano();
+    mostrarToast("✅ " + r.mensagem);
+    limparTodoCache();
+    carregarPlanos();
+
+  } catch (e) {
+    aviso.textContent = "⚠️ Sem conexão.";
+    aviso.style.display = "block";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Lançar";
+  }
+}
+
+// --------------------------------------------------------- sigilo e revisão
+/**
+ * Avisa quando o presente NÃO vai ficar escondido.
+ *
+ * Sem o e-mail da pessoa configurado, o presente aparece na lista dela como
+ * qualquer outro plano. Dizer isso é o mínimo: prometer sigilo e não entregar
+ * é pior que não ter a funcionalidade.
+ */
+function avisarSigilo() {
+  const tipo = document.getElementById("np-tipo").value;
+  const el = document.getElementById("np-sigilo");
+
+  if (tipo !== "presente") { el.style.display = "none"; return; }
+
+  el.textContent = planoSigiloConfigurado
+    ? "Some da lista de quem vai ganhar, se a conta dela estiver configurada."
+    : "⚠️ Os e-mails ainda não foram configurados, então o presente VAI aparecer " +
+      "para quem vai ganhar. Me peça para configurar.";
+  el.style.display = "block";
+}
+
+/**
+ * O custo por uso, três meses depois.
+ *
+ * "Você previu R$ 4,27 por uso" vira "está em R$ 40". É isso que ensina sobre
+ * a PRÓXIMA compra -- o tópico respondido antes dela não ensina nada sozinho.
+ */
+function pintarRevisoes(revisoes) {
+  const alvo = document.getElementById("planos-revisoes");
+  if (!alvo) return;
+
+  if (!revisoes.length) { alvo.innerHTML = ""; return; }
+
+  alvo.innerHTML = revisoes.map(function (r) {
+    return '<div class="revisao-card">' +
+        '<div style="font-size:12px; font-weight:600;">' + escaparHtml(r.titulo) + '</div>' +
+        '<div style="font-size:11px; color:var(--fraco); margin-top:3px; line-height:1.5;">' +
+          'comprado há ' + r.diasDesde + ' dias · você previu ' + r.usosPrevistos +
+          ' usos (' + formatarMoeda(r.custoPrevisto) + ' cada)</div>' +
+        '<div style="display:flex; gap:7px; align-items:center; margin-top:9px;">' +
+          '<input type="number" id="uso-' + r.id + '" min="0" step="1" placeholder="usei" ' +
+            'style="flex:1;" />' +
+          '<button class="btn-modal confirmar" style="flex:0 0 auto;" onclick="salvarUsoReal(' +
+            JSON.stringify(r.id).replace(/"/g, "&quot;") + ')">Responder</button>' +
+        '</div>' +
+      '</div>';
+  }).join("");
+}
+
+async function salvarUsoReal(id) {
+  const campo = document.getElementById("uso-" + id);
+  if (!campo || campo.value === "") { mostrarToast("⚠ Diga quantas vezes usou."); return; }
+
+  try {
+    const r = await chamarServidor("registrarUsoReal", { id: id, usosReais: campo.value });
+    if (!r.ok) { mostrarToast("⚠ " + r.mensagem); return; }
+
+    mostrarToast("✅ " + r.mensagem);
+    carregarPlanos();
   } catch (e) {
     mostrarToast("⚠ Sem conexão.");
   }

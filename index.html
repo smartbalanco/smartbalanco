@@ -496,6 +496,20 @@
     }
     .cap-varrer:disabled { opacity: .5; cursor: default; }
 
+    /* ---- Simulação de parcelas ---- */
+    .simulador { background: var(--surf2); border-radius: 10px; padding: 10px 12px; margin-top: 9px; }
+    .sim-linha1 { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--fraco); }
+    .sim-linha1 input { width: 58px; font-family: inherit; font-size: 12px; }
+    .sim-valor { font-size: 12px; margin: 8px 0 6px; }
+    .sim-mes { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 11px; }
+    .sim-rot { width: 46px; color: var(--fraco); flex: 0 0 auto; }
+    .sim-barra { flex: 1; height: 7px; background: var(--verde); border-radius: 4px; overflow: hidden; }
+    .sim-barra > span { display: block; height: 100%; background: var(--fraco); }
+    .sim-num { width: 72px; text-align: right; flex: 0 0 auto; }
+    .sim-aviso { font-size: 10px; color: var(--fraco); margin-top: 7px; line-height: 1.5; }
+    .revisao-card { background: #dbeafe; border-radius: 12px; padding: 12px 14px; margin-bottom: 9px; }
+    .chk-linha { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 4px 0 8px; }
+
     /* ---- Planos de compra ---- */
     .filtro-pessoas { display: flex; gap: 6px; margin: 12px 0 4px; overflow-x: auto; }
     .chip-pessoa {
@@ -2806,6 +2820,7 @@
          virar lançamento; enquanto isso, não aparece em Transações nem em
          Aprovações. -->
     <div class="conteudo" id="conteudo-planos" style="display:none;">
+      <div id="planos-revisoes"></div>
       <div id="planos-cofre"></div>
       <div class="filtro-pessoas" id="planos-filtro"></div>
       <button class="btn-modal confirmar" style="width:100%; margin:12px 0;"
@@ -3154,6 +3169,14 @@
           <label for="np-pessoa">Para quem</label>
           <select id="np-pessoa"></select>
         </div>
+        <div class="campo-bloco">
+          <label for="np-tipo">Tipo</label>
+          <select id="np-tipo" onchange="avisarSigilo()">
+            <option value="normal">Compra normal</option>
+            <option value="presente">Presente (some da lista de quem ganha)</option>
+          </select>
+        </div>
+        <div id="np-sigilo" class="cfg-aviso" style="display:none;"></div>
         <div id="np-carencia" class="cfg-aviso" style="display:none;"></div>
 
         <div class="modal-acoes">
@@ -3178,6 +3201,53 @@
         <div id="pl-veredito"></div>
         <div id="pl-topicos"></div>
         <div id="pl-acoes" class="modal-acoes" style="flex-wrap:wrap; gap:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CONFIRMAR A COMPRA ============ -->
+  <div class="modal-fundo" id="modal-comprar">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">✅ Compra feita</div>
+          <div class="mt-mov">confira antes de virar lançamento</div>
+        </div>
+        <button class="fechar" onclick="fecharComprar()">&times;</button>
+      </div>
+      <div class="modal-conteudo">
+        <div class="campo-bloco">
+          <label for="cp-descricao">Descrição</label>
+          <input type="text" id="cp-descricao" />
+        </div>
+        <div class="campo-bloco">
+          <label for="cp-valor">Valor pago</label>
+          <input type="number" id="cp-valor" step="0.01" inputmode="decimal" />
+        </div>
+        <div class="campo-bloco">
+          <label for="cp-metodo">Método</label>
+          <select id="cp-metodo"></select>
+        </div>
+        <div class="campo-bloco">
+          <label for="cp-categoria">Categoria</label>
+          <input type="text" id="cp-categoria" list="lista-categorias" />
+        </div>
+        <div class="campo-bloco">
+          <label for="cp-parcelas">Parcelas</label>
+          <input type="number" id="cp-parcelas" min="1" max="24" step="1" value="1" />
+        </div>
+        <div class="campo-bloco">
+          <label for="cp-data">Data da compra</label>
+          <input type="date" id="cp-data" />
+        </div>
+        <label class="chk-linha">
+          <input type="checkbox" id="cp-pago" /> já está pago
+        </label>
+        <div id="cp-aviso" class="cfg-aviso" style="display:none;"></div>
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharComprar()">Cancelar</button>
+          <button class="btn-modal confirmar" id="cp-btn" onclick="confirmarCompraDoPlano()">Lançar</button>
+        </div>
       </div>
     </div>
   </div>
@@ -4690,7 +4760,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=74"></script>
+  <script src="app.js?v=75"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
