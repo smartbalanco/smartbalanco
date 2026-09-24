@@ -1014,6 +1014,23 @@ async function carregarPlanos() {
   }
 }
 
+/**
+ * Abre a lista das fixas previstas do mês.
+ *
+ * Fechada por padrão: o número importa sempre, a lista só quando ele surpreende.
+ */
+function alternarFixasPrevistas() {
+  const lista = document.getElementById("lf-lista");
+  const ver = document.getElementById("lf-ver");
+  if (!lista) return;
+
+  const aberta = lista.style.display !== "none";
+  lista.style.display = aberta ? "none" : "block";
+  if (ver) ver.textContent = aberta
+    ? "ver as " + lista.children.length
+    : "esconder";
+}
+
 function pintarCofre(valor) {
   const alvo = document.getElementById("planos-cofre");
   if (!valor) { alvo.innerHTML = ""; return; }
@@ -4923,6 +4940,36 @@ function preencherDashboard(d) {
   document.getElementById("receita-base-label").textContent = "Receita de " + (d.mesBaseNome || "-");
   document.getElementById("saldo-receitas").textContent = formatarMoeda(s.receitaBase);
   document.getElementById("saldo-despesas").textContent = formatarMoeda(s.despesas);
+
+  // As fixas que ainda não viraram lançamento neste mês. Vêm ANTES dos planos
+  // porque são mais certas: conta cadastrada vai chegar, plano é vontade.
+  const elFixas = document.getElementById("linha-fixas");
+  if (s.fixasPrevistas > 0) {
+    const itens = s.fixasPrevistasItens || [];
+    elFixas.style.display = "block";
+    elFixas.innerHTML =
+      '<div class="lf-topo" onclick="alternarFixasPrevistas()">' +
+        '<span class="lf-rot">+ fixas ainda não lançadas</span>' +
+        '<span class="lf-val">' + formatarMoeda(s.fixasPrevistas) + '</span>' +
+      '</div>' +
+      '<div class="lf-total">despesas esperadas <b>' +
+        formatarMoeda(s.despesasEsperadas) + '</b></div>' +
+      (s.receitaPrevista > 0
+        ? '<div class="lf-nota">Sem receita lançada no mês base. Usando a última ' +
+          'conhecida (' + formatarMoeda(s.receitaPrevista) + ') como previsão, o ' +
+          'saldo esperado é <b>' + formatarMoeda(s.saldoEsperado) + '</b>.</div>'
+        : '') +
+      '<div class="lf-lista" id="lf-lista" style="display:none;">' +
+        itens.map(function (f) {
+          return '<div class="lf-item"><span>' + escaparHtml(f.descricao) +
+                 ' · dia ' + f.dia + '</span><b>' + formatarMoeda(f.valor) + '</b></div>';
+        }).join("") +
+      '</div>' +
+      '<div class="lf-ver" id="lf-ver" onclick="alternarFixasPrevistas()">ver as ' +
+        itens.length + '</div>';
+  } else {
+    elFixas.style.display = "none";
+  }
 
   // A linha só aparece quando há plano aberto pesando no mês: zero seria
   // uma linha a mais dizendo nada.

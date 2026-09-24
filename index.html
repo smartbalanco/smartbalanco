@@ -700,6 +700,38 @@
         var(--cinza-texto) 0 4px, transparent 4px 8px); opacity: .5;
     }
 
+    /* ---- fixas previstas no dashboard ---- */
+    .linha-fixas {
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 12px; padding: 12px 14px; margin: 14px 0 4px;
+    }
+    .lf-topo {
+      display: flex; justify-content: space-between; align-items: baseline;
+      gap: 10px; cursor: pointer;
+    }
+    .lf-rot { font-size: 11.5px; color: var(--cinza-texto); font-weight: 600; }
+    .lf-val { font-size: 15px; color: var(--laranja); font-weight: 700; }
+    .lf-total {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 11.5px; color: var(--cinza-texto); margin-top: 8px;
+      padding-top: 8px; border-top: 1px solid var(--borda);
+    }
+    .lf-total b { font-size: 15px; color: #1e293b; }
+    .lf-nota {
+      font-size: 10.5px; color: var(--cinza-texto); line-height: 1.5; margin-top: 8px;
+    }
+    .lf-nota b { color: #1e293b; }
+    .lf-lista { margin-top: 9px; }
+    .lf-item {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 11px; color: var(--cinza-texto); padding: 4px 0;
+    }
+    .lf-item b { color: #1e293b; }
+    .lf-ver {
+      font-size: 10.5px; color: var(--azul-claro); font-weight: 600;
+      margin-top: 7px; cursor: pointer;
+    }
+
     /* ---- fixas previstas na projeção ---- */
     /* Pontilhado, e não listrado como os planos: são duas coisas previstas
        diferentes e precisam se distinguir uma da outra, não só do real. */
@@ -3014,6 +3046,10 @@
         <!-- Despesas + o que os planos de compra pesariam. Fica numa linha à
              parte, e não somada à de cima: são duas perguntas diferentes, e o
              gasto real não pode parecer maior do que é. -->
+        <!-- As recorrentes que ainda não viraram lançamento. Separadas do
+             valor lançado de propósito: são duas certezas diferentes. -->
+        <div class="linha-fixas" id="linha-fixas" style="display:none;"></div>
+
         <div class="linha-planos" id="linha-planos" style="display:none;"></div>
 
         <div class="receita-secundaria" id="receita-mes-atual"></div>
@@ -5020,7 +5056,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=80"></script>
+  <script src="app.js?v=81"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
