@@ -700,6 +700,40 @@
         var(--cinza-texto) 0 4px, transparent 4px 8px); opacity: .5;
     }
 
+    /* ---- fixas previstas na projeção ---- */
+    /* Pontilhado, e não listrado como os planos: são duas coisas previstas
+       diferentes e precisam se distinguir uma da outra, não só do real. */
+    .pj-bar-fixa {
+      position: absolute; bottom: 0; left: 0; right: 0; border-radius: 5px 5px 0 0;
+      background: repeating-linear-gradient(0deg,
+        var(--laranja) 0 3px, transparent 3px 6px); opacity: .55;
+    }
+    .pj-previsto, .pj-somado {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 11px; padding: 3px 0;
+    }
+    .pj-previsto { color: var(--cinza-texto); }
+    .pj-previsto b { color: var(--laranja); font-weight: 700; }
+    .pj-somado {
+      color: var(--cinza-texto); border-top: 1px solid var(--borda);
+      margin-top: 4px; padding-top: 6px;
+    }
+    .pj-somado b { color: #1e293b; font-size: 12.5px; }
+    .pj-legenda {
+      display: flex; flex-wrap: wrap; gap: 14px; margin: 12px 0 4px;
+      font-size: 10.5px; color: var(--cinza-texto);
+    }
+    .pj-legenda span { display: inline-flex; align-items: center; gap: 6px; }
+    .pj-amostra { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+    .pj-amostra.real { background: var(--laranja); }
+    .pj-amostra.fixa {
+      background: repeating-linear-gradient(0deg, var(--laranja) 0 2px, transparent 2px 4px);
+    }
+    .pj-amostra.plano {
+      background: repeating-linear-gradient(45deg, var(--cinza-texto) 0 2px, transparent 2px 4px);
+    }
+    .pj-legenda-nota { flex-basis: 100%; line-height: 1.5; margin-top: 2px; }
+
     /* ---- sem data definida ---- */
     .sem-data {
       background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
@@ -4986,7 +5020,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=79"></script>
+  <script src="app.js?v=80"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

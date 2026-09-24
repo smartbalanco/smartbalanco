@@ -9164,25 +9164,32 @@ function htmlProjecao(r) {
 
   // Com os planos ligados, a barra ganha um pedaço claro em cima: o real
   // continua sendo a parte cheia, e o acréscimo se vê separado.
-  const teto = r.comPlanos
-    ? (Math.max.apply(null, r.meses.map(function (m) { return m.totalComPlanos || m.total; })) || 1)
-    : max;
+  // O teto considera tudo que a barra pode mostrar: real + fixas previstas +
+  // planos. Com um teto só do real, a parte prevista estouraria a coluna.
+  const teto = Math.max.apply(null, r.meses.map(function (m) {
+    return (m.total || 0) + (m.fixasPrevistas || 0) +
+           (r.comPlanos ? (m.planos || 0) : 0);
+  })) || 1;
 
   let barras = "";
   r.meses.forEach(function (m) {
+    // Três camadas empilhadas, da mais alta para a mais baixa: planos (se
+    // ligados), fixas previstas, e o real por cima de tudo. Cada faixa que
+    // sobra aparecendo é o acréscimo daquela camada.
+    const prev = m.fixasPrevistas || 0;
+    const plan = r.comPlanos ? (m.planos || 0) : 0;
+
     const hReal = (m.total / teto) * 100;
-    // A listrada vai até o TOTAL COM planos e fica ATRÁS; a sólida, que é o
-    // real, vem por cima. O que sobra aparecendo em cima é justamente o
-    // acréscimo -- com a altura só do acréscimo, ela ficava escondida.
-    const hPlano = r.comPlanos && m.planos
-      ? ((m.totalComPlanos || m.total) / teto) * 100 : 0;
-    const mostrado = r.comPlanos && m.totalComPlanos ? m.totalComPlanos : m.total;
+    const hFixas = prev ? ((m.total + prev) / teto) * 100 : 0;
+    const hPlano = plan ? ((m.total + prev + plan) / teto) * 100 : 0;
+    const mostrado = m.total + prev + plan;
 
     barras +=
       '<div class="pj-col">' +
         '<div class="pj-valor">' + (mostrado > 0 ? formatarMoedaCurta(mostrado) : "—") + '</div>' +
         '<div class="pj-bar-wrap">' +
           (hPlano ? '<div class="pj-bar-plano" style="height:' + hPlano + '%"></div>' : '') +
+          (hFixas ? '<div class="pj-bar-fixa" style="height:' + hFixas + '%"></div>' : '') +
           '<div class="pj-bar" style="height:' + hReal + '%"></div>' +
         '</div>' +
         '<div class="pj-mes">' + escaparHtml(m.abrev) + '</div>' +
@@ -9196,12 +9203,27 @@ function htmlProjecao(r) {
       cats += '<div class="pj-cat"><span>' + escaparHtml(c.categoria) + '</span><b>' + formatarMoeda(c.valor) + '</b></div>';
     });
 
+    // Real e previsto em linhas separadas, sempre. Se um número parecer
+    // errado, é preciso saber de qual lado ele veio -- somar os dois num
+    // total só esconderia justamente isso.
+    const prevMes = m.fixasPrevistas || 0;
+
     linhas +=
       '<div class="pj-mes-bloco">' +
         '<div class="pj-mb-topo">' +
           '<span>' + escaparHtml(m.nome) + '</span>' +
           '<b class="vermelho">' + formatarMoeda(m.total) + '</b>' +
         '</div>' +
+        (prevMes
+          ? '<div class="pj-previsto">' +
+              '<span>fixas ainda não lançadas</span>' +
+              '<b>+ ' + formatarMoeda(prevMes) + '</b>' +
+            '</div>' +
+            '<div class="pj-somado">' +
+              '<span>total esperado</span>' +
+              '<b>' + formatarMoeda(m.total + prevMes) + '</b>' +
+            '</div>'
+          : '') +
         '<div class="pj-mb-sub">' +
           (m.parcelas > 0 ? '📦 Parcelas: ' + formatarMoeda(m.parcelas) + ' &middot; ' : '') +
           '🧾 À vista: ' + formatarMoeda(m.avista) +
@@ -9210,6 +9232,16 @@ function htmlProjecao(r) {
         (cats ? '<div class="pj-cats">' + cats + '</div>' : '') +
       '</div>';
   });
+
+  const legenda = (r.totalFixasPrevistas > 0)
+    ? '<div class="pj-legenda">' +
+        '<span><i class="pj-amostra real"></i>lançado</span>' +
+        '<span><i class="pj-amostra fixa"></i>fixa prevista</span>' +
+        (r.comPlanos ? '<span><i class="pj-amostra plano"></i>plano de compra</span>' : '') +
+        '<div class="pj-legenda-nota">A previsão sai do cadastro de despesas fixas. ' +
+          'Quando você lança, ela sai daqui e entra no valor lançado.</div>' +
+      '</div>'
+    : "";
 
   const alerta = res.comprometimentoMedio > 80
     ? '<div class="pj-alerta critico">🔴 Comprometimento médio de <b>' + res.comprometimentoMedio.toFixed(1) + '%</b> da sua receita base.</div>'
@@ -9221,6 +9253,7 @@ function htmlProjecao(r) {
     '<div class="card">' +
       '<h2>Comprometimento mês a mês</h2>' +
       '<div class="pj-grafico">' + barras + '</div>' +
+      legenda +
     '</div>' +
 
     '<div class="card">' +
