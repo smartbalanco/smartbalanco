@@ -1349,6 +1349,7 @@ function pintarFicha() {
           'onclick="event.stopPropagation(); salvarTopico(' + n + ')">Salvar</button>';
       }
       if (n === 2) corpo += simuladorHtml(p);
+      if (n === 5) corpo += semDataHtml(p);
       if (n === 7) corpo += analiseHtml(p);
       if (n === 4) {
         corpo += '<button class="btn-modal cancelar" style="width:100%; margin-top:6px;" ' +
@@ -1640,6 +1641,15 @@ function montarAnalise(r) {
  * que importa, que é se ainda vai caber em março.
  */
 function simuladorHtml(p) {
+  // Sem data não tem mês de entrada: simular seis meses a partir de um prazo
+  // que não existe seria desenhar um cenário inventado.
+  if (p.semData) {
+    return '<div class="simulador" onclick="event.stopPropagation()">' +
+        '<div class="topico-auto">Esta compra está <b>sem data definida</b>, ' +
+        'então não há mês para simular. Desmarque no tópico 5 para ver o estudo.</div>' +
+      '</div>';
+  }
+
   const sim = p.simulacao;
   let h = '<div class="simulador" onclick="event.stopPropagation()">' +
     '<div class="sim-linha1">' +
@@ -1715,6 +1725,33 @@ function simuladorHtml(p) {
   }
 
   return h + '</div>';
+}
+
+/**
+ * "Sem data definida": o desejo anotado que não entra em projeção nenhuma.
+ *
+ * Fica no tópico da carência porque é ali que se fala de prazo -- e marcar
+ * isto é justamente dizer "não tenho prazo".
+ */
+function semDataHtml(p) {
+  return '<div class="sem-data" onclick="event.stopPropagation()">' +
+      '<label class="sem-data-linha">' +
+        '<input type="checkbox" id="pl-sem-data"' + (p.semData ? " checked" : "") +
+          ' onchange="mudarSemData()" />' +
+        '<span>Sem data definida</span>' +
+      '</label>' +
+      '<div class="sem-data-nota">' +
+        (p.semData
+          ? "Não entra na projeção nem na previsão. Fica guardado para quando você quiser."
+          : "Marque para tirar esta compra das projeções: ela continua aqui, mas para de pesar nos meses à frente.") +
+      '</div>' +
+    '</div>';
+}
+
+async function mudarSemData() {
+  const c = document.getElementById("pl-sem-data");
+  if (!c || !planoAberto) return;
+  await salvarNoPlano({ semData: c.checked ? "1" : "0" }, 5);
 }
 
 async function mudarMesPretendido() {
@@ -4886,6 +4923,19 @@ function preencherDashboard(d) {
   document.getElementById("receita-base-label").textContent = "Receita de " + (d.mesBaseNome || "-");
   document.getElementById("saldo-receitas").textContent = formatarMoeda(s.receitaBase);
   document.getElementById("saldo-despesas").textContent = formatarMoeda(s.despesas);
+
+  // A linha só aparece quando há plano aberto pesando no mês: zero seria
+  // uma linha a mais dizendo nada.
+  const elPlanos = document.getElementById("linha-planos");
+  if (s.planos > 0) {
+    elPlanos.style.display = "block";
+    elPlanos.innerHTML =
+      '<span class="lp-rot">com os planos de compra</span>' +
+      '<span class="lp-val">' + formatarMoeda(s.despesasComPlanos) + '</span>' +
+      '<span class="lp-extra">+ ' + formatarMoeda(s.planos) + ' em planos abertos</span>';
+  } else {
+    elPlanos.style.display = "none";
+  }
 
   document.getElementById("aviso-base").textContent =
     "Base de cálculo: receita de " + (d.mesBaseNome || "-") + " (o que entrou no mês anterior é o que se gasta agora).";
@@ -8221,10 +8271,14 @@ async function gerarRelatorioAgora() {
       '<p style="color:var(--cinza-texto); font-size:14px;">Gerando ' + r.nome + '...</p>' +
     '</div>';
 
+  // Os três relatórios que olham para a frente aceitam somar os planos.
+  if (relComPlanos) params.comPlanos = "1";
+
   try {
     const res = await chamarServidor("gerarRelatorio", params);
     if (res.ok) {
       relatorioAtual = res;
+      relatorioParams = params;
       renderizarRelatorio(res, false);
     } else {
       wrap.innerHTML = '<div class="card"><p class="vazio">⚠️ ' + escaparHtml(res.mensagem || "Erro ao gerar.") + '</p></div>';
@@ -8233,6 +8287,61 @@ async function gerarRelatorioAgora() {
   } catch (e) {
     wrap.innerHTML = '<div class="card"><p class="vazio">⚠️ Sem conexão com o servidor.</p></div>';
     setTimeout(renderizarTelaRelatorios, 2500);
+  }
+}
+
+// Se os planos de compra entram nas contas dos relatórios que olham para a
+// frente. Fica desligado por padrão: o número real é a pergunta principal, e
+// o dos planos é um "e se" -- ligado por padrão, viraria o número de sempre.
+let relComPlanos = false;
+let relatorioParams = null;
+
+const REL_ACEITAM_PLANOS = ["parcelamentos", "projecao", "previsao"];
+
+/**
+ * O interruptor, com os dois números lado a lado.
+ *
+ * Mostrar o valor real E o com planos ao mesmo tempo é o ponto: alternar sem
+ * ver os dois faria você comparar de memória.
+ */
+function interruptorPlanos(res) {
+  if (REL_ACEITAM_PLANOS.indexOf(res.tipo) < 0) return "";
+
+  const temPlanos = (res.totalPlanos || 0) > 0;
+
+  return '<div class="rel-planos">' +
+      '<label class="rel-planos-linha">' +
+        '<input type="checkbox"' + (relComPlanos ? " checked" : "") +
+          ' onchange="alternarPlanosNoRelatorio()" />' +
+        '<span>somar os planos de compra</span>' +
+      '</label>' +
+      (relComPlanos && temPlanos
+        ? '<div class="rel-planos-num">' +
+            '<span>real <b>' + formatarMoeda(res.total || 0) + '</b></span>' +
+            '<span>com planos <b>' + formatarMoeda((res.total || 0) + res.totalPlanos) + '</b></span>' +
+          '</div>'
+        : '') +
+      (relComPlanos && !temPlanos
+        ? '<div class="rel-planos-nota">Nenhum plano aberto pesa neste período.</div>'
+        : '') +
+      (!relComPlanos
+        ? '<div class="rel-planos-nota">O que você ainda não comprou fica de fora deste número.</div>'
+        : '') +
+    '</div>';
+}
+
+async function alternarPlanosNoRelatorio() {
+  relComPlanos = !relComPlanos;
+  if (!relatorioParams) return;
+
+  const p = Object.assign({}, relatorioParams);
+  if (relComPlanos) p.comPlanos = "1"; else delete p.comPlanos;
+
+  try {
+    const res = await chamarServidor("gerarRelatorio", p);
+    if (res.ok) { relatorioAtual = res; relatorioParams = p; renderizarRelatorio(res, false); }
+  } catch (e) {
+    mostrarToast("⚠ Sem conexão.");
   }
 }
 
@@ -8251,6 +8360,8 @@ function renderizarRelatorio(res, ehSalvo) {
   else if (res.tipo === "extrato")        corpo = htmlExtrato(res);
   else if (res.tipo === "previsao")       corpo = htmlPrevisao(res);
   else if (res.tipo === "gastosCategoria") corpo = htmlGastosCategoria(res);
+
+  corpo = interruptorPlanos(res) + corpo;
 
   const jaSalvo = ehSalvo || relatorioJaSalvo(res);
 
@@ -9051,14 +9162,28 @@ function htmlProjecao(r) {
   const res = r.resumo;
   const max = Math.max.apply(null, r.meses.map(function (m) { return m.total; })) || 1;
 
+  // Com os planos ligados, a barra ganha um pedaço claro em cima: o real
+  // continua sendo a parte cheia, e o acréscimo se vê separado.
+  const teto = r.comPlanos
+    ? (Math.max.apply(null, r.meses.map(function (m) { return m.totalComPlanos || m.total; })) || 1)
+    : max;
+
   let barras = "";
   r.meses.forEach(function (m) {
-    const h = (m.total / max) * 100;
+    const hReal = (m.total / teto) * 100;
+    // A listrada vai até o TOTAL COM planos e fica ATRÁS; a sólida, que é o
+    // real, vem por cima. O que sobra aparecendo em cima é justamente o
+    // acréscimo -- com a altura só do acréscimo, ela ficava escondida.
+    const hPlano = r.comPlanos && m.planos
+      ? ((m.totalComPlanos || m.total) / teto) * 100 : 0;
+    const mostrado = r.comPlanos && m.totalComPlanos ? m.totalComPlanos : m.total;
+
     barras +=
       '<div class="pj-col">' +
-        '<div class="pj-valor">' + (m.total > 0 ? formatarMoedaCurta(m.total) : "—") + '</div>' +
+        '<div class="pj-valor">' + (mostrado > 0 ? formatarMoedaCurta(mostrado) : "—") + '</div>' +
         '<div class="pj-bar-wrap">' +
-          '<div class="pj-bar" style="height:' + h + '%"></div>' +
+          (hPlano ? '<div class="pj-bar-plano" style="height:' + hPlano + '%"></div>' : '') +
+          '<div class="pj-bar" style="height:' + hReal + '%"></div>' +
         '</div>' +
         '<div class="pj-mes">' + escaparHtml(m.abrev) + '</div>' +
       '</div>';

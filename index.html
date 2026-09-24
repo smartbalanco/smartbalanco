@@ -674,6 +674,46 @@
       line-height: 1.5; font-weight: 600;
     }
 
+    /* ---- somar os planos nos relatórios ---- */
+    .rel-planos {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 14px; padding: 13px 16px; margin-bottom: 14px;
+    }
+    .rel-planos-linha {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12.5px; font-weight: 600; color: var(--azul); cursor: pointer;
+    }
+    .rel-planos-linha input { width: 17px; height: 17px; accent-color: var(--verde); }
+    .rel-planos-num {
+      display: flex; gap: 18px; margin-top: 9px; font-size: 11.5px;
+      color: var(--cinza-texto); flex-wrap: wrap;
+    }
+    .rel-planos-num b { color: #1e293b; font-size: 13px; margin-left: 5px; }
+    .rel-planos-nota {
+      font-size: 10.5px; color: var(--cinza-texto); margin-top: 7px; line-height: 1.5;
+    }
+    /* O acréscimo dos planos fica atrás da barra real, listrado, para nunca
+       ser confundido com gasto já comprometido. */
+    .pj-bar-plano {
+      position: absolute; bottom: 0; left: 0; right: 0; border-radius: 5px 5px 0 0;
+      background: repeating-linear-gradient(45deg,
+        var(--cinza-texto) 0 4px, transparent 4px 8px); opacity: .5;
+    }
+
+    /* ---- sem data definida ---- */
+    .sem-data {
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 12px; padding: 12px 14px; margin-top: 11px;
+    }
+    .sem-data-linha {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 12.5px; font-weight: 600; color: var(--azul); cursor: pointer;
+    }
+    .sem-data-linha input { width: 17px; height: 17px; accent-color: var(--verde); }
+    .sem-data-nota {
+      font-size: 10.5px; color: var(--cinza-texto); line-height: 1.5; margin-top: 7px;
+    }
+
     /* ---- análise da IA ---- */
     .analise-bloco { margin-top: 12px; }
     .analise-travada {
@@ -1826,10 +1866,12 @@
     }
     .pj-col { flex: 1; min-width: 42px; display: flex; flex-direction: column; align-items: center; height: 100%; }
     .pj-valor { font-size: 9px; color: var(--cinza-texto); margin-bottom: 4px; font-weight: 700; }
-    .pj-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; }
+    /* position:relative para a barra dos planos, que é absoluta, ter esta
+       coluna como referência em vez de subir até a tela inteira. */
+    .pj-bar-wrap { flex: 1; width: 100%; display: flex; align-items: flex-end; position: relative; }
     .pj-bar {
       width: 100%; background: linear-gradient(180deg, var(--laranja), #ea580c);
-      border-radius: 4px 4px 0 0; min-height: 3px;
+      border-radius: 4px 4px 0 0; min-height: 3px; position: relative; z-index: 1;
     }
     .pj-mes { font-size: 10px; color: var(--cinza-texto); margin-top: 6px; }
 
@@ -2935,6 +2977,11 @@
             <span class="val des" id="saldo-despesas">R$ 0,00</span>
           </div>
         </div>
+        <!-- Despesas + o que os planos de compra pesariam. Fica numa linha à
+             parte, e não somada à de cima: são duas perguntas diferentes, e o
+             gasto real não pode parecer maior do que é. -->
+        <div class="linha-planos" id="linha-planos" style="display:none;"></div>
+
         <div class="receita-secundaria" id="receita-mes-atual"></div>
         <div class="status-desp">
           <div><div class="lbl">✅ Pagas</div><div class="val paga" id="desp-pagas">R$ 0,00</div></div>
@@ -4939,7 +4986,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=78"></script>
+  <script src="app.js?v=79"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
