@@ -483,113 +483,254 @@
       border: none; border-radius: 12px; cursor: pointer;
       font-family: inherit; background: var(--verde); color: var(--verde-tinta);
     }
-    .doc-caminho.alt { background: var(--surf2); color: var(--txt); }
+    .doc-caminho.alt { background: var(--cinza-fundo); box-shadow: var(--relevo-baixo); color: #1e293b; }
     .doc-caminho:disabled { opacity: .45; cursor: default; }
     .dc-titulo { font-size: 13px; font-weight: 700; }
     .dc-sub { font-size: 11px; opacity: .8; line-height: 1.35; }
 
     .cap-varrer {
       display: block; width: 100%; margin-bottom: 14px; padding: 11px;
-      background: var(--surf2); color: var(--txt); border: none;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo); color: #1e293b; border: none;
       border-radius: 11px; font-family: inherit; font-size: 12px;
       font-weight: 600; cursor: pointer;
     }
     .cap-varrer:disabled { opacity: .5; cursor: default; }
 
-    /* ---- Análise sincera da IA ---- */
-    .analise-bloco { margin-top: 10px; }
-    .analise-travada {
-      background: var(--surf2); border-radius: 10px; padding: 11px 13px;
-      font-size: 11px; color: var(--fraco); line-height: 1.55;
-    }
-    .analise-texto {
-      background: var(--surf2); border-radius: 10px; padding: 12px 14px;
-      font-size: 12px; line-height: 1.6; margin-bottom: 8px;
-    }
-    .analise-veredito {
-      border-radius: 10px; padding: 10px 13px; font-size: 12px;
-      font-weight: 600; line-height: 1.5; margin-bottom: 8px;
-    }
-    .analise-quando { font-size: 10px; color: var(--fraco); margin-bottom: 8px; }
+    /* ================= PLANOS DE COMPRA =================
+       Tudo aqui segue o neumorfismo do resto do app: a superfície tem a MESMA
+       cor do fundo e o que a separa é o relevo. Card com cor própria destoa na
+       hora -- foi o que aconteceu na primeira versão, que usava variáveis de
+       outro projeto e saía chapada. */
 
-    /* ---- Simulação de parcelas ---- */
-    .simulador { background: var(--surf2); border-radius: 10px; padding: 10px 12px; margin-top: 9px; }
-    .sim-linha1 { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--fraco); }
-    .sim-linha1 input { width: 58px; font-family: inherit; font-size: 12px; }
-    .sim-valor { font-size: 12px; margin: 8px 0 6px; }
-    .sim-mes { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 11px; }
-    .sim-rot { width: 46px; color: var(--fraco); flex: 0 0 auto; }
-    .sim-barra { flex: 1; height: 7px; background: var(--verde); border-radius: 4px; overflow: hidden; }
-    .sim-barra > span { display: block; height: 100%; background: var(--fraco); }
-    .sim-num { width: 72px; text-align: right; flex: 0 0 auto; }
-    .sim-aviso { font-size: 10px; color: var(--fraco); margin-top: 7px; line-height: 1.5; }
-    .revisao-card { background: #dbeafe; border-radius: 12px; padding: 12px 14px; margin-bottom: 9px; }
-    .chk-linha { display: flex; align-items: center; gap: 8px; font-size: 12px; margin: 4px 0 8px; }
+    /* ---- o cofre ---- */
+    .cofre-card {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-medio);
+      border-radius: 18px; padding: 16px 18px; cursor: pointer;
+    }
+    .cofre-card:active { box-shadow: var(--afundado-leve); }
+    .cofre-rot {
+      font-size: 10px; color: var(--cinza-texto); text-transform: uppercase;
+      letter-spacing: .5px; font-weight: 700;
+    }
+    .cofre-valor {
+      font-size: 27px; color: var(--verde); font-weight: 700;
+      letter-spacing: -.5px; margin: 2px 0 1px;
+    }
+    .cofre-sub { font-size: 11px; color: var(--cinza-texto); }
 
-    /* ---- Planos de compra ---- */
-    .filtro-pessoas { display: flex; gap: 6px; margin: 12px 0 4px; overflow-x: auto; }
+    /* ---- filtro de pessoas ---- */
+    .filtro-pessoas {
+      display: flex; gap: 8px; margin: 14px 0 12px;
+      overflow-x: auto; padding: 3px 2px 5px;
+    }
+    .filtro-pessoas::-webkit-scrollbar { display: none; }
     .chip-pessoa {
-      flex: 0 0 auto; padding: 6px 13px; border-radius: 999px; border: none;
-      background: var(--surf2); color: var(--fraco); font-family: inherit;
-      font-size: 12px; cursor: pointer;
+      flex: 0 0 auto; padding: 8px 16px; border-radius: 999px; border: none;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      color: var(--cinza-texto); font-family: inherit; font-size: 12px;
+      font-weight: 600; cursor: pointer; transition: color .15s;
     }
-    .chip-pessoa.ativo { background: var(--verde); color: var(--verde-tinta); }
-    .chip-pessoa b { font-weight: 700; }
-    .pergunta { margin-top: 9px; }
+    /* Ativo = AFUNDADO, não colorido. É como o resto do app marca seleção. */
+    .chip-pessoa.ativo { box-shadow: var(--afundado-leve); color: var(--azul); }
+    .chip-pessoa b { font-weight: 700; opacity: .55; margin-left: 3px; }
+
+    /* ---- card do plano ---- */
+    .plano-card {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 16px; padding: 15px 17px; margin-bottom: 12px; cursor: pointer;
+    }
+    .plano-card:active { box-shadow: var(--afundado-leve); }
+    .plano-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+    .plano-nome { font-size: 14px; font-weight: 700; color: var(--azul); line-height: 1.3; }
+    .plano-valor {
+      font-size: 16px; font-weight: 700; white-space: nowrap;
+      letter-spacing: -.3px; color: #1e293b;
+    }
+    .plano-linha2 {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 10px; margin-top: 10px;
+    }
+    /* O selo é um ponto colorido + texto, e não um retângulo de cor: bloco
+       chapado brigava com o relevo de tudo em volta. */
+    .plano-selo {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 600;
+    }
+    .plano-selo::before {
+      content: ""; width: 7px; height: 7px; border-radius: 50%;
+      background: currentColor; flex: 0 0 auto;
+    }
+    .plano-nota { font-size: 10px; color: var(--cinza-texto); white-space: nowrap; }
+    .plano-barra {
+      height: 5px; border-radius: 3px; margin-top: 11px; overflow: hidden;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+    }
+    .plano-barra > div { height: 100%; border-radius: 3px; transition: width .3s; }
+
+    /* ---- tópicos da ficha ---- */
+    .topico {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 14px; padding: 13px 15px; margin-bottom: 10px; cursor: pointer;
+    }
+    .topico.aberto { box-shadow: var(--afundado-leve); }
+    .topico-topo { display: flex; align-items: center; gap: 11px; }
+    .topico-num {
+      width: 25px; height: 25px; border-radius: 9px; flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+    }
+    .topico-nome { flex: 1; font-size: 13px; font-weight: 600; color: var(--azul); }
+    .topico-estado { font-size: 10px; font-weight: 600; letter-spacing: .2px; }
+    .topico-corpo {
+      padding-left: 36px; margin-top: 11px;
+      animation: abrirTopico .18s ease;
+    }
+    @keyframes abrirTopico { from { opacity: 0; transform: translateY(-4px); } }
+    .topico-auto {
+      font-size: 11.5px; color: var(--cinza-texto); line-height: 1.6; padding: 3px 0;
+    }
+    .topico-auto b { color: #1e293b; font-weight: 700; }
+
+    /* ---- perguntas ---- */
+    .pergunta { margin-top: 12px; }
     .pergunta label {
-      display: block; font-size: 11px; color: var(--fraco);
-      margin-bottom: 4px; line-height: 1.4;
+      display: block; font-size: 11px; color: var(--cinza-texto);
+      margin-bottom: 6px; line-height: 1.45; font-weight: 600;
     }
     .pergunta textarea, .pergunta input {
-      width: 100%; font-family: inherit; font-size: 12px;
+      width: 100%; font-family: inherit; font-size: 12.5px; color: #1e293b;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border: none; border-radius: 11px; padding: 11px 13px; resize: vertical;
     }
-    .pergunta textarea { min-height: 46px; }
-    .plano-card { background: var(--surf); border-radius: 14px; padding: 13px 15px; margin-bottom: 9px; }
-    .plano-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
-    .plano-nome { font-size: 13px; font-weight: 600; }
-    .plano-valor { font-size: 15px; white-space: nowrap; }
-    .plano-linha2 { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; gap: 8px; }
-    .plano-selo { font-size: 10px; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
-    .plano-nota { font-size: 10px; color: var(--fraco); text-align: right; }
-    .plano-barra { height: 4px; background: var(--linha); border-radius: 2px; margin-top: 9px; overflow: hidden; }
-    .plano-barra > div { height: 100%; }
-    .cofre-card { background: #dcfce7; border-radius: 14px; padding: 13px 16px; }
-    .cofre-rot { font-size: 10px; color: #15803d; }
-    .cofre-valor { font-size: 23px; color: #15803d; font-weight: 600; }
-    .topico { background: var(--surf); border-radius: 12px; padding: 11px 13px; margin-bottom: 7px; cursor: pointer; }
-    .topico-topo { display: flex; align-items: center; gap: 9px; }
-    .topico-num { width: 21px; height: 21px; border-radius: 6px; display: flex; align-items: center;
-                  justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
-    .topico-nome { flex: 1; font-size: 12px; font-weight: 600; }
-    .topico-corpo { padding-left: 30px; margin-top: 8px; }
-    .topico-auto { font-size: 11px; color: var(--fraco); line-height: 1.5; padding: 3px 0; }
-    .topico-auto b { color: var(--txt); font-weight: 600; }
-    .topico-corpo textarea { width: 100%; min-height: 54px; font-family: inherit; font-size: 12px; margin-top: 6px; }
-    .link-item { background: var(--surf2); border-radius: 10px; padding: 9px 11px; margin-bottom: 6px; }
-    .link-item.menor { background: #dcfce7; }
+    .pergunta textarea { min-height: 52px; line-height: 1.5; }
+    .pergunta textarea:focus, .pergunta input:focus { outline: 1.5px solid var(--verde); }
+
+    /* ---- veredito do app, no topo da ficha ---- */
+    .pl-veredito {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 14px; padding: 13px 15px; margin-bottom: 14px;
+      display: flex; align-items: flex-start; gap: 11px;
+    }
+    .pl-veredito-ponto {
+      width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; flex: 0 0 auto;
+    }
+    /* display:block porque são dois <span> um sobre o outro: inline deixava
+       o subtítulo grudado no fim da frase de cima. */
+    .pl-veredito-txt { display: block; font-size: 12.5px; font-weight: 700; line-height: 1.4; }
+    .pl-veredito-sub { display: block; font-size: 10.5px; color: var(--cinza-texto); margin-top: 3px; }
+
+    /* ---- simulador de parcelas ---- */
+    .simulador {
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 13px; padding: 13px 15px; margin-top: 12px;
+    }
+    .sim-linha1 {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 11px; color: var(--cinza-texto); font-weight: 600;
+    }
+    .sim-linha1 input {
+      width: 62px; font-family: inherit; font-size: 13px; text-align: center;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border: none; border-radius: 9px; padding: 7px; color: #1e293b; font-weight: 700;
+    }
+    .sim-valor { font-size: 15px; font-weight: 700; margin: 11px 0 9px; color: var(--azul); }
+    .sim-mes { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 11px; }
+    .sim-rot {
+      width: 48px; flex: 0 0 auto; color: var(--cinza-texto); font-weight: 600;
+    }
+    .sim-barra {
+      flex: 1; height: 8px; border-radius: 4px; overflow: hidden; display: flex;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+    }
+    .sim-ja { background: var(--cinza-texto); opacity: .45; }
+    .sim-nova { background: var(--verde); }
+    .sim-nova.estoura { background: var(--vermelho); }
+    .sim-num { width: 76px; text-align: right; flex: 0 0 auto; font-weight: 600; }
+    .sim-aviso {
+      font-size: 10.5px; color: var(--laranja); margin-top: 9px;
+      line-height: 1.5; font-weight: 600;
+    }
+
+    /* ---- análise da IA ---- */
+    .analise-bloco { margin-top: 12px; }
+    .analise-travada {
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 13px; padding: 13px 15px;
+      font-size: 11.5px; color: var(--cinza-texto); line-height: 1.6;
+    }
+    .analise-travada b { color: var(--azul); display: block; margin-bottom: 3px; }
+    .analise-texto {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 13px; padding: 14px 16px; font-size: 12.5px;
+      line-height: 1.65; margin-bottom: 10px; color: #1e293b;
+    }
+    .analise-veredito {
+      border-radius: 13px; padding: 12px 15px; font-size: 13px;
+      font-weight: 700; line-height: 1.45; margin-bottom: 9px;
+      display: flex; align-items: center; gap: 10px;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+    }
+    .analise-veredito::before {
+      content: ""; width: 4px; align-self: stretch; border-radius: 3px;
+      background: currentColor; flex: 0 0 auto;
+    }
+    .analise-quando {
+      font-size: 10px; color: var(--cinza-texto); margin-bottom: 10px; text-align: right;
+    }
+
+    /* ---- links ---- */
+    .link-item {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 13px; padding: 12px 14px; margin-bottom: 9px;
+    }
+    .link-item.menor { box-shadow: var(--relevo-baixo), inset 0 0 0 1.5px var(--verde); }
+    .link-loja { font-size: 12.5px; font-weight: 700; color: var(--azul); }
+    .link-preco { font-size: 16px; font-weight: 700; letter-spacing: -.3px; }
+    .link-acoes { display: flex; gap: 16px; margin-top: 9px; }
+    .link-acoes span { font-size: 11.5px; font-weight: 600; cursor: pointer; }
+
+    /* ---- revisão de uso ---- */
+    .revisao-card {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-medio);
+      border-radius: 16px; padding: 15px 17px; margin-bottom: 12px;
+      border-left: 4px solid var(--laranja);
+    }
+    .revisao-card input {
+      flex: 1; font-family: inherit; font-size: 13px; padding: 10px 12px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border: none; border-radius: 10px; color: #1e293b;
+    }
+
+    /* ---- estado vazio ---- */
+    .planos-vazio {
+      text-align: center; padding: 34px 24px; color: var(--cinza-texto);
+      font-size: 12.5px; line-height: 1.6;
+    }
+    .planos-vazio-icone { font-size: 34px; opacity: .3; margin-bottom: 10px; }
 
     /* ---- Diagnóstico da captura de notificações ---- */
     .cap-diag {
-      background: var(--surf2); border-radius: 12px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve); border-radius: 12px;
       padding: 12px 14px; margin-bottom: 14px; font-size: 12px;
     }
     .cap-diag-linha {
       display: flex; justify-content: space-between; align-items: center;
       padding: 5px 0; gap: 10px;
     }
-    .cap-diag-rot { color: var(--fraco); }
+    .cap-diag-rot { color: var(--cinza-texto); }
     .cap-diag-val { font-weight: 700; text-align: right; }
     .cap-diag-val.ok  { color: var(--verde); }
     .cap-diag-val.nao { color: var(--erro); }
     .cap-ignorados {
       margin-top: 10px; padding-top: 10px;
-      border-top: 1px solid var(--linha);
+      border-top: 1px solid var(--borda);
     }
     .cap-ign-item {
-      padding: 7px 0; font-size: 11px; color: var(--fraco);
+      padding: 7px 0; font-size: 11px; color: var(--cinza-texto);
       line-height: 1.45;
     }
-    .cap-ign-item b { color: var(--txt); font-weight: 600; }
+    .cap-ign-item b { color: #1e293b; font-weight: 600; }
     .cap-ign-motivo { color: var(--erro); }
 
     /* ---- Veio da notificação do cartão ---- */
@@ -4776,7 +4917,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=76"></script>
+  <script src="app.js?v=77"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

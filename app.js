@@ -1025,10 +1025,11 @@ function pintarCofre(valor) {
     : valor;
 
   alvo.innerHTML = '<div class="cofre-card" onclick="abrirCofre()">' +
-    '<div class="cofre-rot">cofre do que não foi comprado' +
-      (planoFiltroPessoa ? " · " + escaparHtml(planoFiltroPessoa) : "") + '</div>' +
-    '<div class="cofre-valor">' + formatarMoeda(mostrado) + '</div>' +
-    '<div class="cofre-rot" style="margin-top:3px;">toque para ver o que está aqui dentro</div></div>';
+      '<div class="cofre-rot">não comprei' +
+        (planoFiltroPessoa ? " · " + escaparHtml(planoFiltroPessoa) : "") + '</div>' +
+      '<div class="cofre-valor">' + formatarMoeda(mostrado) + '</div>' +
+      '<div class="cofre-sub">toque para ver o que está aqui dentro</div>' +
+    '</div>';
 }
 
 function pintarFiltroPessoas() {
@@ -1068,10 +1069,12 @@ function pintarListaPlanos() {
   const visiveis = planosVisiveis();
 
   if (!visiveis.length) {
-    lista.innerHTML = '<p class="vazio">' + (planoFiltroPessoa
-      ? "Nenhum plano de " + escaparHtml(planoFiltroPessoa) + "."
-      : "Nenhum plano aberto. O primeiro é aquela compra que você está adiando decidir.") +
-      '</p>';
+    lista.innerHTML = '<div class="planos-vazio">' +
+      '<div class="planos-vazio-icone">🛒</div>' +
+      (planoFiltroPessoa
+        ? "Nenhum plano de " + escaparHtml(planoFiltroPessoa) + "."
+        : "Nenhum plano aberto.<br>O primeiro é aquela compra que você está adiando decidir.") +
+      '</div>';
     document.getElementById("badge-planos").textContent = "";
     return;
   }
@@ -1086,29 +1089,36 @@ function pintarListaPlanos() {
   lista.innerHTML = visiveis.map(function (p) {
     const cor = corDoVeredito(p.veredito.situacao);
     const i = planosCarregados.indexOf(p);
+    const marca = (p.tipo === "presente" ? "🎁 " : "");
+
     return '<div class="plano-card" onclick="abrirPlano(' + i + ')">' +
         '<div class="plano-topo">' +
-          '<span class="plano-nome">' + escaparHtml(p.titulo) + '</span>' +
+          '<span class="plano-nome">' + marca + escaparHtml(p.titulo) + '</span>' +
           '<span class="plano-valor">' + formatarMoeda(p.valor) + '</span>' +
         '</div>' +
         '<div class="plano-linha2">' +
-          '<span class="plano-selo" style="background:' + cor.fundo + '; color:' + cor.texto + ';">' +
-            p.veredito.texto + '</span>' +
-          '<span class="plano-nota">' + escaparHtml(p.pessoa) + ' · ' +
-            p.respondidos + '/7' + (p.links && p.links.length ? ' · ' + p.links.length + ' link(s)' : '') +
+          '<span class="plano-selo" style="color:' + cor + '">' + p.veredito.texto + '</span>' +
+          '<span class="plano-nota">' + escaparHtml(p.pessoa) + ' · ' + p.respondidos + '/7' +
+            (p.links && p.links.length ? ' · ' + p.links.length + ' preço(s)' : '') +
           '</span>' +
         '</div>' +
         '<div class="plano-barra"><div style="width:' + Math.round(p.respondidos / 7 * 100) +
-          '%; background:' + cor.texto + ';"></div></div>' +
+          '%; background:' + cor + '"></div></div>' +
       '</div>';
   }).join("");
 }
 
+/**
+ * Uma cor por situação, tirada da paleta do app.
+ *
+ * Só a cor, sem fundo: neste app o que separa uma superfície é o relevo, e
+ * retângulo colorido briga com isso. A cor entra em ponto, texto e barra.
+ */
 function corDoVeredito(situacao) {
-  if (situacao === "pronto")    return { fundo: "#dcfce7", texto: "#15803d" };
-  if (situacao === "carencia")  return { fundo: "#fef3c7", texto: "#a16207" };
-  if (situacao === "nao-cabe")  return { fundo: "#fee2e2", texto: "#b91c1c" };
-  return { fundo: "#dbeafe", texto: "#1d4ed8" };
+  if (situacao === "pronto")   return "var(--verde)";
+  if (situacao === "carencia") return "var(--laranja)";
+  if (situacao === "nao-cabe") return "var(--vermelho)";
+  return "var(--azul-claro)";
 }
 
 // ---------------------------------------------------------------- novo plano
@@ -1295,10 +1305,13 @@ function pintarFicha() {
   const cor = corDoVeredito(p.veredito.situacao);
 
   document.getElementById("pl-veredito").innerHTML =
-    '<div style="background:' + cor.fundo + '; color:' + cor.texto +
-    '; border-radius:12px; padding:11px 13px; margin-bottom:12px;">' +
-    '<div style="font-size:12px; font-weight:600;">o app sugere: ' + p.veredito.texto + '</div>' +
-    '<div style="font-size:10px; margin-top:3px;">a decisão continua sendo sua</div></div>';
+    '<div class="pl-veredito">' +
+      '<span class="pl-veredito-ponto" style="background:' + cor + '"></span>' +
+      '<span>' +
+        '<span class="pl-veredito-txt" style="color:' + cor + '">' + p.veredito.texto + '</span>' +
+        '<span class="pl-veredito-sub">sugestão do app; a decisão é sua</span>' +
+      '</span>' +
+    '</div>';
 
   let html = "";
   for (let n = 1; n <= 7; n++) {
@@ -1345,12 +1358,14 @@ function pintarFicha() {
       corpo += '</div>';
     }
 
-    html += '<div class="topico" onclick="alternarTopico(' + n + ')">' +
+    const corEstado = feito ? "var(--verde)" : "var(--cinza-texto)";
+    html += '<div class="topico' + (aberto ? " aberto" : "") +
+        '" onclick="alternarTopico(' + n + ')">' +
         '<div class="topico-topo">' +
-          '<span class="topico-num" style="background:' + (feito ? "#dcfce7" : "#e2e8f0") +
-            '; color:' + (feito ? "#15803d" : "#64748b") + ';">' + n + '</span>' +
+          '<span class="topico-num" style="color:' + corEstado + '">' +
+            (feito ? "✓" : n) + '</span>' +
           '<span class="topico-nome">' + NOMES_TOPICOS[n] + '</span>' +
-          '<span style="font-size:11px; color:' + (feito ? "#15803d" : "#94a3b8") + ';">' +
+          '<span class="topico-estado" style="color:' + corEstado + '">' +
             (automatico ? "automático" : (feito ? "respondido" : "pendente")) + '</span>' +
         '</div>' + corpo +
       '</div>';
@@ -1591,14 +1606,13 @@ function montarAnalise(r) {
     veredito = texto.slice(corte + 9).trim();
   }
 
-  const cor = /não compre/i.test(veredito) ? ["#fee2e2", "#b91c1c"]
-            : (/espere/i.test(veredito)    ? ["#fef3c7", "#a16207"]
-                                           : ["#dcfce7", "#15803d"]);
+  const cor = /não compre/i.test(veredito) ? "var(--vermelho)"
+            : (/espere/i.test(veredito)    ? "var(--laranja)" : "var(--verde)");
 
   let h = '<div class="analise-texto">' + escaparHtml(corpo).replace(/\n/g, "<br>") + '</div>';
 
   if (veredito) {
-    h += '<div class="analise-veredito" style="background:' + cor[0] + '; color:' + cor[1] + ';">' +
+    h += '<div class="analise-veredito" style="color:' + cor + '">' +
          escaparHtml(veredito) + '</div>';
   }
   if (r.quando) {
@@ -1631,13 +1645,23 @@ function simuladorHtml(p) {
   h += '<div class="sim-valor">' + sim.parcelas + 'x de <b>' +
        formatarMoeda(sim.valorParcela) + '</b></div>';
 
+  // A barra tem duas partes: o que JÁ estava comprometido e a parcela nova.
+  // Ver as duas separadas é o que mostra se a compra cabe ou se o mês já
+  // estava cheio antes dela.
+  const teto = Math.max.apply(null, sim.meses.map(function (m) { return m.total; }));
+
   sim.meses.forEach(function (m) {
-    const largura = Math.min(100, Math.round(m.total / Math.max(1, m.total, 1) * 100));
+    const pJa = (m.jaComprometido / teto) * 100;
+    const pNova = (m.novaParcela / teto) * 100;
     h += '<div class="sim-mes">' +
         '<span class="sim-rot">' + m.rotulo + '</span>' +
-        '<span class="sim-barra"><span style="width:' +
-          (m.jaComprometido / Math.max(m.total, 1) * 100) + '%"></span></span>' +
-        '<span class="sim-num" style="color:' + (m.cabe ? "var(--txt)" : "#b91c1c") + '">' +
+        '<span class="sim-barra">' +
+          '<span class="sim-ja" style="width:' + pJa + '%"></span>' +
+          '<span class="sim-nova' + (m.cabe ? "" : " estoura") +
+            '" style="width:' + pNova + '%"></span>' +
+        '</span>' +
+        '<span class="sim-num" style="color:' +
+          (m.cabe ? "#1e293b" : "var(--vermelho)") + '">' +
           formatarMoeda(m.total) + '</span>' +
       '</div>';
   });
@@ -1793,7 +1817,7 @@ function pintarRevisoes(revisoes) {
   alvo.innerHTML = revisoes.map(function (r) {
     return '<div class="revisao-card">' +
         '<div style="font-size:12px; font-weight:600;">' + escaparHtml(r.titulo) + '</div>' +
-        '<div style="font-size:11px; color:var(--fraco); margin-top:3px; line-height:1.5;">' +
+        '<div style="font-size:11px; color:var(--cinza-texto); margin-top:3px; line-height:1.5;">' +
           'comprado há ' + r.diasDesde + ' dias · você previu ' + r.usosPrevistos +
           ' usos (' + formatarMoeda(r.custoPrevisto) + ' cada)</div>' +
         '<div style="display:flex; gap:7px; align-items:center; margin-top:9px;">' +
@@ -1866,20 +1890,21 @@ function pintarLinks() {
     }
 
     return '<div class="link-item' + (ehMenor ? " menor" : "") + '">' +
-        '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">' +
-          '<span style="font-size:12px; font-weight:600;">' +
-            escaparHtml(k.loja || "loja") + '</span>' +
-          '<span style="font-size:14px;">' + (preco ? formatarMoeda(preco) : "sem preço") + '</span>' +
+        '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">' +
+          '<span class="link-loja">' + escaparHtml(k.loja || "loja") +
+            (ehMenor ? ' <span style="color:var(--verde)">· menor</span>' : '') + '</span>' +
+          '<span class="link-preco" style="color:' + (ehMenor ? "var(--verde)" : "#1e293b") + '">' +
+            (preco ? formatarMoeda(preco) : "—") + '</span>' +
         '</div>' +
-        (k.produto ? '<div style="font-size:10px; color:var(--fraco); margin-top:2px;">' +
+        (k.produto ? '<div style="font-size:10.5px; color:var(--cinza-texto); margin-top:3px; line-height:1.4;">' +
           escaparHtml(k.produto.slice(0, 60)) + '</div>' : '') +
-        (variacao ? '<div style="font-size:10px; color:' +
-          (variacao.indexOf("caiu") === 0 ? "#15803d" : "#b91c1c") +
-          '; margin-top:3px;">' + variacao + '</div>' : '') +
-        '<div style="display:flex; gap:10px; margin-top:6px;">' +
-          '<span style="font-size:11px; color:#1d4ed8;" onclick="abrirLinkExterno(' +
-            JSON.stringify(k.url).replace(/"/g, "&quot;") + ')">abrir</span>' +
-          '<span style="font-size:11px; color:var(--fraco);" onclick="atualizarPrecoLink(' +
+        (variacao ? '<div style="font-size:10.5px; font-weight:600; margin-top:5px; color:' +
+          (variacao.indexOf("caiu") === 0 ? "var(--verde)" : "var(--vermelho)") +
+          '">' + variacao + '</div>' : '') +
+        '<div class="link-acoes">' +
+          '<span style="color:var(--azul-claro)" onclick="abrirLinkExterno(' +
+            JSON.stringify(k.url).replace(/"/g, "&quot;") + ')">abrir a loja</span>' +
+          '<span style="color:var(--cinza-texto)" onclick="atualizarPrecoLink(' +
             JSON.stringify(k.url).replace(/"/g, "&quot;") + ')">rever preço</span>' +
         '</div>' +
       '</div>';
@@ -1984,7 +2009,7 @@ async function abrirCofre() {
             '<span style="font-size:12px; font-weight:600;">' + escaparHtml(i.titulo) + '</span>' +
             '<span style="font-size:14px;">' + formatarMoeda(i.valor) + '</span>' +
           '</div>' +
-          '<div style="font-size:10px; color:var(--fraco); margin-top:3px;">' +
+          '<div style="font-size:10px; color:var(--cinza-texto); margin-top:3px;">' +
             escaparHtml(i.pessoa) + (i.quando ? " · " + formatarDataBR(i.quando) : "") +
             (i.motivo ? " · " + escaparHtml(i.motivo) : "") + '</div>' +
           '<span style="font-size:11px; color:#b91c1c; display:inline-block; margin-top:6px;" ' +
