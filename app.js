@@ -977,20 +977,16 @@ async function alimentarWidgetCalendario() {
 let planosCarregados = [];
 let planoAberto = null;
 let topicoAberto = null;
+let planoFiltroPessoa = "";          // "" = todos
+let planoPessoas = ["Paulo"];
+let planoPerguntas = {};
+let planoCofrePorPessoa = {};
 
-const TOPICOS_PLANO = [
-  { n: 1, nome: "Necessidade",
-    perguntas: "Resolve um problema real ou é vontade do momento?\nVocê já tem algo que cumpre essa função?\nO que acontece se não comprar?" },
-  { n: 2, nome: "Impacto no orçamento", automatico: true },
-  { n: 3, nome: "Custo real",
-    perguntas: "Frete, manutenção, assinatura, acessórios?" },
-  { n: 4, nome: "Pesquisa",
-    perguntas: "Comparou em pelo menos 3 lugares?\nExiste usado, mais barato ou emprestado?\nLeu avaliações de quem comprou?" },
-  { n: 5, nome: "Carência", automatico: true },
-  { n: 6, nome: "Motivação",
-    perguntas: "Está comprando por tédio, ansiedade, cansaço ou promoção?\nCompraria se ninguém fosse ver?" },
-  { n: 7, nome: "Decisão", automatico: true }
-];
+const NOMES_TOPICOS = {
+  1: "Necessidade", 2: "Impacto no orçamento", 3: "Custo real",
+  4: "Pesquisa", 5: "Carência", 6: "Motivação", 7: "Decisão"
+};
+const TOPICOS_AUTOMATICOS = [2, 5, 7];
 
 async function carregarPlanos() {
   const lista = document.getElementById("planos-lista");
@@ -999,7 +995,12 @@ async function carregarPlanos() {
     if (!r.ok) { lista.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro.") + '</p>'; return; }
 
     planosCarregados = r.planos || [];
+    planoPessoas = r.pessoas || planoPessoas;
+    planoPerguntas = r.perguntas || {};
+    planoCofrePorPessoa = r.cofrePorPessoa || {};
+
     pintarCofre(r.cofre || 0);
+    pintarFiltroPessoas();
     pintarListaPlanos();
     marcarCarenciasVencidas();
 
@@ -1011,17 +1012,61 @@ async function carregarPlanos() {
 function pintarCofre(valor) {
   const alvo = document.getElementById("planos-cofre");
   if (!valor) { alvo.innerHTML = ""; return; }
-  alvo.innerHTML = '<div class="cofre-card">' +
-    '<div class="cofre-rot">cofre do que você não comprou</div>' +
-    '<div class="cofre-valor">' + formatarMoeda(valor) + '</div></div>';
+
+  // Com filtro ligado, o cofre mostra o daquela pessoa: número total com
+  // lista filtrada seria duas verdades na mesma tela.
+  const mostrado = planoFiltroPessoa
+    ? (planoCofrePorPessoa[planoFiltroPessoa] || 0)
+    : valor;
+
+  alvo.innerHTML = '<div class="cofre-card" onclick="abrirCofre()">' +
+    '<div class="cofre-rot">cofre do que não foi comprado' +
+      (planoFiltroPessoa ? " · " + escaparHtml(planoFiltroPessoa) : "") + '</div>' +
+    '<div class="cofre-valor">' + formatarMoeda(mostrado) + '</div>' +
+    '<div class="cofre-rot" style="margin-top:3px;">toque para ver o que está aqui dentro</div></div>';
+}
+
+function pintarFiltroPessoas() {
+  const alvo = document.getElementById("planos-filtro");
+  if (!alvo) return;
+
+  const opcoes = [""].concat(planoPessoas);
+  alvo.innerHTML = opcoes.map(function (nome) {
+    const ativo = planoFiltroPessoa === nome;
+    const quantos = nome
+      ? planosCarregados.filter(function (p) { return p.pessoa === nome; }).length
+      : planosCarregados.length;
+    return '<button class="chip-pessoa' + (ativo ? " ativo" : "") + '" ' +
+      'onclick="filtrarPessoa(' + JSON.stringify(nome).replace(/"/g, "&quot;") + ')">' +
+      (nome || "Todos") + (quantos ? ' <b>' + quantos + '</b>' : '') + '</button>';
+  }).join("");
+}
+
+function filtrarPessoa(nome) {
+  planoFiltroPessoa = nome;
+  pintarFiltroPessoas();
+  pintarListaPlanos();
+  // O cofre acompanha o filtro.
+  const total = Object.keys(planoCofrePorPessoa).reduce(function (s, k) {
+    return s + planoCofrePorPessoa[k];
+  }, 0);
+  pintarCofre(total);
+}
+
+function planosVisiveis() {
+  if (!planoFiltroPessoa) return planosCarregados;
+  return planosCarregados.filter(function (p) { return p.pessoa === planoFiltroPessoa; });
 }
 
 function pintarListaPlanos() {
   const lista = document.getElementById("planos-lista");
+  const visiveis = planosVisiveis();
 
-  if (!planosCarregados.length) {
-    lista.innerHTML = '<p class="vazio">Nenhum plano aberto. O primeiro é aquela compra ' +
-      'que você está adiando decidir.</p>';
+  if (!visiveis.length) {
+    lista.innerHTML = '<p class="vazio">' + (planoFiltroPessoa
+      ? "Nenhum plano de " + escaparHtml(planoFiltroPessoa) + "."
+      : "Nenhum plano aberto. O primeiro é aquela compra que você está adiando decidir.") +
+      '</p>';
     document.getElementById("badge-planos").textContent = "";
     return;
   }
@@ -1033,8 +1078,9 @@ function pintarListaPlanos() {
   }).length;
   document.getElementById("badge-planos").textContent = prontos ? prontos : "";
 
-  lista.innerHTML = planosCarregados.map(function (p, i) {
+  lista.innerHTML = visiveis.map(function (p) {
     const cor = corDoVeredito(p.veredito.situacao);
+    const i = planosCarregados.indexOf(p);
     return '<div class="plano-card" onclick="abrirPlano(' + i + ')">' +
         '<div class="plano-topo">' +
           '<span class="plano-nome">' + escaparHtml(p.titulo) + '</span>' +
@@ -1043,7 +1089,9 @@ function pintarListaPlanos() {
         '<div class="plano-linha2">' +
           '<span class="plano-selo" style="background:' + cor.fundo + '; color:' + cor.texto + ';">' +
             p.veredito.texto + '</span>' +
-          '<span class="plano-nota">' + p.respondidos + ' de 7 tópicos</span>' +
+          '<span class="plano-nota">' + escaparHtml(p.pessoa) + ' · ' +
+            p.respondidos + '/7' + (p.links && p.links.length ? ' · ' + p.links.length + ' link(s)' : '') +
+          '</span>' +
         '</div>' +
         '<div class="plano-barra"><div style="width:' + Math.round(p.respondidos / 7 * 100) +
           '%; background:' + cor.texto + ';"></div></div>' +
@@ -1066,6 +1114,12 @@ function abrirNovoPlano() {
   });
   document.getElementById("np-aviso").style.display = "none";
   document.getElementById("np-carencia").style.display = "none";
+
+  const sel = document.getElementById("np-pessoa");
+  sel.innerHTML = planoPessoas.map(function (n) {
+    return '<option value="' + escaparHtml(n) + '">' + escaparHtml(n) + '</option>';
+  }).join("");
+  if (planoFiltroPessoa) sel.value = planoFiltroPessoa;
 }
 
 function fecharNovoPlano() {
@@ -1101,18 +1155,21 @@ async function lerLinkDoPlano() {
 
     // Mesmo quando não dá para ler o preço, o endereço costuma entregar o
     // nome. Preencher metade é melhor que devolver um erro e nada.
-    if (r.produto) document.getElementById("np-titulo").value = r.produto;
+    if (r.produto && !document.getElementById("np-titulo").value.trim()) {
+      document.getElementById("np-titulo").value = r.produto;
+    }
     if (r.ok && r.preco) {
       document.getElementById("np-valor").value = Number(r.preco).toFixed(2);
       mostrarCarenciaPrevista();
       aviso.textContent = "✅ " + (r.loja || "loja") + " · " + formatarMoeda(r.preco);
     } else {
-      aviso.textContent = "⚠️ " + (r.mensagem || "Não consegui ler.");
+      aviso.textContent = "⚠️ " + (r.mensagem || "Não consegui ler.") +
+                          " O link fica guardado do mesmo jeito.";
     }
     aviso.style.display = "block";
 
   } catch (e) {
-    aviso.textContent = "⚠️ Sem conexão.";
+    aviso.textContent = "⚠️ Sem conexão. O link fica guardado do mesmo jeito.";
     aviso.style.display = "block";
   } finally {
     btn.disabled = false;
@@ -1124,6 +1181,7 @@ async function criarPlanoApp() {
   const titulo = document.getElementById("np-titulo").value.trim();
   const valor = document.getElementById("np-valor").value;
   const url = document.getElementById("np-link").value.trim();
+  const pessoa = document.getElementById("np-pessoa").value;
   const aviso = document.getElementById("np-aviso");
 
   if (!titulo || !(parseFloat(valor) > 0)) {
@@ -1137,9 +1195,13 @@ async function criarPlanoApp() {
   btn.textContent = "Criando...";
 
   try {
-    const r = await chamarServidor("criarPlano", { titulo: titulo, valor: valor });
+    const r = await chamarServidor("criarPlano", {
+      titulo: titulo, valor: valor, pessoa: pessoa
+    });
     if (!r.ok) { aviso.textContent = "⚠️ " + r.mensagem; aviso.style.display = "block"; return; }
 
+    // O link é guardado mesmo sem leitura: ele é o caminho de volta para a
+    // loja daqui a 30 dias, e isso vale por si.
     if (url) {
       await chamarServidor("adicionarLinkAoPlano", { id: r.id, url: url, preco: valor });
     }
@@ -1182,8 +1244,8 @@ async function agendarAvisoCarencia(id, titulo, valor, dias) {
 
     await LN.schedule({
       notifications: [{
-        // Id numérico derivado do id do plano: o Android exige número, e
-        // usar o mesmo permite cancelar depois se o plano for decidido antes.
+        // Id numérico derivado do id do plano: o Android exige número, e usar
+        // o mesmo permite cancelar depois se o plano for decidido antes.
         id: Math.abs(hashDoTexto(id)) % 2000000,
         title: "Passaram " + (dias === 1 ? "24 horas" : dias + " dias"),
         body: titulo + " · " + formatarMoeda(valor) + ". Ainda quer?",
@@ -1212,7 +1274,7 @@ function abrirPlano(i) {
   document.getElementById("modal-plano").style.display = "flex";
   document.getElementById("pl-titulo").textContent = planoAberto.titulo;
   document.getElementById("pl-sub").textContent =
-    formatarMoeda(planoAberto.valor) +
+    formatarMoeda(planoAberto.valor) + " · " + planoAberto.pessoa +
     (planoAberto.diasFaltando ? " · faltam " + planoAberto.diasFaltando + " dias" : "");
   pintarFicha();
 }
@@ -1230,42 +1292,78 @@ function pintarFicha() {
     '<div style="background:' + cor.fundo + '; color:' + cor.texto +
     '; border-radius:12px; padding:11px 13px; margin-bottom:12px;">' +
     '<div style="font-size:12px; font-weight:600;">o app sugere: ' + p.veredito.texto + '</div>' +
-    '<div style="font-size:10px; margin-top:3px; line-height:1.5;">a decisão continua sendo sua</div></div>';
+    '<div style="font-size:10px; margin-top:3px;">a decisão continua sendo sua</div></div>';
 
-  document.getElementById("pl-topicos").innerHTML = TOPICOS_PLANO.map(function (t) {
-    const resp = (p.respostas["t" + t.n] || "").toString();
-    const feito = t.automatico ? true : resp.trim() !== "";
-    const aberto = topicoAberto === t.n;
+  let html = "";
+  for (let n = 1; n <= 7; n++) {
+    const automatico = TOPICOS_AUTOMATICOS.indexOf(n) >= 0;
+    const perguntas = planoPerguntas[String(n)] || [];
+    const feito = automatico || perguntasCompletas(perguntas, p.respostas);
+    const aberto = topicoAberto === n;
 
     let corpo = "";
     if (aberto) {
-      corpo = '<div class="topico-corpo">' +
-        (t.automatico ? autoDoTopico(t.n, p) : "") +
-        (t.perguntas
-          ? '<div class="topico-auto" style="white-space:pre-line;">' + t.perguntas + '</div>' +
-            '<textarea id="resp-' + t.n + '" placeholder="sua resposta">' + escaparHtml(resp) + '</textarea>' +
-            '<button class="btn-modal confirmar" style="width:100%; margin-top:7px;" ' +
-            'onclick="event.stopPropagation(); salvarTopico(' + t.n + ')">Salvar</button>'
-          : "") +
-        '</div>';
+      corpo = '<div class="topico-corpo">' + (automatico ? autoDoTopico(n, p) : "");
+
+      // Um campo por pergunta: com tudo numa caixa só, as perguntas de baixo
+      // não são respondidas -- vira um parágrafo sobre a primeira.
+      perguntas.forEach(function (q) {
+        const v = (p.respostas[q.c] === undefined || p.respostas[q.c] === null)
+          ? "" : p.respostas[q.c].toString();
+        const campo = (q.tipo === "valor" || q.tipo === "numero")
+          ? '<input type="number" step="' + (q.tipo === "valor" ? "0.01" : "1") +
+            '" inputmode="decimal" id="resp-' + q.c + '" value="' + escaparHtml(v) + '" ' +
+            'onclick="event.stopPropagation()" />'
+          : '<textarea id="resp-' + q.c + '" onclick="event.stopPropagation()" ' +
+            'placeholder="sua resposta">' + escaparHtml(v) + '</textarea>';
+
+        html += "";
+        corpo += '<div class="pergunta">' +
+            '<label for="resp-' + q.c + '">' + escaparHtml(q.p) + '</label>' +
+            campo +
+          '</div>';
+      });
+
+      if (perguntas.length) {
+        corpo += '<button class="btn-modal confirmar" style="width:100%; margin-top:8px;" ' +
+          'onclick="event.stopPropagation(); salvarTopico(' + n + ')">Salvar</button>';
+      }
+      if (n === 4) {
+        corpo += '<button class="btn-modal cancelar" style="width:100%; margin-top:6px;" ' +
+          'onclick="event.stopPropagation(); abrirLinks()">🔗 Onde comprar (' +
+          (p.links ? p.links.length : 0) + ')</button>';
+      }
+      corpo += '</div>';
     }
 
-    return '<div class="topico" onclick="alternarTopico(' + t.n + ')">' +
+    html += '<div class="topico" onclick="alternarTopico(' + n + ')">' +
         '<div class="topico-topo">' +
           '<span class="topico-num" style="background:' + (feito ? "#dcfce7" : "#e2e8f0") +
-            '; color:' + (feito ? "#15803d" : "#64748b") + ';">' + t.n + '</span>' +
-          '<span class="topico-nome">' + t.nome + '</span>' +
+            '; color:' + (feito ? "#15803d" : "#64748b") + ';">' + n + '</span>' +
+          '<span class="topico-nome">' + NOMES_TOPICOS[n] + '</span>' +
           '<span style="font-size:11px; color:' + (feito ? "#15803d" : "#94a3b8") + ';">' +
-            (t.automatico ? "automático" : (feito ? "respondido" : "pendente")) + '</span>' +
+            (automatico ? "automático" : (feito ? "respondido" : "pendente")) + '</span>' +
         '</div>' + corpo +
       '</div>';
-  }).join("");
+  }
+  document.getElementById("pl-topicos").innerHTML = html;
 
   pintarAcoesDoPlano();
 }
 
+function perguntasCompletas(perguntas, respostas) {
+  if (!perguntas.length) return false;
+  for (let i = 0; i < perguntas.length; i++) {
+    const v = respostas[perguntas[i].c];
+    if (v === undefined || v === null || v.toString().trim() === "") return false;
+  }
+  return true;
+}
+
 /** As respostas que o servidor deu. */
 function autoDoTopico(n, p) {
+  const linha = function (x) { return '<div class="topico-auto">' + x + "</div>"; };
+
   if (n === 2) {
     const l = [];
     l.push(p.cabe
@@ -1278,7 +1376,7 @@ function autoDoTopico(n, p) {
       l.push("Você já tem <b>" + formatarMoeda(p.parcelasComprometidas) +
              "</b> em parcelas comprometidas nos próximos meses.");
     }
-    return l.map(function (x) { return '<div class="topico-auto">' + x + "</div>"; }).join("");
+    return l.map(linha).join("");
   }
 
   if (n === 5) {
@@ -1290,18 +1388,14 @@ function autoDoTopico(n, p) {
       l.push("Comprando a partir de <b>" + formatarDataBR(p.melhorDia.aPartirDe) +
              "</b>, cai na fatura seguinte do " + p.melhorDia.cartao + ".");
     }
-    return l.map(function (x) { return '<div class="topico-auto">' + x + "</div>"; }).join("");
+    return l.map(linha).join("");
   }
 
   if (n === 7) {
-    const l = ['<div class="topico-auto">' + p.respondidos + " de 7 tópicos respondidos.</div>"];
-    if (p.custoPorUso) {
-      l.push('<div class="topico-auto">Custo por uso: <b>' + formatarMoeda(p.custoPorUso) + "</b></div>");
-    }
-    if (p.menorPreco) {
-      l.push('<div class="topico-auto">Menor preço achado: <b>' + formatarMoeda(p.menorPreco) + "</b></div>");
-    }
-    return l.join("");
+    const l = [p.respondidos + " de 7 tópicos completos."];
+    if (p.custoPorUso) l.push("Custo por uso: <b>" + formatarMoeda(p.custoPorUso) + "</b>");
+    if (p.menorPreco) l.push("Menor preço achado: <b>" + formatarMoeda(p.menorPreco) + "</b>");
+    return l.map(linha).join("");
   }
   return "";
 }
@@ -1312,22 +1406,33 @@ function alternarTopico(n) {
 }
 
 async function salvarTopico(n) {
-  const campo = document.getElementById("resp-" + n);
-  if (!campo || !planoAberto) return;
+  if (!planoAberto) return;
+  const perguntas = planoPerguntas[String(n)] || [];
 
-  planoAberto.respostas["t" + n] = campo.value.trim();
+  perguntas.forEach(function (q) {
+    const el = document.getElementById("resp-" + q.c);
+    if (el) planoAberto.respostas[q.c] = el.value.trim();
+  });
+
+  // O tópico 3 alimenta as colunas de custo e de usos, que são o que o
+  // servidor usa para calcular o custo por uso.
+  const extras = { id: planoAberto.id, respostas: JSON.stringify(planoAberto.respostas) };
+  if (n === 3) {
+    extras.custosExtras = planoAberto.respostas["3a"] || 0;
+    extras.usosPrevistos = planoAberto.respostas["3b"] || 0;
+  }
+
   try {
-    const r = await chamarServidor("salvarPlano", {
-      id: planoAberto.id,
-      respostas: JSON.stringify(planoAberto.respostas)
-    });
+    const r = await chamarServidor("salvarPlano", extras);
     if (!r.ok) { mostrarToast("⚠ " + r.mensagem); return; }
 
     mostrarToast("✅ Salvo.");
     topicoAberto = null;
-    // Recarrega para o veredito levar a resposta nova em conta.
+
+    // Recarrega para o veredito levar as respostas novas em conta.
+    const idAtual = planoAberto.id;
     await carregarPlanos();
-    const atual = planosCarregados.filter(function (x) { return x.id === planoAberto.id; })[0];
+    const atual = planosCarregados.filter(function (x) { return x.id === idAtual; })[0];
     if (atual) { planoAberto = atual; pintarFicha(); }
 
   } catch (e) {
@@ -1341,7 +1446,32 @@ function pintarAcoesDoPlano() {
     '<button class="btn-modal cancelar" style="flex:1;" onclick="decidir(&quot;reprovar&quot;)">Desisti</button>' +
     '<button class="btn-modal cancelar" style="flex:1;" onclick="decidir(&quot;adiar&quot;)">+30 dias</button>' +
     '<button class="btn-modal confirmar" style="flex:1;" onclick="decidir(&quot;aprovar&quot;)">' +
-      (p.veredito.situacao === "pronto" ? "Comprar" : "Comprar mesmo assim") + '</button>';
+      (p.veredito.situacao === "pronto" ? "Comprar" : "Comprar mesmo assim") + '</button>' +
+    '<button class="cd-excluir" style="width:100%; margin-top:6px;" ' +
+      'onclick="excluirPlanoApp()">Apagar este plano</button>';
+}
+
+/**
+ * Apaga de vez, incluindo do cofre.
+ *
+ * Existe porque "desisti" soma no cofre, e um teste ou um engano viram número
+ * falso lá dentro -- e o cofre só vale enquanto for verdadeiro.
+ */
+async function excluirPlanoApp() {
+  if (!planoAberto) return;
+  if (!confirm("Apagar " + planoAberto.titulo + " e tudo dele? Não dá para desfazer.")) return;
+
+  try {
+    const r = await chamarServidor("excluirPlano", { id: planoAberto.id });
+    if (!r.ok) { mostrarToast("⚠ " + r.mensagem); return; }
+
+    fecharPlano();
+    fecharCofre();
+    mostrarToast("✅ " + r.mensagem);
+    carregarPlanos();
+  } catch (e) {
+    mostrarToast("⚠ Sem conexão.");
+  }
 }
 
 async function decidir(decisao) {
@@ -1359,9 +1489,7 @@ async function decidir(decisao) {
 
   try {
     const r = await chamarServidor("decidirPlano", {
-      id: planoAberto.id,
-      decisao: decisao,
-      dias: 30
+      id: planoAberto.id, decisao: decisao, dias: 30
     });
     if (!r.ok) { mostrarToast("⚠ " + r.mensagem); return; }
 
@@ -1370,6 +1498,200 @@ async function decidir(decisao) {
     limparTodoCache();
     carregarPlanos();
 
+  } catch (e) {
+    mostrarToast("⚠ Sem conexão.");
+  }
+}
+
+// -------------------------------------------------------------------- links
+function abrirLinks() {
+  if (!planoAberto) return;
+  document.getElementById("modal-links").style.display = "flex";
+  document.getElementById("lk-url").value = "";
+  document.getElementById("lk-preco").value = "";
+  document.getElementById("lk-aviso").style.display = "none";
+  pintarLinks();
+}
+
+function fecharLinks() {
+  document.getElementById("modal-links").style.display = "none";
+}
+
+function pintarLinks() {
+  const links = (planoAberto && planoAberto.links) || [];
+  const alvo = document.getElementById("lk-lista");
+
+  if (!links.length) {
+    alvo.innerHTML = '<p class="vazio">Nenhum link ainda. Cole o primeiro abaixo.</p>';
+    return;
+  }
+
+  const menor = links.reduce(function (m, k) {
+    const p = Number(k.preco) || 0;
+    return (p > 0 && (m === 0 || p < m)) ? p : m;
+  }, 0);
+
+  alvo.innerHTML = links.map(function (k) {
+    const preco = Number(k.preco) || 0;
+    const ehMenor = preco > 0 && preco === menor && links.length > 1;
+
+    // O histórico é o que faz a carência trabalhar a favor: em 30 dias o
+    // preço muda, e sem registro ninguém lembra de quanto era.
+    let variacao = "";
+    if (k.precos && k.precos.length > 1) {
+      const primeiro = Number(k.precos[0].preco) || 0;
+      const dif = preco - primeiro;
+      if (dif !== 0 && primeiro > 0) {
+        variacao = (dif < 0 ? "caiu " : "subiu ") + formatarMoeda(Math.abs(dif)) +
+                   " desde " + formatarDataBR(k.precos[0].data);
+      }
+    }
+
+    return '<div class="link-item' + (ehMenor ? " menor" : "") + '">' +
+        '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">' +
+          '<span style="font-size:12px; font-weight:600;">' +
+            escaparHtml(k.loja || "loja") + '</span>' +
+          '<span style="font-size:14px;">' + (preco ? formatarMoeda(preco) : "sem preço") + '</span>' +
+        '</div>' +
+        (k.produto ? '<div style="font-size:10px; color:var(--fraco); margin-top:2px;">' +
+          escaparHtml(k.produto.slice(0, 60)) + '</div>' : '') +
+        (variacao ? '<div style="font-size:10px; color:' +
+          (variacao.indexOf("caiu") === 0 ? "#15803d" : "#b91c1c") +
+          '; margin-top:3px;">' + variacao + '</div>' : '') +
+        '<div style="display:flex; gap:10px; margin-top:6px;">' +
+          '<span style="font-size:11px; color:#1d4ed8;" onclick="abrirLinkExterno(' +
+            JSON.stringify(k.url).replace(/"/g, "&quot;") + ')">abrir</span>' +
+          '<span style="font-size:11px; color:var(--fraco);" onclick="atualizarPrecoLink(' +
+            JSON.stringify(k.url).replace(/"/g, "&quot;") + ')">rever preço</span>' +
+        '</div>' +
+      '</div>';
+  }).join("");
+}
+
+function abrirLinkExterno(url) {
+  try {
+    const B = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
+    if (B && B.open) { B.open({ url: url }); return; }
+  } catch (e) {}
+  window.open(url, "_blank");
+}
+
+async function adicionarLink() {
+  const url = document.getElementById("lk-url").value.trim();
+  const preco = document.getElementById("lk-preco").value;
+  const aviso = document.getElementById("lk-aviso");
+  const btn = document.getElementById("lk-btn-add");
+
+  if (!url) { aviso.textContent = "Cole o link."; aviso.style.display = "block"; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Lendo...";
+  aviso.style.display = "none";
+
+  let dados = { url: url, preco: preco, loja: "", produto: "" };
+
+  try {
+    // Tenta ler; se a loja bloquear, guarda o que der. O link vale mesmo sem
+    // preço: é o caminho de volta para a loja daqui a 30 dias.
+    const r = await chamarServidor("analisarLinkProduto", { url: url });
+    if (r.produto) dados.produto = r.produto;
+    if (r.loja) dados.loja = r.loja;
+    if (r.ok && r.preco && !preco) dados.preco = r.preco;
+
+    if (!r.ok && !preco) {
+      aviso.textContent = "⚠️ " + (r.mensagem || "Não li o preço.") + " Guardei sem preço.";
+      aviso.style.display = "block";
+    }
+  } catch (e) {
+    aviso.textContent = "⚠️ Sem conexão para ler. Guardando assim mesmo.";
+    aviso.style.display = "block";
+  }
+
+  try {
+    const g = await chamarServidor("adicionarLinkAoPlano", Object.assign({ id: planoAberto.id }, dados));
+    if (!g.ok) { aviso.textContent = "⚠️ " + g.mensagem; aviso.style.display = "block"; return; }
+
+    planoAberto.links = g.links || [];
+    document.getElementById("lk-url").value = "";
+    document.getElementById("lk-preco").value = "";
+    pintarLinks();
+    mostrarToast("✅ " + g.mensagem);
+
+  } catch (e) {
+    aviso.textContent = "⚠️ Sem conexão.";
+    aviso.style.display = "block";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Adicionar";
+  }
+}
+
+/** Relê a página e acrescenta o preço de hoje ao histórico daquele link. */
+async function atualizarPrecoLink(url) {
+  mostrarToast("⏳ Relendo...", true);
+  try {
+    const r = await chamarServidor("analisarLinkProduto", { url: url });
+    if (!r.ok || !r.preco) {
+      mostrarToast("⚠ " + (r.mensagem || "Não consegui reler."));
+      return;
+    }
+    const g = await chamarServidor("adicionarLinkAoPlano", {
+      id: planoAberto.id, url: url, preco: r.preco, loja: r.loja, produto: r.produto
+    });
+    if (g.ok) {
+      planoAberto.links = g.links || [];
+      pintarLinks();
+      mostrarToast("✅ " + formatarMoeda(r.preco));
+    }
+  } catch (e) {
+    mostrarToast("⚠ Sem conexão.");
+  }
+}
+
+// -------------------------------------------------------------------- cofre
+async function abrirCofre() {
+  document.getElementById("modal-cofre").style.display = "flex";
+  const alvo = document.getElementById("cf-lista");
+  alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+
+  try {
+    const r = await chamarServidor("listarReprovados");
+    if (!r.ok || !r.itens.length) {
+      alvo.innerHTML = '<p class="vazio">Nada aqui ainda.</p>';
+      return;
+    }
+    alvo.innerHTML = r.itens.map(function (i) {
+      return '<div class="link-item">' +
+          '<div style="display:flex; justify-content:space-between; align-items:baseline;">' +
+            '<span style="font-size:12px; font-weight:600;">' + escaparHtml(i.titulo) + '</span>' +
+            '<span style="font-size:14px;">' + formatarMoeda(i.valor) + '</span>' +
+          '</div>' +
+          '<div style="font-size:10px; color:var(--fraco); margin-top:3px;">' +
+            escaparHtml(i.pessoa) + (i.quando ? " · " + formatarDataBR(i.quando) : "") +
+            (i.motivo ? " · " + escaparHtml(i.motivo) : "") + '</div>' +
+          '<span style="font-size:11px; color:#b91c1c; display:inline-block; margin-top:6px;" ' +
+            'onclick="apagarDoCofre(' + JSON.stringify(i.id).replace(/"/g, "&quot;") + ', ' +
+            JSON.stringify(i.titulo).replace(/"/g, "&quot;") + ')">apagar de vez</span>' +
+        '</div>';
+    }).join("");
+  } catch (e) {
+    alvo.innerHTML = '<p class="vazio">⚠️ Sem conexão.</p>';
+  }
+}
+
+function fecharCofre() {
+  const m = document.getElementById("modal-cofre");
+  if (m) m.style.display = "none";
+}
+
+async function apagarDoCofre(id, titulo) {
+  if (!confirm("Apagar " + titulo + " do cofre? O valor sai da conta.")) return;
+  try {
+    const r = await chamarServidor("excluirPlano", { id: id });
+    if (!r.ok) { mostrarToast("⚠ " + r.mensagem); return; }
+    mostrarToast("✅ " + r.mensagem);
+    abrirCofre();
+    carregarPlanos();
   } catch (e) {
     mostrarToast("⚠ Sem conexão.");
   }
@@ -1391,6 +1713,7 @@ function marcarCarenciasVencidas() {
     mostrarToast("⏰ " + prontos.length + " plano(s) cumpriram a carência.");
   }, 900);
 }
+
 
 function desenharGradeCalendario() {
   const grade = document.getElementById("cal-grade");

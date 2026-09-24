@@ -497,6 +497,23 @@
     .cap-varrer:disabled { opacity: .5; cursor: default; }
 
     /* ---- Planos de compra ---- */
+    .filtro-pessoas { display: flex; gap: 6px; margin: 12px 0 4px; overflow-x: auto; }
+    .chip-pessoa {
+      flex: 0 0 auto; padding: 6px 13px; border-radius: 999px; border: none;
+      background: var(--surf2); color: var(--fraco); font-family: inherit;
+      font-size: 12px; cursor: pointer;
+    }
+    .chip-pessoa.ativo { background: var(--verde); color: var(--verde-tinta); }
+    .chip-pessoa b { font-weight: 700; }
+    .pergunta { margin-top: 9px; }
+    .pergunta label {
+      display: block; font-size: 11px; color: var(--fraco);
+      margin-bottom: 4px; line-height: 1.4;
+    }
+    .pergunta textarea, .pergunta input {
+      width: 100%; font-family: inherit; font-size: 12px;
+    }
+    .pergunta textarea { min-height: 46px; }
     .plano-card { background: var(--surf); border-radius: 14px; padding: 13px 15px; margin-bottom: 9px; }
     .plano-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
     .plano-nome { font-size: 13px; font-weight: 600; }
@@ -2790,6 +2807,7 @@
          Aprovações. -->
     <div class="conteudo" id="conteudo-planos" style="display:none;">
       <div id="planos-cofre"></div>
+      <div class="filtro-pessoas" id="planos-filtro"></div>
       <button class="btn-modal confirmar" style="width:100%; margin:12px 0;"
               onclick="abrirNovoPlano()">+ Novo plano de compra</button>
       <div id="planos-lista"><p class="vazio">Carregando...</p></div>
@@ -3132,6 +3150,10 @@
           <input type="number" id="np-valor" step="0.01" inputmode="decimal"
                  oninput="mostrarCarenciaPrevista()" />
         </div>
+        <div class="campo-bloco">
+          <label for="np-pessoa">Para quem</label>
+          <select id="np-pessoa"></select>
+        </div>
         <div id="np-carencia" class="cfg-aviso" style="display:none;"></div>
 
         <div class="modal-acoes">
@@ -3156,6 +3178,51 @@
         <div id="pl-veredito"></div>
         <div id="pl-topicos"></div>
         <div id="pl-acoes" class="modal-acoes" style="flex-wrap:wrap; gap:6px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ONDE COMPRAR ============ -->
+  <div class="modal-fundo" id="modal-links">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">🔗 Onde comprar</div>
+          <div class="mt-mov">o link fica guardado mesmo sem preço</div>
+        </div>
+        <button class="fechar" onclick="fecharLinks()">&times;</button>
+      </div>
+      <div class="modal-conteudo">
+        <div id="lk-lista"></div>
+        <div class="campo-bloco" style="margin-top:12px;">
+          <label for="lk-url">Link</label>
+          <input type="url" id="lk-url" placeholder="cole o endereço da loja" />
+        </div>
+        <div class="campo-bloco">
+          <label for="lk-preco">Preço (deixe vazio para eu tentar ler)</label>
+          <input type="number" id="lk-preco" step="0.01" inputmode="decimal" />
+        </div>
+        <div id="lk-aviso" class="cfg-aviso" style="display:none;"></div>
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharLinks()">Fechar</button>
+          <button class="btn-modal confirmar" id="lk-btn-add" onclick="adicionarLink()">Adicionar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ COFRE ============ -->
+  <div class="modal-fundo" id="modal-cofre">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">🐷 Cofre</div>
+          <div class="mt-mov">o que você decidiu não comprar</div>
+        </div>
+        <button class="fechar" onclick="fecharCofre()">&times;</button>
+      </div>
+      <div class="modal-conteudo">
+        <div id="cf-lista"></div>
       </div>
     </div>
   </div>
@@ -4623,7 +4690,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=73"></script>
+  <script src="app.js?v=74"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
