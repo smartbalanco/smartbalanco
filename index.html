@@ -22,6 +22,8 @@
       --borda: #dbe2ec;
       --vermelho: #b91c1c;      /* um tom mais fundo: 4,1:1 -> 5,5:1 */
       --laranja: #f97316;
+      --roxo: #8b5cf6;          /* o mesmo do botão da IA: a cor do "ainda não
+                                   aconteceu" no app */
 
       /* ---- Neumorfismo ----
          Não existe "cor de card": tudo tem a cor do fundo e o relevo vem de
@@ -665,6 +667,32 @@
     .sim-ponto-ja { background: var(--cinza-texto); opacity: .45; }
     .sim-ponto-nova { background: var(--verde); }
     .sim-legenda-sobra { margin-left: auto; }
+    /* Os outros planos: listrado, e não chapado como os dois vizinhos. A cor
+       sozinha não basta -- é o único pedaço da barra que ainda é suposição. */
+    .sim-outros {
+      background: repeating-linear-gradient(45deg,
+        var(--roxo) 0 3px, transparent 3px 6px);
+      background-color: rgba(139, 92, 246, .16);
+    }
+    .sim-ponto-outros {
+      background: repeating-linear-gradient(45deg,
+        var(--roxo) 0 2px, transparent 2px 4px);
+      background-color: rgba(139, 92, 246, .16);
+    }
+    .sim-outros-aviso {
+      font-size: 11px; line-height: 1.5; color: var(--cinza-texto);
+      margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--borda);
+    }
+    .sim-outros-aviso.estoura { color: var(--vermelho); font-weight: 600; }
+
+    /* ---- a linha dos planos no dashboard ---- */
+    /* Mesmo molde da linha das fixas: as duas dizem "isto ainda não é real",
+       e duas caixas diferentes para a mesma ideia fariam procurar diferença
+       onde não há. */
+    .linha-planos {
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 12px; padding: 12px 14px; margin: 10px 0 4px;
+    }
     .sim-ok {
       font-size: 10.5px; color: var(--verde); margin-top: 9px;
       line-height: 1.5; font-weight: 600;
@@ -5056,7 +5084,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=81"></script>
+  <script src="app.js?v=82"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

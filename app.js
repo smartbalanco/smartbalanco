@@ -1705,6 +1705,10 @@ function simuladorHtml(p) {
   sim.meses.forEach(function (m) {
     const pJa = Math.min(100, (m.jaComprometido / teto) * 100);
     const pNova = Math.min(100 - pJa, (m.novaParcela / teto) * 100);
+    // Os outros planos entram DEPOIS desta compra na barra: assim o pedaço
+    // verde encosta no que já está comprometido, e dá para ler o impacto
+    // desta decisão sem a fila da frente empurrando ele para o lado.
+    const pOutros = Math.min(100 - pJa - pNova, ((m.outrosPlanos || 0) / teto) * 100);
     const corSobra = !m.cabe ? "var(--vermelho)"
                     : (m.apertado ? "var(--laranja)" : "var(--verde)");
 
@@ -1714,6 +1718,8 @@ function simuladorHtml(p) {
           '<span class="sim-ja" style="width:' + pJa + '%"></span>' +
           (pNova > 0 ? '<span class="sim-nova' + (m.cabe ? "" : " estoura") +
             '" style="width:' + pNova + '%"></span>' : '') +
+          (pOutros > 0 ? '<span class="sim-outros" title="outros planos em aberto"' +
+            ' style="width:' + pOutros + '%"></span>' : '') +
         '</span>' +
         '<span class="sim-num" style="color:' + corSobra + '">' +
           (m.sobra < 0 ? "-" : "") + formatarMoeda(Math.abs(m.sobra)) + '</span>' +
@@ -1723,8 +1729,35 @@ function simuladorHtml(p) {
   h += '<div class="sim-legenda">' +
       '<span><i class="sim-ponto sim-ponto-ja"></i>já comprometido</span>' +
       '<span><i class="sim-ponto sim-ponto-nova"></i>esta compra</span>' +
+      (sim.outrosPlanosQtd > 0
+        ? '<span><i class="sim-ponto sim-ponto-outros"></i>outros ' +
+          sim.outrosPlanosQtd + ' plano' + (sim.outrosPlanosQtd > 1 ? "s" : "") + '</span>'
+        : '') +
       '<span class="sim-legenda-sobra">à direita: o que sobra</span>' +
     '</div>';
+
+  // A fila inteira de planos, num aviso à parte.
+  //
+  // Fora do "o que sobra" de propósito: aquele número é o desta decisão, e
+  // reprovar esta compra por causa de outra que talvez nem aconteça seria
+  // decidir pelo que ainda é vontade. Mas ignorar a fila faria cada plano
+  // parecer o único -- e a conta só fecha se todos forem somados uma vez.
+  // Quando a fila não muda o mês mais apertado nem a folga, o aviso repetiria
+  // com outras palavras a frase que vem logo abaixo.
+  const filaMuda = sim.piorMesComOutros !== sim.piorMes ||
+                   Math.abs((sim.piorSobraComOutros || 0) - (sim.piorSobra || 0)) > 0.01;
+
+  if (sim.outrosPlanosQtd > 0 && sim.outrosPlanosTotal > 0 && filaMuda) {
+    h += '<div class="sim-outros-aviso' +
+        (sim.piorSobraComOutros < 0 ? " estoura" : "") + '">' +
+      'Com os outros ' + sim.outrosPlanosQtd + ' plano' +
+      (sim.outrosPlanosQtd > 1 ? "s" : "") + ' em aberto, o mês mais apertado ' +
+      'seria ' + sim.piorMesComOutros +
+      (sim.piorSobraComOutros < 0
+        ? ', faltando ' + formatarMoeda(Math.abs(sim.piorSobraComOutros)) + '.'
+        : ', com ' + formatarMoeda(sim.piorSobraComOutros) + ' de folga.') +
+    '</div>';
+  }
 
   // O pior mês é a conclusão do estudo. Sem ele, seis linhas de número pedem
   // que você faça a comparação de cabeça.
@@ -4977,9 +5010,15 @@ function preencherDashboard(d) {
   if (s.planos > 0) {
     elPlanos.style.display = "block";
     elPlanos.innerHTML =
-      '<span class="lp-rot">com os planos de compra</span>' +
-      '<span class="lp-val">' + formatarMoeda(s.despesasComPlanos) + '</span>' +
-      '<span class="lp-extra">+ ' + formatarMoeda(s.planos) + ' em planos abertos</span>';
+      '<div class="lf-topo">' +
+        '<span class="lf-rot">+ planos de compra em aberto</span>' +
+        '<span class="lf-val">' + formatarMoeda(s.planos) + '</span>' +
+      '</div>' +
+      '<div class="lf-total">' +
+        (s.fixasPrevistas > 0 ? 'esperadas + planos' : 'despesas com os planos') +
+        ' <b>' + formatarMoeda(s.despesasComPlanos) + '</b></div>' +
+      '<div class="lf-nota">Nada disso foi comprado ainda. É o que aconteceria ' +
+        'se todos os planos abertos virassem compra.</div>';
   } else {
     elPlanos.style.display = "none";
   }
