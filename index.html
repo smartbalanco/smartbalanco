@@ -496,6 +496,22 @@
     }
     .cap-varrer:disabled { opacity: .5; cursor: default; }
 
+    /* ---- Análise sincera da IA ---- */
+    .analise-bloco { margin-top: 10px; }
+    .analise-travada {
+      background: var(--surf2); border-radius: 10px; padding: 11px 13px;
+      font-size: 11px; color: var(--fraco); line-height: 1.55;
+    }
+    .analise-texto {
+      background: var(--surf2); border-radius: 10px; padding: 12px 14px;
+      font-size: 12px; line-height: 1.6; margin-bottom: 8px;
+    }
+    .analise-veredito {
+      border-radius: 10px; padding: 10px 13px; font-size: 12px;
+      font-weight: 600; line-height: 1.5; margin-bottom: 8px;
+    }
+    .analise-quando { font-size: 10px; color: var(--fraco); margin-bottom: 8px; }
+
     /* ---- Simulação de parcelas ---- */
     .simulador { background: var(--surf2); border-radius: 10px; padding: 10px 12px; margin-top: 9px; }
     .sim-linha1 { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--fraco); }
@@ -4760,7 +4776,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=75"></script>
+  <script src="app.js?v=76"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

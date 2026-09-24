@@ -1336,6 +1336,7 @@ function pintarFicha() {
           'onclick="event.stopPropagation(); salvarTopico(' + n + ')">Salvar</button>';
       }
       if (n === 2) corpo += simuladorHtml(p);
+      if (n === 7) corpo += analiseHtml(p);
       if (n === 4) {
         corpo += '<button class="btn-modal cancelar" style="width:100%; margin-top:6px;" ' +
           'onclick="event.stopPropagation(); abrirLinks()">🔗 Onde comprar (' +
@@ -1510,6 +1511,101 @@ async function decidir(decisao) {
   } catch (e) {
     mostrarToast("⚠ Sem conexão.");
   }
+}
+
+// --------------------------------------------------------- análise sincera
+/**
+ * O botão da análise, e a análise quando já existe.
+ *
+ * Fica travado enquanto faltar tópico. Não por limitação técnica: uma análise
+ * feita pela metade vira palpite, e palpite com cara de conclusão é pior que
+ * nenhuma análise. Responder tudo também é o ponto do fluxo -- liberar o
+ * atalho antes tiraria o motivo de responder.
+ */
+function analiseHtml(p) {
+  const completo = p.respondidos >= 7;
+  let h = '<div class="analise-bloco" onclick="event.stopPropagation()">';
+
+  if (!completo) {
+    h += '<div class="analise-travada">' +
+         '<b>Análise sincera da IA</b><br>' +
+         'Disponível quando os 7 tópicos estiverem respondidos. Faltam ' +
+         (7 - p.respondidos) + '.</div>';
+    return h + '</div>';
+  }
+
+  h += '<div id="analise-texto"></div>' +
+       '<button class="btn-modal confirmar" style="width:100%;" id="btn-analise" ' +
+       'onclick="pedirAnalise(false)">' +
+       (p.temAnalise ? "🔍 Ver a análise da IA" : "🔍 Analisar com a IA") +
+       '</button>';
+  return h + '</div>';
+}
+
+async function pedirAnalise(refazer) {
+  if (!planoAberto) return;
+
+  const btn = document.getElementById("btn-analise");
+  const alvo = document.getElementById("analise-texto");
+  if (btn) { btn.disabled = true; btn.textContent = "Analisando..."; }
+
+  try {
+    const r = await chamarServidor("analisarPlanoComIA", {
+      id: planoAberto.id,
+      refazer: refazer ? "1" : ""
+    });
+
+    if (!r.ok) {
+      alvo.innerHTML = '<div class="analise-travada">⚠️ ' +
+        escaparHtml(r.mensagem || "Não consegui analisar.") + '</div>';
+      return;
+    }
+
+    planoAberto.temAnalise = true;
+    alvo.innerHTML = montarAnalise(r);
+
+  } catch (e) {
+    alvo.innerHTML = '<div class="analise-travada">⚠️ Sem conexão.</div>';
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🔄 Analisar de novo";
+      btn.setAttribute("onclick", "pedirAnalise(true)");
+    }
+  }
+}
+
+/**
+ * Separa o veredito do resto e o destaca.
+ *
+ * A IA termina com "VEREDITO: ESPERE ...". Esse é o pedaço que você vai ler
+ * primeiro -- e provavelmente o único, se estiver com pressa.
+ */
+function montarAnalise(r) {
+  const texto = (r.analise || "").toString().trim();
+  const corte = texto.lastIndexOf("VEREDITO:");
+
+  let corpo = texto, veredito = "";
+  if (corte >= 0) {
+    corpo = texto.slice(0, corte).trim();
+    veredito = texto.slice(corte + 9).trim();
+  }
+
+  const cor = /não compre/i.test(veredito) ? ["#fee2e2", "#b91c1c"]
+            : (/espere/i.test(veredito)    ? ["#fef3c7", "#a16207"]
+                                           : ["#dcfce7", "#15803d"]);
+
+  let h = '<div class="analise-texto">' + escaparHtml(corpo).replace(/\n/g, "<br>") + '</div>';
+
+  if (veredito) {
+    h += '<div class="analise-veredito" style="background:' + cor[0] + '; color:' + cor[1] + ';">' +
+         escaparHtml(veredito) + '</div>';
+  }
+  if (r.quando) {
+    h += '<div class="analise-quando">' +
+         (r.doCache ? "análise de " + escaparHtml(r.quando) : "analisado agora") + '</div>';
+  }
+  return h;
 }
 
 // ------------------------------------------------------------- simulação
