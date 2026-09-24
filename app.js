@@ -963,6 +963,435 @@ async function alimentarWidgetCalendario() {
   }
 }
 
+// ============================================================================
+// PLANOS DE COMPRA
+// ----------------------------------------------------------------------------
+// A despesa que ainda não existe. Passa pelos sete tópicos antes de virar
+// lançamento; enquanto está em análise não aparece em Transações nem em
+// Aprovações.
+//
+// Cinco tópicos o servidor responde sozinho. Os outros dois são seus -- e são
+// justamente os que não dá para automatizar: por que você quer, e se está
+// comprando por cansaço.
+// ============================================================================
+let planosCarregados = [];
+let planoAberto = null;
+let topicoAberto = null;
+
+const TOPICOS_PLANO = [
+  { n: 1, nome: "Necessidade",
+    perguntas: "Resolve um problema real ou é vontade do momento?\nVocê já tem algo que cumpre essa função?\nO que acontece se não comprar?" },
+  { n: 2, nome: "Impacto no orçamento", automatico: true },
+  { n: 3, nome: "Custo real",
+    perguntas: "Frete, manutenção, assinatura, acessórios?" },
+  { n: 4, nome: "Pesquisa",
+    perguntas: "Comparou em pelo menos 3 lugares?\nExiste usado, mais barato ou emprestado?\nLeu avaliações de quem comprou?" },
+  { n: 5, nome: "Carência", automatico: true },
+  { n: 6, nome: "Motivação",
+    perguntas: "Está comprando por tédio, ansiedade, cansaço ou promoção?\nCompraria se ninguém fosse ver?" },
+  { n: 7, nome: "Decisão", automatico: true }
+];
+
+async function carregarPlanos() {
+  const lista = document.getElementById("planos-lista");
+  try {
+    const r = await chamarServidor("listarPlanos");
+    if (!r.ok) { lista.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro.") + '</p>'; return; }
+
+    planosCarregados = r.planos || [];
+    pintarCofre(r.cofre || 0);
+    pintarListaPlanos();
+    marcarCarenciasVencidas();
+
+  } catch (e) {
+    lista.innerHTML = '<p class="vazio">⚠️ Sem conexão.</p>';
+  }
+}
+
+function pintarCofre(valor) {
+  const alvo = document.getElementById("planos-cofre");
+  if (!valor) { alvo.innerHTML = ""; return; }
+  alvo.innerHTML = '<div class="cofre-card">' +
+    '<div class="cofre-rot">cofre do que você não comprou</div>' +
+    '<div class="cofre-valor">' + formatarMoeda(valor) + '</div></div>';
+}
+
+function pintarListaPlanos() {
+  const lista = document.getElementById("planos-lista");
+
+  if (!planosCarregados.length) {
+    lista.innerHTML = '<p class="vazio">Nenhum plano aberto. O primeiro é aquela compra ' +
+      'que você está adiando decidir.</p>';
+    document.getElementById("badge-planos").textContent = "";
+    return;
+  }
+
+  // O badge conta só o que já pode ser decidido: número que pisca por algo
+  // que ainda vai esperar 20 dias é ruído.
+  const prontos = planosCarregados.filter(function (p) {
+    return p.veredito.situacao === "pronto";
+  }).length;
+  document.getElementById("badge-planos").textContent = prontos ? prontos : "";
+
+  lista.innerHTML = planosCarregados.map(function (p, i) {
+    const cor = corDoVeredito(p.veredito.situacao);
+    return '<div class="plano-card" onclick="abrirPlano(' + i + ')">' +
+        '<div class="plano-topo">' +
+          '<span class="plano-nome">' + escaparHtml(p.titulo) + '</span>' +
+          '<span class="plano-valor">' + formatarMoeda(p.valor) + '</span>' +
+        '</div>' +
+        '<div class="plano-linha2">' +
+          '<span class="plano-selo" style="background:' + cor.fundo + '; color:' + cor.texto + ';">' +
+            p.veredito.texto + '</span>' +
+          '<span class="plano-nota">' + p.respondidos + ' de 7 tópicos</span>' +
+        '</div>' +
+        '<div class="plano-barra"><div style="width:' + Math.round(p.respondidos / 7 * 100) +
+          '%; background:' + cor.texto + ';"></div></div>' +
+      '</div>';
+  }).join("");
+}
+
+function corDoVeredito(situacao) {
+  if (situacao === "pronto")    return { fundo: "#dcfce7", texto: "#15803d" };
+  if (situacao === "carencia")  return { fundo: "#fef3c7", texto: "#a16207" };
+  if (situacao === "nao-cabe")  return { fundo: "#fee2e2", texto: "#b91c1c" };
+  return { fundo: "#dbeafe", texto: "#1d4ed8" };
+}
+
+// ---------------------------------------------------------------- novo plano
+function abrirNovoPlano() {
+  document.getElementById("modal-novo-plano").style.display = "flex";
+  ["np-link", "np-titulo", "np-valor"].forEach(function (id) {
+    document.getElementById(id).value = "";
+  });
+  document.getElementById("np-aviso").style.display = "none";
+  document.getElementById("np-carencia").style.display = "none";
+}
+
+function fecharNovoPlano() {
+  document.getElementById("modal-novo-plano").style.display = "none";
+}
+
+// Mostra a carência assim que o valor é digitado: saber que vai esperar 30
+// dias ANTES de criar o plano é o que faz a regra ser aceita.
+function mostrarCarenciaPrevista() {
+  const v = parseFloat(document.getElementById("np-valor").value) || 0;
+  const el = document.getElementById("np-carencia");
+  if (!v) { el.style.display = "none"; return; }
+
+  const dias = v <= 100 ? 1 : (v <= 500 ? 7 : 30);
+  el.textContent = "Carência de " + (dias === 1 ? "24 horas" : dias + " dias") +
+                   " para este valor. O app avisa quando vencer.";
+  el.style.display = "block";
+}
+
+async function lerLinkDoPlano() {
+  const url = document.getElementById("np-link").value.trim();
+  const aviso = document.getElementById("np-aviso");
+  const btn = document.getElementById("np-btn-ler");
+
+  if (!url) { aviso.textContent = "Cole o link primeiro."; aviso.style.display = "block"; return; }
+
+  btn.disabled = true;
+  btn.textContent = "Lendo...";
+  aviso.style.display = "none";
+
+  try {
+    const r = await chamarServidor("analisarLinkProduto", { url: url });
+
+    // Mesmo quando não dá para ler o preço, o endereço costuma entregar o
+    // nome. Preencher metade é melhor que devolver um erro e nada.
+    if (r.produto) document.getElementById("np-titulo").value = r.produto;
+    if (r.ok && r.preco) {
+      document.getElementById("np-valor").value = Number(r.preco).toFixed(2);
+      mostrarCarenciaPrevista();
+      aviso.textContent = "✅ " + (r.loja || "loja") + " · " + formatarMoeda(r.preco);
+    } else {
+      aviso.textContent = "⚠️ " + (r.mensagem || "Não consegui ler.");
+    }
+    aviso.style.display = "block";
+
+  } catch (e) {
+    aviso.textContent = "⚠️ Sem conexão.";
+    aviso.style.display = "block";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔗 Ler o link";
+  }
+}
+
+async function criarPlanoApp() {
+  const titulo = document.getElementById("np-titulo").value.trim();
+  const valor = document.getElementById("np-valor").value;
+  const url = document.getElementById("np-link").value.trim();
+  const aviso = document.getElementById("np-aviso");
+
+  if (!titulo || !(parseFloat(valor) > 0)) {
+    aviso.textContent = "Preencha o que é e quanto custa.";
+    aviso.style.display = "block";
+    return;
+  }
+
+  const btn = document.getElementById("np-btn-criar");
+  btn.disabled = true;
+  btn.textContent = "Criando...";
+
+  try {
+    const r = await chamarServidor("criarPlano", { titulo: titulo, valor: valor });
+    if (!r.ok) { aviso.textContent = "⚠️ " + r.mensagem; aviso.style.display = "block"; return; }
+
+    if (url) {
+      await chamarServidor("adicionarLinkAoPlano", { id: r.id, url: url, preco: valor });
+    }
+    agendarAvisoCarencia(r.id, titulo, valor, r.carenciaDias);
+
+    fecharNovoPlano();
+    mostrarToast("✅ " + r.mensagem);
+    carregarPlanos();
+
+  } catch (e) {
+    aviso.textContent = "⚠️ Sem conexão.";
+    aviso.style.display = "block";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Criar";
+  }
+}
+
+/**
+ * Agenda a notificação do fim da carência.
+ *
+ * É local, no aparelho: não depende de o app estar aberto nem de servidor
+ * nenhum. Sem esse aviso, a carência viraria só um jeito de esquecer a
+ * compra -- que às vezes é o objetivo, mas não pode ser o único resultado.
+ */
+async function agendarAvisoCarencia(id, titulo, valor, dias) {
+  try {
+    const LN = window.Capacitor && window.Capacitor.Plugins &&
+               window.Capacitor.Plugins.LocalNotifications;
+    if (!LN) return;
+
+    const perm = await LN.checkPermissions();
+    if (perm.display !== "granted") {
+      const pedido = await LN.requestPermissions();
+      if (pedido.display !== "granted") return;
+    }
+
+    const quando = new Date(Date.now() + dias * 86400000);
+    quando.setHours(10, 0, 0, 0);   // de manhã, não no meio da noite
+
+    await LN.schedule({
+      notifications: [{
+        // Id numérico derivado do id do plano: o Android exige número, e
+        // usar o mesmo permite cancelar depois se o plano for decidido antes.
+        id: Math.abs(hashDoTexto(id)) % 2000000,
+        title: "Passaram " + (dias === 1 ? "24 horas" : dias + " dias"),
+        body: titulo + " · " + formatarMoeda(valor) + ". Ainda quer?",
+        schedule: { at: quando },
+        extra: { plano: id }
+      }]
+    });
+  } catch (e) {
+    // Sem notificação o plano continua valendo; só não vai lembrar sozinho.
+    console.warn("Aviso da carência não agendado:", e);
+  }
+}
+
+function hashDoTexto(t) {
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = ((h << 5) - h + t.charCodeAt(i)) | 0;
+  return h;
+}
+
+// ------------------------------------------------------------------- a ficha
+function abrirPlano(i) {
+  planoAberto = planosCarregados[i];
+  if (!planoAberto) return;
+  topicoAberto = null;
+
+  document.getElementById("modal-plano").style.display = "flex";
+  document.getElementById("pl-titulo").textContent = planoAberto.titulo;
+  document.getElementById("pl-sub").textContent =
+    formatarMoeda(planoAberto.valor) +
+    (planoAberto.diasFaltando ? " · faltam " + planoAberto.diasFaltando + " dias" : "");
+  pintarFicha();
+}
+
+function fecharPlano() {
+  document.getElementById("modal-plano").style.display = "none";
+  planoAberto = null;
+}
+
+function pintarFicha() {
+  const p = planoAberto;
+  const cor = corDoVeredito(p.veredito.situacao);
+
+  document.getElementById("pl-veredito").innerHTML =
+    '<div style="background:' + cor.fundo + '; color:' + cor.texto +
+    '; border-radius:12px; padding:11px 13px; margin-bottom:12px;">' +
+    '<div style="font-size:12px; font-weight:600;">o app sugere: ' + p.veredito.texto + '</div>' +
+    '<div style="font-size:10px; margin-top:3px; line-height:1.5;">a decisão continua sendo sua</div></div>';
+
+  document.getElementById("pl-topicos").innerHTML = TOPICOS_PLANO.map(function (t) {
+    const resp = (p.respostas["t" + t.n] || "").toString();
+    const feito = t.automatico ? true : resp.trim() !== "";
+    const aberto = topicoAberto === t.n;
+
+    let corpo = "";
+    if (aberto) {
+      corpo = '<div class="topico-corpo">' +
+        (t.automatico ? autoDoTopico(t.n, p) : "") +
+        (t.perguntas
+          ? '<div class="topico-auto" style="white-space:pre-line;">' + t.perguntas + '</div>' +
+            '<textarea id="resp-' + t.n + '" placeholder="sua resposta">' + escaparHtml(resp) + '</textarea>' +
+            '<button class="btn-modal confirmar" style="width:100%; margin-top:7px;" ' +
+            'onclick="event.stopPropagation(); salvarTopico(' + t.n + ')">Salvar</button>'
+          : "") +
+        '</div>';
+    }
+
+    return '<div class="topico" onclick="alternarTopico(' + t.n + ')">' +
+        '<div class="topico-topo">' +
+          '<span class="topico-num" style="background:' + (feito ? "#dcfce7" : "#e2e8f0") +
+            '; color:' + (feito ? "#15803d" : "#64748b") + ';">' + t.n + '</span>' +
+          '<span class="topico-nome">' + t.nome + '</span>' +
+          '<span style="font-size:11px; color:' + (feito ? "#15803d" : "#94a3b8") + ';">' +
+            (t.automatico ? "automático" : (feito ? "respondido" : "pendente")) + '</span>' +
+        '</div>' + corpo +
+      '</div>';
+  }).join("");
+
+  pintarAcoesDoPlano();
+}
+
+/** As respostas que o servidor deu. */
+function autoDoTopico(n, p) {
+  if (n === 2) {
+    const l = [];
+    l.push(p.cabe
+      ? "<b>Cabe</b> sem mexer na reserva. Sobram " + formatarMoeda(p.sobraDepois) + " depois."
+      : (p.mexeNaReserva
+          ? "<b>Não cabe</b> no que sobra do mês. Só mexendo na reserva de emergência."
+          : "<b>Não cabe</b> nem com a reserva."));
+    if (p.horasDeTrabalho) l.push("São <b>" + p.horasDeTrabalho + " horas</b> de trabalho.");
+    if (p.parcelasComprometidas) {
+      l.push("Você já tem <b>" + formatarMoeda(p.parcelasComprometidas) +
+             "</b> em parcelas comprometidas nos próximos meses.");
+    }
+    return l.map(function (x) { return '<div class="topico-auto">' + x + "</div>"; }).join("");
+  }
+
+  if (n === 5) {
+    const l = [];
+    l.push(p.carenciaVencida
+      ? "<b>Carência cumprida.</b> Você esperou e ainda está aqui."
+      : "Faltam <b>" + p.diasFaltando + " dias</b> · vence em " + formatarDataBR(p.carenciaAte));
+    if (p.melhorDia && p.melhorDia.dias > 0) {
+      l.push("Comprando a partir de <b>" + formatarDataBR(p.melhorDia.aPartirDe) +
+             "</b>, cai na fatura seguinte do " + p.melhorDia.cartao + ".");
+    }
+    return l.map(function (x) { return '<div class="topico-auto">' + x + "</div>"; }).join("");
+  }
+
+  if (n === 7) {
+    const l = ['<div class="topico-auto">' + p.respondidos + " de 7 tópicos respondidos.</div>"];
+    if (p.custoPorUso) {
+      l.push('<div class="topico-auto">Custo por uso: <b>' + formatarMoeda(p.custoPorUso) + "</b></div>");
+    }
+    if (p.menorPreco) {
+      l.push('<div class="topico-auto">Menor preço achado: <b>' + formatarMoeda(p.menorPreco) + "</b></div>");
+    }
+    return l.join("");
+  }
+  return "";
+}
+
+function alternarTopico(n) {
+  topicoAberto = (topicoAberto === n) ? null : n;
+  pintarFicha();
+}
+
+async function salvarTopico(n) {
+  const campo = document.getElementById("resp-" + n);
+  if (!campo || !planoAberto) return;
+
+  planoAberto.respostas["t" + n] = campo.value.trim();
+  try {
+    const r = await chamarServidor("salvarPlano", {
+      id: planoAberto.id,
+      respostas: JSON.stringify(planoAberto.respostas)
+    });
+    if (!r.ok) { mostrarToast("⚠ " + r.mensagem); return; }
+
+    mostrarToast("✅ Salvo.");
+    topicoAberto = null;
+    // Recarrega para o veredito levar a resposta nova em conta.
+    await carregarPlanos();
+    const atual = planosCarregados.filter(function (x) { return x.id === planoAberto.id; })[0];
+    if (atual) { planoAberto = atual; pintarFicha(); }
+
+  } catch (e) {
+    mostrarToast("⚠ Sem conexão.");
+  }
+}
+
+function pintarAcoesDoPlano() {
+  const p = planoAberto;
+  document.getElementById("pl-acoes").innerHTML =
+    '<button class="btn-modal cancelar" style="flex:1;" onclick="decidir(&quot;reprovar&quot;)">Desisti</button>' +
+    '<button class="btn-modal cancelar" style="flex:1;" onclick="decidir(&quot;adiar&quot;)">+30 dias</button>' +
+    '<button class="btn-modal confirmar" style="flex:1;" onclick="decidir(&quot;aprovar&quot;)">' +
+      (p.veredito.situacao === "pronto" ? "Comprar" : "Comprar mesmo assim") + '</button>';
+}
+
+async function decidir(decisao) {
+  if (!planoAberto) return;
+
+  // Comprar antes da carência vencer é permitido, mas não em silêncio: a
+  // regra existe para ser vista no momento de quebrá-la.
+  if (decisao === "aprovar" && !planoAberto.carenciaVencida) {
+    if (!confirm("Ainda faltam " + planoAberto.diasFaltando +
+                 " dias de carência. Comprar mesmo assim?")) return;
+  }
+  if (decisao === "reprovar") {
+    if (!confirm("Desistir de " + planoAberto.titulo + "? O valor vai para o cofre.")) return;
+  }
+
+  try {
+    const r = await chamarServidor("decidirPlano", {
+      id: planoAberto.id,
+      decisao: decisao,
+      dias: 30
+    });
+    if (!r.ok) { mostrarToast("⚠ " + r.mensagem); return; }
+
+    fecharPlano();
+    mostrarToast("✅ " + r.mensagem);
+    limparTodoCache();
+    carregarPlanos();
+
+  } catch (e) {
+    mostrarToast("⚠ Sem conexão.");
+  }
+}
+
+/**
+ * Quem cumpriu a carência ganha um empurrão ao abrir a tela.
+ *
+ * Sem isto, um plano pronto ficaria parado esperando você lembrar dele -- e
+ * lembrar é justamente o que a carência de 30 dias atrapalha.
+ */
+function marcarCarenciasVencidas() {
+  const prontos = planosCarregados.filter(function (p) {
+    return p.carenciaVencida && p.veredito.situacao !== "nao-cabe";
+  });
+  if (!prontos.length) return;
+
+  setTimeout(function () {
+    mostrarToast("⏰ " + prontos.length + " plano(s) cumpriram a carência.");
+  }, 900);
+}
+
 function desenharGradeCalendario() {
   const grade = document.getElementById("cal-grade");
   const primeiro = new Date(calAno, calMes, 1);
@@ -6148,6 +6577,7 @@ function trocarAba(nome) {
   document.getElementById("conteudo-dash").style.display  = (nome === "dashboard")  ? "block" : "none";
   document.getElementById("conteudo-aprov").style.display = (nome === "aprovacoes") ? "block" : "none";
   document.getElementById("conteudo-rel").style.display   = (nome === "relatorios") ? "block" : "none";
+  document.getElementById("conteudo-planos").style.display = (nome === "planos") ? "block" : "none";
   document.getElementById("conteudo-chat").style.display  = (nome === "chat")       ? "flex"  : "none";
   document.getElementById("conteudo-busca").style.display = (nome === "busca")      ? "block" : "none";
   document.getElementById("conteudo-calendario").style.display = (nome === "calendario") ? "block" : "none";
@@ -6162,6 +6592,8 @@ function trocarAba(nome) {
   document.getElementById("tab-dashboard").classList.toggle("ativa", nome === "dashboard");
   document.getElementById("tab-aprovacoes").classList.toggle("ativa", nome === "aprovacoes");
   document.getElementById("tab-relatorios").classList.toggle("ativa", nome === "relatorios");
+  document.getElementById("tab-planos").classList.toggle("ativa", nome === "planos");
+  if (nome === "planos") carregarPlanos();
 
   // Botões flutuantes: só no dashboard
   const noDash = (nome === "dashboard");

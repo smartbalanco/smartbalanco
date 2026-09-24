@@ -496,6 +496,31 @@
     }
     .cap-varrer:disabled { opacity: .5; cursor: default; }
 
+    /* ---- Planos de compra ---- */
+    .plano-card { background: var(--surf); border-radius: 14px; padding: 13px 15px; margin-bottom: 9px; }
+    .plano-topo { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+    .plano-nome { font-size: 13px; font-weight: 600; }
+    .plano-valor { font-size: 15px; white-space: nowrap; }
+    .plano-linha2 { display: flex; justify-content: space-between; align-items: center; margin-top: 7px; gap: 8px; }
+    .plano-selo { font-size: 10px; padding: 3px 8px; border-radius: 6px; white-space: nowrap; }
+    .plano-nota { font-size: 10px; color: var(--fraco); text-align: right; }
+    .plano-barra { height: 4px; background: var(--linha); border-radius: 2px; margin-top: 9px; overflow: hidden; }
+    .plano-barra > div { height: 100%; }
+    .cofre-card { background: #dcfce7; border-radius: 14px; padding: 13px 16px; }
+    .cofre-rot { font-size: 10px; color: #15803d; }
+    .cofre-valor { font-size: 23px; color: #15803d; font-weight: 600; }
+    .topico { background: var(--surf); border-radius: 12px; padding: 11px 13px; margin-bottom: 7px; cursor: pointer; }
+    .topico-topo { display: flex; align-items: center; gap: 9px; }
+    .topico-num { width: 21px; height: 21px; border-radius: 6px; display: flex; align-items: center;
+                  justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+    .topico-nome { flex: 1; font-size: 12px; font-weight: 600; }
+    .topico-corpo { padding-left: 30px; margin-top: 8px; }
+    .topico-auto { font-size: 11px; color: var(--fraco); line-height: 1.5; padding: 3px 0; }
+    .topico-auto b { color: var(--txt); font-weight: 600; }
+    .topico-corpo textarea { width: 100%; min-height: 54px; font-family: inherit; font-size: 12px; margin-top: 6px; }
+    .link-item { background: var(--surf2); border-radius: 10px; padding: 9px 11px; margin-bottom: 6px; }
+    .link-item.menor { background: #dcfce7; }
+
     /* ---- Diagnóstico da captura de notificações ---- */
     .cap-diag {
       background: var(--surf2); border-radius: 12px;
@@ -2673,6 +2698,9 @@
         <button id="tab-relatorios" onclick="trocarAba('relatorios')">
           📈 Relatórios
         </button>
+        <button id="tab-planos" onclick="trocarAba('planos')">
+          🛒 Planos <span id="badge-planos"></span>
+        </button>
       </div>
     </div>
 
@@ -2755,6 +2783,17 @@
 
     <!-- ============ CONTEÚDO: RELATÓRIOS ============ -->
     <div id="conteudo-rel"></div>
+
+    <!-- ============ PLANOS DE COMPRA ============
+         A despesa que ainda não existe. Ela passa pelos sete tópicos antes de
+         virar lançamento; enquanto isso, não aparece em Transações nem em
+         Aprovações. -->
+    <div class="conteudo" id="conteudo-planos" style="display:none;">
+      <div id="planos-cofre"></div>
+      <button class="btn-modal confirmar" style="width:100%; margin:12px 0;"
+              onclick="abrirNovoPlano()">+ Novo plano de compra</button>
+      <div id="planos-lista"><p class="vazio">Carregando...</p></div>
+    </div>
 
     <!-- ============ SMARTCALENDÁRIO ============ -->
     <div id="conteudo-calendario">
@@ -3064,6 +3103,62 @@
        cards porque eles sao recriados a cada carga da lista. -->
   <input type="file" id="pre-foto-arquivo" accept="image/*,application/pdf"
          style="display:none" onchange="processarFotoDoPreLancamento(this)" />
+
+  <!-- ============ NOVO PLANO ============ -->
+  <div class="modal-fundo" id="modal-novo-plano">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">🛒 Novo plano de compra</div>
+          <div class="mt-mov">passa pelos tópicos antes de virar despesa</div>
+        </div>
+        <button class="fechar" onclick="fecharNovoPlano()">&times;</button>
+      </div>
+      <div class="modal-conteudo">
+        <div class="campo-bloco">
+          <label for="np-link">Link do produto (opcional)</label>
+          <input type="url" id="np-link" placeholder="cole aqui e eu preencho o resto" />
+        </div>
+        <button class="btn-modal cancelar" style="width:100%;" id="np-btn-ler"
+                onclick="lerLinkDoPlano()">🔗 Ler o link</button>
+        <div id="np-aviso" class="cfg-aviso" style="display:none;"></div>
+
+        <div class="campo-bloco" style="margin-top:12px;">
+          <label for="np-titulo">O que é</label>
+          <input type="text" id="np-titulo" placeholder="Fone de ouvido" />
+        </div>
+        <div class="campo-bloco">
+          <label for="np-valor">Quanto custa</label>
+          <input type="number" id="np-valor" step="0.01" inputmode="decimal"
+                 oninput="mostrarCarenciaPrevista()" />
+        </div>
+        <div id="np-carencia" class="cfg-aviso" style="display:none;"></div>
+
+        <div class="modal-acoes">
+          <button class="btn-modal cancelar" onclick="fecharNovoPlano()">Cancelar</button>
+          <button class="btn-modal confirmar" id="np-btn-criar" onclick="criarPlanoApp()">Criar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ FICHA DO PLANO ============ -->
+  <div class="modal-fundo" id="modal-plano">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo" id="pl-titulo">Plano</div>
+          <div class="mt-mov" id="pl-sub"></div>
+        </div>
+        <button class="fechar" onclick="fecharPlano()">&times;</button>
+      </div>
+      <div class="modal-conteudo">
+        <div id="pl-veredito"></div>
+        <div id="pl-topicos"></div>
+        <div id="pl-acoes" class="modal-acoes" style="flex-wrap:wrap; gap:6px;"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- ============ COMPRAS DETECTADAS NAS NOTIFICAÇÕES ============ -->
   <div class="modal-fundo" id="modal-capturadas">
@@ -4528,7 +4623,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=72"></script>
+  <script src="app.js?v=73"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
