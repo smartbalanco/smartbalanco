@@ -634,6 +634,11 @@
       background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
       border: none; border-radius: 9px; padding: 7px; color: #1e293b; font-weight: 700;
     }
+    .sim-linha1 select {
+      font-family: inherit; font-size: 12.5px; font-weight: 700; color: #1e293b;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border: none; border-radius: 9px; padding: 7px 10px;
+    }
     .sim-valor { font-size: 15px; font-weight: 700; margin: 11px 0 9px; color: var(--azul); }
     .sim-mes { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 11px; }
     .sim-rot {
@@ -647,6 +652,23 @@
     .sim-nova { background: var(--verde); }
     .sim-nova.estoura { background: var(--vermelho); }
     .sim-num { width: 76px; text-align: right; flex: 0 0 auto; font-weight: 600; }
+    .sim-cabecalho {
+      font-size: 10.5px; color: var(--cinza-texto); line-height: 1.45;
+      margin-bottom: 10px;
+    }
+    .sim-legenda {
+      display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px;
+      font-size: 10px; color: var(--cinza-texto);
+    }
+    .sim-legenda span { display: inline-flex; align-items: center; gap: 5px; }
+    .sim-ponto { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+    .sim-ponto-ja { background: var(--cinza-texto); opacity: .45; }
+    .sim-ponto-nova { background: var(--verde); }
+    .sim-legenda-sobra { margin-left: auto; }
+    .sim-ok {
+      font-size: 10.5px; color: var(--verde); margin-top: 9px;
+      line-height: 1.5; font-weight: 600;
+    }
     .sim-aviso {
       font-size: 10.5px; color: var(--laranja); margin-top: 9px;
       line-height: 1.5; font-weight: 600;
@@ -4917,7 +4939,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=77"></script>
+  <script src="app.js?v=78"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

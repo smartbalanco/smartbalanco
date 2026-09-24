@@ -1554,6 +1554,15 @@ function analiseHtml(p) {
        'onclick="pedirAnalise(false)">' +
        (p.temAnalise ? "🔍 Ver a análise da IA" : "🔍 Analisar com a IA") +
        '</button>';
+
+  // Já existe análise: mostra sozinha, sem exigir um toque. Fechar a ficha
+  // sem querer e ver o texto sumir dá a impressão de que ele se perdeu --
+  // e ele não se perde, está guardado na planilha.
+  if (p.temAnalise) {
+    setTimeout(function () {
+      if (topicoAberto === 7 && document.getElementById("analise-texto")) pedirAnalise(false);
+    }, 40);
+  }
   return h + '</div>';
 }
 
@@ -1634,45 +1643,84 @@ function simuladorHtml(p) {
   const sim = p.simulacao;
   let h = '<div class="simulador" onclick="event.stopPropagation()">' +
     '<div class="sim-linha1">' +
-      '<label for="sim-parcelas">Simular em</label>' +
+      '<label for="sim-parcelas">Parcelar em</label>' +
       '<input type="number" id="sim-parcelas" min="1" max="24" step="1" value="' +
         (p.parcelas || 1) + '" onchange="mudarParcelas()" />' +
-      '<span>vezes</span>' +
+      '<span>vez(es)</span>' +
     '</div>';
 
   if (!sim || !sim.meses || !sim.meses.length) return h + '</div>';
 
-  h += '<div class="sim-valor">' + sim.parcelas + 'x de <b>' +
-       formatarMoeda(sim.valorParcela) + '</b></div>';
+  // Em que mês você pretende comprar. Muda o estudo inteiro: a parcela entra
+  // a partir dali, e a janela dos seis meses continua a mesma -- assim dá
+  // para comparar uma escolha com a outra.
+  h += '<div class="sim-linha1" style="margin-top:10px;">' +
+      '<label for="sim-mes">Pretendo comprar em</label>' +
+      '<select id="sim-mes" onchange="mudarMesPretendido()">' +
+        sim.meses.map(function (m, i) {
+          return '<option value="' + i + '"' +
+                 (i === sim.entrada ? " selected" : "") + '>' + m.rotulo + '</option>';
+        }).join("") +
+      '</select>' +
+    '</div>';
 
-  // A barra tem duas partes: o que JÁ estava comprometido e a parcela nova.
-  // Ver as duas separadas é o que mostra se a compra cabe ou se o mês já
-  // estava cheio antes dela.
-  const teto = Math.max.apply(null, sim.meses.map(function (m) { return m.total; }));
+  h += '<div class="sim-valor">' + sim.parcelas + 'x de ' +
+       formatarMoeda(sim.valorParcela) + '</div>';
+
+  h += '<div class="sim-cabecalho">os próximos 6 meses, supondo a mesma receita de ' +
+       formatarMoeda(sim.receita) + '</div>';
+
+  // Cada mês é uma linha: o que já estava comprometido, a parcela nova e o
+  // que sobra. A barra é da RECEITA, não do maior mês -- assim a altura de
+  // cada barra quer dizer a mesma coisa em todas as linhas.
+  const teto = Math.max(sim.receita, 1);
 
   sim.meses.forEach(function (m) {
-    const pJa = (m.jaComprometido / teto) * 100;
-    const pNova = (m.novaParcela / teto) * 100;
+    const pJa = Math.min(100, (m.jaComprometido / teto) * 100);
+    const pNova = Math.min(100 - pJa, (m.novaParcela / teto) * 100);
+    const corSobra = !m.cabe ? "var(--vermelho)"
+                    : (m.apertado ? "var(--laranja)" : "var(--verde)");
+
     h += '<div class="sim-mes">' +
         '<span class="sim-rot">' + m.rotulo + '</span>' +
         '<span class="sim-barra">' +
           '<span class="sim-ja" style="width:' + pJa + '%"></span>' +
-          '<span class="sim-nova' + (m.cabe ? "" : " estoura") +
-            '" style="width:' + pNova + '%"></span>' +
+          (pNova > 0 ? '<span class="sim-nova' + (m.cabe ? "" : " estoura") +
+            '" style="width:' + pNova + '%"></span>' : '') +
         '</span>' +
-        '<span class="sim-num" style="color:' +
-          (m.cabe ? "#1e293b" : "var(--vermelho)") + '">' +
-          formatarMoeda(m.total) + '</span>' +
+        '<span class="sim-num" style="color:' + corSobra + '">' +
+          (m.sobra < 0 ? "-" : "") + formatarMoeda(Math.abs(m.sobra)) + '</span>' +
       '</div>';
   });
 
-  const apertados = sim.meses.filter(function (m) { return !m.cabe; }).length;
-  if (apertados) {
-    h += '<div class="sim-aviso">' + apertados +
-         (apertados === 1 ? " mês fica" : " meses ficam") +
-         ' acima do que sobra hoje. A barra escura é o que já estava comprometido.</div>';
+  h += '<div class="sim-legenda">' +
+      '<span><i class="sim-ponto sim-ponto-ja"></i>já comprometido</span>' +
+      '<span><i class="sim-ponto sim-ponto-nova"></i>esta compra</span>' +
+      '<span class="sim-legenda-sobra">à direita: o que sobra</span>' +
+    '</div>';
+
+  // O pior mês é a conclusão do estudo. Sem ele, seis linhas de número pedem
+  // que você faça a comparação de cabeça.
+  if (sim.mesesApertados > 0) {
+    h += '<div class="sim-aviso">' +
+      (sim.piorSobra < 0
+        ? "Em " + sim.piorMes + " você fecharia no vermelho: faltariam " +
+          formatarMoeda(Math.abs(sim.piorSobra)) + "."
+        : "O mês mais apertado é " + sim.piorMes + ", com " +
+          formatarMoeda(sim.piorSobra) + " de folga.") +
+      '</div>';
+  } else {
+    h += '<div class="sim-ok">Os seis meses cabem, e o mais apertado ainda deixa ' +
+         formatarMoeda(sim.piorSobra) + '.</div>';
   }
+
   return h + '</div>';
+}
+
+async function mudarMesPretendido() {
+  const campo = document.getElementById("sim-mes");
+  if (!campo || !planoAberto) return;
+  await salvarNoPlano({ mesPretendido: campo.value }, 2);
 }
 
 async function mudarParcelas() {
@@ -1680,14 +1728,30 @@ async function mudarParcelas() {
   if (!campo || !planoAberto) return;
 
   const n = Math.max(1, Math.min(24, parseInt(campo.value) || 1));
+  await salvarNoPlano({ parcelas: n }, 2);
+}
+
+/**
+ * Salva um campo do plano e redesenha a ficha com o tópico certo aberto.
+ *
+ * Recarregar a lista inteira é o que garante que os números do estudo venham
+ * recalculados pelo servidor; refazer a conta no app seria ter a mesma regra
+ * em dois lugares.
+ */
+async function salvarNoPlano(campos, manterTopicoAberto) {
   try {
-    const r = await chamarServidor("salvarPlano", { id: planoAberto.id, parcelas: n });
+    const r = await chamarServidor("salvarPlano",
+      Object.assign({ id: planoAberto.id }, campos));
     if (!r.ok) { mostrarToast("⚠ " + r.mensagem); return; }
 
     const idAtual = planoAberto.id;
     await carregarPlanos();
     const atual = planosCarregados.filter(function (x) { return x.id === idAtual; })[0];
-    if (atual) { planoAberto = atual; topicoAberto = 2; pintarFicha(); }
+    if (atual) {
+      planoAberto = atual;
+      topicoAberto = manterTopicoAberto;
+      pintarFicha();
+    }
   } catch (e) {
     mostrarToast("⚠ Sem conexão.");
   }
