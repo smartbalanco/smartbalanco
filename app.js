@@ -981,6 +981,7 @@ let planoFiltroPessoa = "";          // "" = todos
 let planoPessoas = ["Paulo"];
 let planoPerguntas = {};
 let planoPerguntasPresente = {};
+let planoFrequencias = [];
 let planoSigiloConfigurado = false;
 let planoCofrePorPessoa = {};
 
@@ -1000,6 +1001,7 @@ async function carregarPlanos() {
     planoPessoas = r.pessoas || planoPessoas;
     planoPerguntas = r.perguntas || {};
     planoPerguntasPresente = r.perguntasPresente || {};
+    planoFrequencias = r.frequencias || [];
     planoSigiloConfigurado = r.sigiloConfigurado === true;
     planoCofrePorPessoa = r.cofrePorPessoa || {};
     pintarRevisoes(r.revisoes || []);
@@ -1119,6 +1121,19 @@ function pintarListaPlanos() {
             (p.links && p.links.length ? ' · ' + p.links.length + ' preço(s)' : '') +
           '</span>' +
         '</div>' +
+        (p.prioridadeIA || p.frequenciaRotulo
+          ? '<div class="plano-chips">' +
+              (p.prioridadeIA
+                ? '<span class="chip-prio ' + p.prioridadeIA.replace("é", "e") + '">' +
+                  'prioridade ' + p.prioridadeIA + '</span>'
+                : '') +
+              (p.frequenciaRotulo
+                ? '<span class="chip-freq">' + escaparHtml(p.frequenciaRotulo.toLowerCase()) +
+                  (p.custoPorUso ? ' · ' + formatarMoeda(p.custoPorUso) + '/uso' : '') +
+                  '</span>'
+                : '') +
+            '</div>'
+          : '') +
         '<div class="plano-barra"><div style="width:' + Math.round(p.respondidos / 7 * 100) +
           '%; background:' + cor + '"></div></div>' +
       '</div>';
@@ -1347,7 +1362,9 @@ function pintarFicha() {
       perguntas.forEach(function (q) {
         const v = (p.respostas[q.c] === undefined || p.respostas[q.c] === null)
           ? "" : p.respostas[q.c].toString();
-        const campo = (q.tipo === "valor" || q.tipo === "numero")
+        const campo = (q.tipo === "frequencia")
+          ? campoFrequencia(q.c, v)
+          : (q.tipo === "valor" || q.tipo === "numero")
           ? '<input type="number" step="' + (q.tipo === "valor" ? "0.01" : "1") +
             '" inputmode="decimal" id="resp-' + q.c + '" value="' + escaparHtml(v) + '" ' +
             'onclick="event.stopPropagation()" />'
@@ -1435,11 +1452,59 @@ function autoDoTopico(n, p) {
 
   if (n === 7) {
     const l = [p.respondidos + " de 7 tópicos completos."];
-    if (p.custoPorUso) l.push("Custo por uso: <b>" + formatarMoeda(p.custoPorUso) + "</b>");
+    if (p.custoPorUso) {
+      l.push("Custo por uso: <b>" + formatarMoeda(p.custoPorUso) + "</b>" +
+             (p.frequenciaRotulo
+               ? " (" + p.usosPrevistos + " usos no 1º ano, pela frequência)"
+               : ""));
+    }
     if (p.menorPreco) l.push("Menor preço achado: <b>" + formatarMoeda(p.menorPreco) + "</b>");
     return l.map(linha).join("");
   }
   return "";
+}
+
+/**
+ * As faixas de frequência, uma embaixo da outra.
+ *
+ * Não é um <select>: com cinco opções que precisam de uma explicação cada, a
+ * lista fechada esconderia justamente o que faz escolher. E cada faixa mostra
+ * quantos usos o app vai supor -- o número volta para a tela como ESTIMATIVA
+ * declarada, em vez de virar uma conta escondida atrás de um rótulo.
+ *
+ * O valor fica num campo escondido porque o resto do formulário lê tudo por
+ * getElementById("resp-" + codigo), e uma exceção aqui vazaria para o salvar.
+ */
+function campoFrequencia(codigo, valor) {
+  if (!planoFrequencias.length) {
+    return '<input type="number" step="1" inputmode="numeric" id="resp-' + codigo +
+           '" value="' + escaparHtml(valor) + '" onclick="event.stopPropagation()" />';
+  }
+
+  return '<input type="hidden" id="resp-' + codigo + '" value="' + escaparHtml(valor) + '" />' +
+    '<div class="freq-opcoes" id="freq-' + codigo + '" data-c="' + codigo + '">' +
+      planoFrequencias.map(function (f) {
+        return '<button type="button" class="freq-opcao' + (f.v === valor ? " ativa" : "") +
+            '" data-v="' + f.v + '" onclick="event.stopPropagation(); ' +
+            'escolherFrequencia(this)">' +
+            '<span class="freq-rot">' + escaparHtml(f.r) + '</span>' +
+            '<span class="freq-det">' + escaparHtml(f.d) + '</span>' +
+            '<span class="freq-usos">≈ ' + f.usos + '/ano</span>' +
+          '</button>';
+      }).join("") +
+    '</div>';
+}
+
+function escolherFrequencia(botao) {
+  const caixa = botao.parentNode;
+  const valor = botao.getAttribute("data-v");
+
+  const campo = document.getElementById("resp-" + caixa.getAttribute("data-c"));
+  if (campo) campo.value = valor;
+
+  caixa.querySelectorAll(".freq-opcao").forEach(function (x) {
+    x.classList.toggle("ativa", x === botao);
+  });
 }
 
 function alternarTopico(n) {
@@ -1633,10 +1698,29 @@ function montarAnalise(r) {
     veredito = texto.slice(corte + 9).trim();
   }
 
+  // A prioridade sai do corpo e vira selo. Deixada no texto, ela apareceria
+  // como uma linha solta em CAIXA ALTA no fim de um parágrafo -- e é o
+  // contrário de uma conclusão: é a etiqueta dela.
+  const mp = corpo.match(/PRIORIDADE:\s*(ALTA|M[ÉE]DIA|BAIXA)\s*$/im);
+  const prioridade = mp ? mp[1].toUpperCase().replace("E", "É") : "";
+  if (mp) corpo = corpo.slice(0, mp.index).trim();
+
+  // O card da lista precisa saber, senão o selo só apareceria na próxima vez
+  // que a lista fosse buscada do servidor.
+  if (planoAberto && prioridade) {
+    planoAberto.prioridadeIA = prioridade.toLowerCase();
+  }
+
   const cor = /não compre/i.test(veredito) ? "var(--vermelho)"
             : (/espere/i.test(veredito)    ? "var(--laranja)" : "var(--verde)");
 
-  let h = '<div class="analise-texto">' + escaparHtml(corpo).replace(/\n/g, "<br>") + '</div>';
+  let h = "";
+  if (prioridade) {
+    h += '<div class="analise-prio"><span class="chip-prio ' +
+         prioridade.toLowerCase().replace("é", "e") + '">prioridade ' +
+         prioridade.toLowerCase() + '</span></div>';
+  }
+  h += '<div class="analise-texto">' + escaparHtml(corpo).replace(/\n/g, "<br>") + '</div>';
 
   if (veredito) {
     h += '<div class="analise-veredito" style="color:' + cor + '">' +
