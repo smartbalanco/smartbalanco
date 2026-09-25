@@ -62,7 +62,7 @@ const LISTAS_TTL_MS = 5 * 60 * 1000;
 function revalidarListasValidas(aoAtualizar) {
   if (Date.now() - listasValidasEm < LISTAS_TTL_MS) return;
 
-  chamarServidor("listasValidas").then(function (rl) {
+  lerCacheado("listasValidas").then(function (rl) {
     if (!rl || !rl.ok) return;
 
     const antes = listasValidas
@@ -107,6 +107,287 @@ function lerCache(mes, ano) {
   } catch (e) {
     return null;
   }
+}
+
+// ============================================================================
+// OS CARIMBOS — não buscar o que não mudou
+// ----------------------------------------------------------------------------
+// Cada tela buscava os dados dela do zero toda vez, e o Apps Script não é
+// rápido. Abrir Planos, trocar de mês, voltar ao Dashboard: uma ida e volta
+// cada, quase sempre para receber exatamente a mesma resposta de antes.
+//
+// Agora o servidor mantém um número por domínio (transações, planos, agenda,
+// trabalho, configuração) que sobe a cada gravação. O app pergunta os cinco
+// UMA vez ao abrir -- é a chamada mais barata que existe lá -- e todo domínio
+// que não mudou dispensa a busca INTEIRA. A tela sai do aparelho, sem rede.
+//
+// O ganho não é o cache: já havia cache no Dashboard. É deixar de esperar a
+// resposta para saber que ela era igual.
+// ============================================================================
+const CACHE_LEITURA = "sb_l_";
+const CARIMBOS_CHAVE = "sb_carimbos";
+
+// Os carimbos que este aparelho já viu. Vazio = tudo precisa ser buscado.
+let carimbosConhecidos = {};
+
+/**
+ * De que domínio cada leitura depende.
+ *
+ * É o que liga uma gravação às telas que ela estraga. Uma leitura que não
+ * esteja aqui simplesmente não é cacheada -- some o ganho, nada quebra. O
+ * perigo é apontar para o domínio ERRADO: aí a tela guarda dado velho e não
+ * tem nada que a faça atualizar.
+ */
+const DOMINIO_DA_LEITURA = {
+  dashboard: "transacoes",
+  listarAprovacoes: "transacoes",
+  descricoesUsadas: "transacoes",
+  listarFixas: "transacoes",
+  previsaoFixas: "transacoes",
+  gerarRelatorio: "transacoes",
+  resumoWidget: "transacoes",
+  listasValidas: "config",
+  listarCartoesConfig: "config",
+  dadosCalendario: "agenda",
+  listarTarefas: "agenda",
+  listarPlanos: "planos",
+  listarReprovados: "planos",
+  trabalhoPainel: "trabalho"
+};
+
+function carregarCarimbos() {
+  try {
+    carimbosConhecidos = JSON.parse(localStorage.getItem(CARIMBOS_CHAVE) || "{}") || {};
+  } catch (e) {
+    carimbosConhecidos = {};
+  }
+}
+
+function guardarCarimbos() {
+  try {
+    localStorage.setItem(CARIMBOS_CHAVE, JSON.stringify(carimbosConhecidos));
+  } catch (e) {}
+}
+
+/**
+ * Pergunta ao servidor o que mudou e joga fora o cache do que mudou.
+ *
+ * Roda ao abrir e no ↻. Falhar aqui não pode travar nada: sem resposta, o app
+ * segue com os carimbos que tinha e cada tela decide se busca -- que é
+ * exatamente o comportamento de antes deste arquivo existir.
+ */
+async function sincronizarCarimbos() {
+  try {
+    const r = await chamarServidor("carimbos");
+    if (!r || !r.ok || !r.carimbos) return false;
+
+    let mudou = false;
+    Object.keys(r.carimbos).forEach(function (d) {
+      if (carimbosConhecidos[d] === r.carimbos[d]) return;
+      carimbosConhecidos[d] = r.carimbos[d];
+      esquecerDominio(d);
+      mudou = true;
+    });
+
+    if (mudou) guardarCarimbos();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Idade máxima de qualquer coisa guardada.
+ *
+ * O carimbo pega o que o APP grava. Não pega o que é digitado direto na
+ * planilha -- e nesta casa isso acontece: categoria nova, linha corrigida à
+ * mão. Sem um teto, uma edição dessas ficaria invisível para sempre.
+ *
+ * Doze horas porque o ↻ já resolve na hora para quem percebeu; isto é a rede
+ * de segurança de quem não percebeu.
+ */
+const CACHE_IDADE_MAX = 12 * 60 * 60 * 1000;
+
+/** Joga fora TODA leitura guardada. É o que o ↻ faz. */
+function esquecerTudo() {
+  try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (k.indexOf(CACHE_LEITURA) === 0 || k.indexOf(CACHE_PREFIXO) === 0) {
+        localStorage.removeItem(k);
+      }
+    }
+  } catch (e) {}
+}
+
+/** Apaga tudo que foi guardado de um domínio. */
+function esquecerDominio(dominio) {
+  const acoes = Object.keys(DOMINIO_DA_LEITURA).filter(function (a) {
+    return DOMINIO_DA_LEITURA[a] === dominio;
+  });
+
+  try {
+    // De trás para a frente: remover encurta a lista e pular índice deixaria
+    // chave para trás -- justamente a que devia morrer.
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+
+      if (k.indexOf(CACHE_LEITURA) === 0) {
+        const acao = k.slice(CACHE_LEITURA.length).split("|")[0];
+        if (acoes.indexOf(acao) >= 0) localStorage.removeItem(k);
+      } else if (dominio === "transacoes" && k.indexOf(CACHE_PREFIXO) === 0) {
+        // O Dashboard tem cache próprio, de antes disto, e é por mês: some
+        // TODO mês, porque uma transação lançada em março muda março.
+        localStorage.removeItem(k);
+      }
+    }
+  } catch (e) {}
+}
+
+/**
+ * Depois de gravar, o domínio está sujo AQUI mesmo -- sem perguntar a ninguém.
+ *
+ * Zerar o carimbo conhecido, e não só apagar o cache, é o que importa: apagado
+ * mas com o carimbo casando, a próxima sincronização acharia que está tudo em
+ * dia e o dado novo nunca seria buscado.
+ */
+function sujarDominio(dominio) {
+  if (!dominio) return;
+  delete carimbosConhecidos[dominio];
+  guardarCarimbos();
+  esquecerDominio(dominio);
+}
+
+/**
+ * Uma leitura, do aparelho quando dá e do servidor quando precisa.
+ *
+ * Devolve { ok, dados, doCache }. Quem chama não precisa saber de carimbo
+ * nenhum -- troca chamarServidor por esta e pronto.
+ */
+async function lerDoServidor(acao, params) {
+  params = params || {};
+  const dominio = DOMINIO_DA_LEITURA[acao];
+  const chave = CACHE_LEITURA + acao + "|" + JSON.stringify(params);
+
+  if (dominio && carimbosConhecidos[dominio] !== undefined) {
+    try {
+      const bruto = localStorage.getItem(chave);
+      if (bruto) {
+        const p = JSON.parse(bruto);
+        // O carimbo gravado junto é o que diz se ainda vale. Comparar data
+        // não serviria: dado de um ano atrás continua certo se nada mudou.
+        const velho = !p.quando || (Date.now() - p.quando) > CACHE_IDADE_MAX;
+        if (p && p.carimbo === carimbosConhecidos[dominio] && !velho) {
+          return { ok: true, dados: p.dados, doCache: true, quando: p.quando };
+        }
+      }
+    } catch (e) {}
+  }
+
+  const r = await chamarServidor(acao, params);
+
+  if (r && r.ok && dominio && carimbosConhecidos[dominio] !== undefined) {
+    try {
+      localStorage.setItem(chave, JSON.stringify({
+        carimbo: carimbosConhecidos[dominio], quando: Date.now(), dados: r
+      }));
+    } catch (e) {
+      // Armazenamento cheio: joga fora o que é mais fácil de refazer e segue.
+      esquecerDominio("transacoes");
+    }
+  }
+
+  return { ok: !!(r && r.ok), dados: r, doCache: false };
+}
+
+/**
+ * Igual a chamarServidor, mas passando pelo cache.
+ *
+ * Devolve a resposta crua, na mesma forma: quem chama continua lendo r.ok,
+ * r.planos, r.mensagem. É o que permite trocar uma pela outra sem mexer no
+ * resto da tela.
+ */
+async function lerCacheado(acao, params) {
+  return (await lerDoServidor(acao, params)).dados;
+}
+
+// ============================================================================
+// TAREFAS EM SEGUNDO PLANO
+// ----------------------------------------------------------------------------
+// Algumas coisas demoram porque demoram: a IA lendo um plano, um site sendo
+// aberto para pegar preço, a planilha gerando os processos do mês. Enquanto
+// isso o app ficava parado -- a folha aberta, o botão escrito "Analisando...",
+// e nada mais a fazer além de esperar.
+//
+// Agora essas ações saem da frente: a folha fecha, uma barrinha no rodapé diz
+// o que está rodando, e o app continua inteiro. Quando termina, avisa.
+//
+// A barra some sozinha quando a última tarefa acaba. Ela NUNCA bloqueia a
+// tela -- se bloqueasse, seria a mesma espera com outra aparência.
+// ============================================================================
+let tarefasFundo = [];
+let proximaTarefaId = 1;
+
+function pintarBarraFundo() {
+  let el = document.getElementById("barra-fundo");
+
+  if (!tarefasFundo.length) {
+    if (el) el.classList.remove("visivel");
+    return;
+  }
+
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "barra-fundo";
+    document.body.appendChild(el);
+  }
+
+  const primeira = tarefasFundo[0];
+  const resto = tarefasFundo.length - 1;
+
+  el.innerHTML = '<span class="bf-giro"></span>' +
+    '<span class="bf-txt">' + escaparHtml(primeira.rotulo) + '</span>' +
+    (resto > 0 ? '<span class="bf-mais">+' + resto + '</span>' : '');
+
+  // O reflow força a transição a acontecer quando o elemento acabou de ser
+  // criado: sem ele o navegador junta criar e mostrar num quadro só, e a
+  // barra aparece de estalo.
+  void el.offsetHeight;
+  el.classList.add("visivel");
+}
+
+/**
+ * Roda algo demorado sem segurar a tela.
+ *
+ * Devolve a promessa para quem quiser esperar -- mas o normal é NÃO esperar:
+ * quem chama fecha a folha e segue. O retorno existe para o caso raro de uma
+ * segunda etapa depender da primeira.
+ */
+function emSegundoPlano(rotulo, fn, aoTerminar) {
+  const id = proximaTarefaId++;
+  tarefasFundo.push({ id: id, rotulo: rotulo });
+  pintarBarraFundo();
+
+  return Promise.resolve()
+    .then(fn)
+    .then(function (r) {
+      if (typeof aoTerminar === "function") aoTerminar(r, null);
+      return r;
+    })
+    .catch(function (e) {
+      // O erro vira aviso na tela, não exceção solta: ninguém está esperando
+      // esta promessa, então um throw aqui morreria calado no console.
+      mostrarToast("⚠ " + rotulo + ": " + (e && e.message ? e.message : "falhou"));
+      if (typeof aoTerminar === "function") aoTerminar(null, e);
+      return null;
+    })
+    .then(function (r) {
+      tarefasFundo = tarefasFundo.filter(function (t) { return t.id !== id; });
+      pintarBarraFundo();
+      return r;
+    });
 }
 
 function tempoRelativo(timestamp) {
@@ -201,6 +482,13 @@ async function chamarServidor(acao, paramsExtras) {
   if (dados && dados.erro === "NAO_AUTORIZADO" && sessaoAtual) {
     sessaoAtual = null;
     apagarSessao();
+  }
+
+  // O servidor diz o que gravou. Aqui, e não em cada botão, porque esquecer
+  // numa tela só apareceria como um número que não atualiza -- sem erro,
+  // sem aviso, e difícil de ligar à tela que esqueceu.
+  if (dados && dados._carimbou) {
+    dados._carimbou.forEach(sujarDominio);
   }
 
   return dados;
@@ -383,7 +671,7 @@ async function abrirEdicao(numMov) {
   // Garante as listas para os seletores
   if (!listasValidas) {
     try {
-      const rl = await chamarServidor("listasValidas");
+      const rl = await lerCacheado("listasValidas");
       if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
     } catch (e) { listasValidas = { categorias: [], metodos: [] }; }
   }
@@ -680,7 +968,7 @@ async function carregarSugestoesDescricao() {
   descricoesCarregadas = true;   // marca antes: evita duas cargas simultâneas
 
   try {
-    const r = await chamarServidor("descricoesUsadas");
+    const r = await lerCacheado("descricoesUsadas");
     if (!r.ok || !r.descricoes) return;
 
     const lista = document.getElementById("lista-descricoes");
@@ -871,7 +1159,7 @@ async function carregarCalendario() {
   document.getElementById("cal-grade").innerHTML = '<p class="vazio" style="grid-column:1/8;">Carregando...</p>';
 
   try {
-    const r = await chamarServidor("dadosCalendario", { mes: calMes, ano: calAno });
+    const r = await lerCacheado("dadosCalendario", { mes: calMes, ano: calAno });
     calDados = r.ok ? { compromissos: r.compromissos || [], despesas: r.despesas || [] }
                     : { compromissos: [], despesas: [] };
     if (!r.ok) mostrarToast("❌ " + (r.mensagem || "Não consegui carregar o mês."));
@@ -994,7 +1282,7 @@ const TOPICOS_AUTOMATICOS = [2, 5, 7];
 async function carregarPlanos() {
   const lista = document.getElementById("planos-lista");
   try {
-    const r = await chamarServidor("listarPlanos");
+    const r = await lerCacheado("listarPlanos");
     if (!r.ok) { lista.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro.") + '</p>'; return; }
 
     planosCarregados = r.planos || [];
@@ -1634,7 +1922,7 @@ function analiseHtml(p) {
 
   h += '<div id="analise-texto"></div>' +
        '<button class="btn-modal confirmar" style="width:100%;" id="btn-analise" ' +
-       'onclick="pedirAnalise(false)">' +
+       'onclick="pedirAnalise(false, ' + (p.temAnalise ? "false" : "true") + ')">' +
        (p.temAnalise ? "🔍 Ver a análise da IA" : "🔍 Analisar com a IA") +
        '</button>';
 
@@ -1649,11 +1937,43 @@ function analiseHtml(p) {
   return h + '</div>';
 }
 
-async function pedirAnalise(refazer) {
+/**
+ * @param refazer   Gerar de novo em vez de ler a guardada.
+ * @param aoFundo   Rodar sem segurar a tela. Vale para a análise NOVA, que
+ *   demora de verdade; ler a guardada é instantâneo e sair da tela para
+ *   esperar por ela seria pior que esperar.
+ */
+async function pedirAnalise(refazer, aoFundo) {
   if (!planoAberto) return;
 
   const btn = document.getElementById("btn-analise");
   const alvo = document.getElementById("analise-texto");
+
+  if (aoFundo) {
+    const id = planoAberto.id;
+    const nome = planoAberto.titulo;
+
+    fecharPlano();
+    emSegundoPlano("Analisando " + nome + "...", function () {
+      return chamarServidor("analisarPlanoComIA", { id: id, refazer: "1" });
+    }, function (r) {
+      if (!r) return;
+      if (!r.ok) { mostrarToast("⚠ " + (r.mensagem || "Não consegui analisar.")); return; }
+
+      // A ficha pode ter sido reaberta enquanto rodava -- ou outra pode estar
+      // aberta no lugar. Só pinta se for a MESMA; pintar por cima de outro
+      // plano poria a análise de um na ficha do outro.
+      if (planoAberto && planoAberto.id === id && document.getElementById("analise-texto")) {
+        planoAberto.temAnalise = true;
+        document.getElementById("analise-texto").innerHTML = montarAnalise(r);
+      } else {
+        mostrarToast("✅ Análise de " + nome + " pronta.");
+      }
+      carregarPlanos();
+    });
+    return;
+  }
+
   if (btn) { btn.disabled = true; btn.textContent = "Analisando..."; }
 
   try {
@@ -1677,7 +1997,7 @@ async function pedirAnalise(refazer) {
     if (btn) {
       btn.disabled = false;
       btn.textContent = "🔄 Analisar de novo";
-      btn.setAttribute("onclick", "pedirAnalise(true)");
+      btn.setAttribute("onclick", "pedirAnalise(true, true)");
     }
   }
 }
@@ -2233,7 +2553,7 @@ async function abrirCofre() {
   alvo.innerHTML = '<p class="vazio">Carregando...</p>';
 
   try {
-    const r = await chamarServidor("listarReprovados");
+    const r = await lerCacheado("listarReprovados");
     if (!r.ok || !r.itens.length) {
       alvo.innerHTML = '<p class="vazio">Nada aqui ainda.</p>';
       return;
@@ -2686,7 +3006,7 @@ async function carregarTrabalho() {
   document.getElementById("trab-lista-balancete").innerHTML = "";
 
   try {
-    const r = await chamarServidor("trabalhoPainel", { competencia: trabComp });
+    const r = await lerCacheado("trabalhoPainel", { competencia: trabComp });
     if (!r.ok) {
       trabDados = null;
       document.getElementById("trab-lista-contas").innerHTML =
@@ -4107,7 +4427,7 @@ async function abrirConfig() {
 
   // Sempre busca do servidor: aqui a lista precisa estar exata.
   try {
-    const rl = await chamarServidor("listasValidas");
+    const rl = await lerCacheado("listasValidas");
     if (rl.ok) {
       listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
       listasValidasEm = Date.now();
@@ -4895,13 +5215,18 @@ async function executarEntradaNoApp() {
     mostrarCarregando("Carregando seus dados...");
   }
 
-  // 2. Checa aprovações pendentes em segundo plano (para mostrar o badge)
+  // 2. Uma pergunta só: mudou alguma coisa? O que não mudou dispensa busca,
+  //    nesta tela e em todas as outras que forem abertas depois.
+  await sincronizarCarimbos();
+
+  // 3. Checa aprovações pendentes em segundo plano (para mostrar o badge)
   checarPendentesAprovacao();
 
   // 3. Busca os dados frescos (em segundo plano se o cache já apareceu)
   try {
-    const r = await chamarServidor("dashboard", { mes: mesExibido, ano: anoExibido });
-    if (r.ok) {
+    const lido = await lerDoServidor("dashboard", { mes: mesExibido, ano: anoExibido });
+    const r = lido.dados;
+    if (lido.ok) {
       salvarCache(mesExibido, anoExibido, r);
       preencherDashboard(r);
       mostrarTelaInterna();
@@ -4967,7 +5292,14 @@ async function conferirPaginaNova() {
   }
 }
 
-async function recarregarDados() {
+/**
+ * @param conferirOutrosAparelhos  Perguntar ao servidor se algo mudou fora
+ *   daqui. Só o ↻ pede isso. Trocar de mês NÃO pede: as gravações feitas
+ *   neste aparelho já apagam o cache sozinhas (pelo _carimbou da resposta), e
+ *   uma conferida por mês visitado devolveria a espera que este recurso veio
+ *   tirar.
+ */
+async function recarregarDados(conferirOutrosAparelhos) {
   // Antes dos dados: se a própria tela está velha, recarregar dados não
   // adianta — o que o usuário procura pode nem existir neste HTML.
   conferirPaginaNova().then(function (temNova) {
@@ -4980,6 +5312,15 @@ async function recarregarDados() {
   const btn = document.getElementById("btn-atualizar");
   if (btn) btn.classList.add("girando");
 
+  // O ↻ é o único gesto que quer dizer "desconfie do que está na tela", e
+  // por isso ele joga fora TUDO -- não basta reconferir os carimbos, porque
+  // uma linha corrigida à mão na planilha não sobe carimbo nenhum. É
+  // justamente essa a mudança que faz a pessoa apertar o botão.
+  if (conferirOutrosAparelhos) {
+    esquecerTudo();
+    await sincronizarCarimbos();
+  }
+
   // Se houver cache do mês pedido, mostra na hora enquanto busca o novo
   const cache = lerCache(mesExibido, anoExibido);
   if (cache) {
@@ -4991,8 +5332,9 @@ async function recarregarDados() {
   }
 
   try {
-    const r = await chamarServidor("dashboard", { mes: mesExibido, ano: anoExibido });
-    if (r.ok) {
+    const lido = await lerDoServidor("dashboard", { mes: mesExibido, ano: anoExibido });
+    const r = lido.dados;
+    if (lido.ok) {
       salvarCache(mesExibido, anoExibido, r);
       preencherDashboard(r);
       mostrarAvisoAtualizando(null);
@@ -6053,7 +6395,7 @@ async function abrirLiquidacao(numMov) {
     // Carrega listas de categoria/método (só na primeira vez)
     if (!listasValidas) {
       try {
-        const rl = await chamarServidor("listasValidas");
+        const rl = await lerCacheado("listasValidas");
         if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
       } catch (e) {
         listasValidas = { categorias: [], metodos: [] };
@@ -6392,7 +6734,7 @@ async function abrirNovaDespesa() {
   if (!listasValidas) {
     document.getElementById("nd-form").style.opacity = "0.5";
     try {
-      const rl = await chamarServidor("listasValidas");
+      const rl = await lerCacheado("listasValidas");
       if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
     } catch (e) {
       listasValidas = { categorias: [], metodos: [] };
@@ -7591,7 +7933,7 @@ async function carregarAprovacoes(forcar) {
   }
 
   try {
-    const r = await chamarServidor("listarAprovacoes");
+    const r = await lerCacheado("listarAprovacoes");
     if (!r.ok) {
       if (!aprovacoesPreCarregadas) {
         lista.innerHTML = '<p class="vazio">⚠️ ' + escaparHtml(r.mensagem || "Erro ao carregar.") + '</p>';
@@ -7890,7 +8232,7 @@ async function abrirEdicaoAprovacao(idx) {
   // Carrega listas se preciso
   if (!listasValidas) {
     try {
-      const rl = await chamarServidor("listasValidas");
+      const rl = await lerCacheado("listasValidas");
       if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
     } catch (e) {
       listasValidas = { categorias: [], metodos: [] };
@@ -7994,7 +8336,7 @@ function mostrarErroAprov(msg) {
 // Pré-carrega as aprovações em segundo plano (para abrir instantâneo depois)
 async function checarPendentesAprovacao() {
   try {
-    const r = await chamarServidor("listarAprovacoes");
+    const r = await lerCacheado("listarAprovacoes");
     if (r.ok) {
       gruposAprovacao = r.grupos || [];
       aprovacoesPreCarregadas = true;
@@ -8256,7 +8598,7 @@ async function abrirPeriodo(tipo) {
   // Se o relatório usa categorias, garante que as listas estão carregadas
   if (r.periodo === "intervaloCategorias" && !listasValidas) {
     try {
-      const rl = await chamarServidor("listasValidas");
+      const rl = await lerCacheado("listasValidas");
       if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
     } catch (e) { listasValidas = { categorias: [], metodos: [] }; }
   }
@@ -10283,7 +10625,11 @@ async function chamarServidorPost(acao, dados) {
   });
 
   if (!resp.ok) throw new Error("Falha na conexão (HTTP " + resp.status + ").");
-  return await resp.json();
+
+  // "resposta", e não "dados": o parâmetro desta função já se chama dados.
+  const resposta = await resp.json();
+  if (resposta && resposta._carimbou) resposta._carimbou.forEach(sujarDominio);
+  return resposta;
 }
 
 // ============================================================================
@@ -10441,7 +10787,7 @@ async function mostrarRevisao(d, avisoCodigo) {
   // Carrega listas se preciso
   if (!listasValidas) {
     try {
-      const rl = await chamarServidor("listasValidas");
+      const rl = await lerCacheado("listasValidas");
       if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
     } catch (e) { listasValidas = { categorias: [], metodos: [] }; }
   }
@@ -10949,7 +11295,7 @@ let somaBusca = { despesas: 0, receitas: 0, saldo: 0 };
 async function abrirBusca() {
   if (!listasValidas) {
     try {
-      const rl = await chamarServidor("listasValidas");
+      const rl = await lerCacheado("listasValidas");
       if (rl.ok) listasValidas = { categorias: rl.categorias, metodos: rl.metodos };
     } catch (e) {
       listasValidas = { categorias: [], metodos: [] };
