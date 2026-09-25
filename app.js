@@ -127,8 +127,26 @@ function lerCache(mes, ano) {
 const CACHE_LEITURA = "sb_l_";
 const CARIMBOS_CHAVE = "sb_carimbos";
 
-// Os carimbos que este aparelho já viu. Vazio = tudo precisa ser buscado.
-let carimbosConhecidos = {};
+/**
+ * Os carimbos que este aparelho já viu.
+ *
+ * Lido do armazenamento AQUI, na própria declaração, e não numa função que
+ * alguém precisa lembrar de chamar. Foi exatamente esse o defeito da primeira
+ * versão: a função existia e nunca era chamada, então toda abertura começava
+ * com a lista vazia, achava que os cinco domínios tinham mudado e jogava fora
+ * o cache inteiro -- a pré-carga do ano se refazia a cada vez que o app abria.
+ *
+ * Sem aviso, sem erro: só parecia lento de novo.
+ */
+let carimbosConhecidos = carimbosGuardados();
+
+function carimbosGuardados() {
+  try {
+    return JSON.parse(localStorage.getItem(CARIMBOS_CHAVE) || "{}") || {};
+  } catch (e) {
+    return {};
+  }
+}
 
 /**
  * De que domínio cada leitura depende.
@@ -167,14 +185,6 @@ function limparVazios(obj) {
   return saida;
 }
 
-function carregarCarimbos() {
-  try {
-    carimbosConhecidos = JSON.parse(localStorage.getItem(CARIMBOS_CHAVE) || "{}") || {};
-  } catch (e) {
-    carimbosConhecidos = {};
-  }
-}
-
 function guardarCarimbos() {
   try {
     localStorage.setItem(CARIMBOS_CHAVE, JSON.stringify(carimbosConhecidos));
@@ -193,15 +203,24 @@ async function sincronizarCarimbos() {
     const r = await chamarServidor("carimbos");
     if (!r || !r.ok || !r.carimbos) return false;
 
-    let mudou = false;
+    const sujos = [];
     Object.keys(r.carimbos).forEach(function (d) {
       if (carimbosConhecidos[d] === r.carimbos[d]) return;
       carimbosConhecidos[d] = r.carimbos[d];
-      esquecerDominio(d);
-      mudou = true;
+      sujos.push(d);
     });
 
-    if (mudou) guardarCarimbos();
+    // GRAVA PRIMEIRO, esquece depois.
+    //
+    // Na ordem inversa, qualquer erro ao limpar abortava antes de gravar --
+    // e aí a abertura seguinte começava sem carimbo nenhum, achava que tudo
+    // tinha mudado e jogava o cache fora outra vez. Um defeito assim não dá
+    // erro na tela: o app só volta a parecer lento, para sempre.
+    if (sujos.length) guardarCarimbos();
+
+    sujos.forEach(function (d) {
+      try { esquecerDominio(d); } catch (e) {}
+    });
     return true;
   } catch (e) {
     return false;
