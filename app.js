@@ -249,6 +249,8 @@ function esquecerTudo() {
         localStorage.removeItem(k);
       }
     }
+    localStorage.removeItem(PRECARGA_MARCA);
+    localStorage.removeItem(LANCAMENTOS_CHAVE);
   } catch (e) {}
 }
 
@@ -273,6 +275,18 @@ function esquecerDominio(dominio) {
         // TODO mês, porque uma transação lançada em março muda março.
         localStorage.removeItem(k);
       }
+    }
+
+    // A marca da pré-carga e os lançamentos guardados são dados de
+    // TRANSAÇÕES, e precisam cair junto.
+    //
+    // Deixar a marca para trás foi um defeito de verdade: ela continuava
+    // dizendo "o ano está guardado" depois dos meses terem sido apagados, e
+    // a pré-carga nunca mais rodava. O sintoma era voltar a carregar mês a
+    // mês, sem nada indicando o motivo.
+    if (dominio === "transacoes") {
+      localStorage.removeItem(PRECARGA_MARCA);
+      localStorage.removeItem(LANCAMENTOS_CHAVE);
     }
   } catch (e) {}
 }
@@ -445,8 +459,20 @@ const LANCAMENTOS_CHAVE = "sb_lancamentos";
 function precargaEstaEmDia() {
   try {
     const p = JSON.parse(localStorage.getItem(PRECARGA_MARCA) || "null");
-    return !!(p && p.carimbo !== undefined &&
-              p.carimbo === carimbosConhecidos.transacoes);
+    if (!p || p.carimbo === undefined) return false;
+    if (p.carimbo !== carimbosConhecidos.transacoes) return false;
+
+    // Confere se o dado está MESMO lá, em vez de acreditar só na marca.
+    //
+    // Marca e dado moram em chaves diferentes, e uma limpeza que pegue uma e
+    // não a outra é possível -- foi o que aconteceu. Uma marca que mente não
+    // se conserta sozinha: a pré-carga nunca mais roda, e o sintoma é voltar
+    // a carregar mês a mês sem nada explicando por quê.
+    //
+    // A conferida é no ÚLTIMO mês que a pré-carga gravou, não no mês de hoje:
+    // o de hoje aparece no cache só por você ter aberto o app, então ele
+    // estaria lá mesmo com o resto do ano faltando.
+    return !!(p.prova && localStorage.getItem(p.prova));
   } catch (e) {
     return false;
   }
@@ -467,6 +493,11 @@ async function preCarregarAno() {
   const carimbo = carimbosConhecidos.transacoes;
   let guardados = 0;
 
+  // A chave do mês mais distante que conseguiu entrar. É por ela que a
+  // próxima abertura confere se a pré-carga continua de pé -- e ela funciona
+  // mesmo quando o armazenamento encheu e só metade dos meses coube.
+  let prova = "";
+
   // Do mês atual para fora, alternando. Se o armazenamento encher no meio, o
   // que sobra guardado são os meses PERTO de hoje -- que são os que se abre.
   // Guardando em ordem, o estouro comeria sempre o futuro.
@@ -484,6 +515,7 @@ async function preCarregarAno() {
         JSON.stringify({ carimbo: carimbo, quando: Date.now(), dados: m.dados }));
       salvarCache(m.mes, m.ano, m.dados);
       guardados++;
+      prova = CACHE_LEITURA + "dashboard|" + JSON.stringify({ ano: m.ano, mes: m.mes });
     } catch (e) {
       break;   // encheu: para por aqui e fica com o que já entrou
     }
@@ -501,7 +533,7 @@ async function preCarregarAno() {
       }));
     }
     localStorage.setItem(PRECARGA_MARCA, JSON.stringify({
-      carimbo: carimbo, quando: Date.now(), meses: guardados
+      carimbo: carimbo, quando: Date.now(), meses: guardados, prova: prova
     }));
   } catch (e) {}
 }
