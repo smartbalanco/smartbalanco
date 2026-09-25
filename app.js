@@ -150,10 +150,22 @@ const DOMINIO_DA_LEITURA = {
   listarCartoesConfig: "config",
   dadosCalendario: "agenda",
   listarTarefas: "agenda",
+  buscarLancamentos: "transacoes",
   listarPlanos: "planos",
   listarReprovados: "planos",
   trabalhoPainel: "trabalho"
 };
+
+/** Tira os campos em branco. O servidor trata ausente e vazio igual. */
+function limparVazios(obj) {
+  const saida = {};
+  Object.keys(obj).sort().forEach(function (k) {
+    const v = obj[k];
+    if (v === "" || v === null || v === undefined) return;
+    saida[k] = v;
+  });
+  return saida;
+}
 
 function carregarCarimbos() {
   try {
@@ -267,7 +279,11 @@ function sujarDominio(dominio) {
  * nenhum -- troca chamarServidor por esta e pronto.
  */
 async function lerDoServidor(acao, params) {
-  params = params || {};
+  // Campo vazio sai antes da chave. Uma busca sem filtro chega da tela com
+  // sete campos em branco; sem limpar, ela nunca casaria com a mesma busca
+  // guardada pela pré-carga, que manda só { pagina: 0 }.
+  params = limparVazios(params || {});
+
   const dominio = DOMINIO_DA_LEITURA[acao];
   const chave = CACHE_LEITURA + acao + "|" + JSON.stringify(params);
 
@@ -388,6 +404,102 @@ function emSegundoPlano(rotulo, fn, aoTerminar) {
       pintarBarraFundo();
       return r;
     });
+}
+
+// ============================================================================
+// PRÉ-CARGA — ter o ano inteiro antes de precisar dele
+// ----------------------------------------------------------------------------
+// O carimbo evita rebuscar o que não mudou, mas só depois da primeira visita.
+// Abrir um mês pela primeira vez continuava custando a espera inteira.
+//
+// Aqui o app pede 25 meses (12 para trás, o atual, 12 para frente) e os 500
+// lançamentos mais recentes numa chamada só, em segundo plano, logo depois de
+// entrar. Depois disso, navegar no tempo não fala mais com o servidor.
+//
+// Roda de novo quando o carimbo de transações muda -- ou seja, quando alguma
+// coisa de dinheiro foi gravada. Não roda a cada abertura: seria baixar o ano
+// inteiro para descobrir que continua igual.
+// ============================================================================
+const PRECARGA_MARCA = "sb_precarga";
+const LANCAMENTOS_CHAVE = "sb_lancamentos";
+
+function precargaEstaEmDia() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PRECARGA_MARCA) || "null");
+    return !!(p && p.carimbo !== undefined &&
+              p.carimbo === carimbosConhecidos.transacoes);
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Busca o ano inteiro e guarda.
+ *
+ * Não devolve nada e não trava nada: quem chama dispara e segue. Se falhar, o
+ * app continua exatamente como era -- cada mês buscado quando for aberto.
+ */
+async function preCarregarAno() {
+  if (precargaEstaEmDia()) return;
+
+  const r = await chamarServidor("preCarga", {});
+  if (!r || !r.ok) return;
+
+  const carimbo = carimbosConhecidos.transacoes;
+  let guardados = 0;
+
+  // Do mês atual para fora, alternando. Se o armazenamento encher no meio, o
+  // que sobra guardado são os meses PERTO de hoje -- que são os que se abre.
+  // Guardando em ordem, o estouro comeria sempre o futuro.
+  const ordenados = (r.meses || []).slice().sort(function (a, b) {
+    return Math.abs(distanciaEmMeses(a)) - Math.abs(distanciaEmMeses(b));
+  });
+
+  for (let i = 0; i < ordenados.length; i++) {
+    const m = ordenados[i];
+    try {
+      // Nos DOIS caches: o de leitura é o que dispensa a rede, e o do
+      // dashboard é o que pinta a tela na hora enquanto confere.
+      localStorage.setItem(
+        CACHE_LEITURA + "dashboard|" + JSON.stringify({ ano: m.ano, mes: m.mes }),
+        JSON.stringify({ carimbo: carimbo, quando: Date.now(), dados: m.dados }));
+      salvarCache(m.mes, m.ano, m.dados);
+      guardados++;
+    } catch (e) {
+      break;   // encheu: para por aqui e fica com o que já entrou
+    }
+  }
+
+  try {
+    if (r.buscaInicial) {
+      localStorage.setItem(
+        CACHE_LEITURA + 'buscarLancamentos|{"pagina":0}',
+        JSON.stringify({ carimbo: carimbo, quando: Date.now(), dados: r.buscaInicial }));
+    }
+    if (r.lancamentos) {
+      localStorage.setItem(LANCAMENTOS_CHAVE, JSON.stringify({
+        carimbo: carimbo, quando: Date.now(), itens: r.lancamentos
+      }));
+    }
+    localStorage.setItem(PRECARGA_MARCA, JSON.stringify({
+      carimbo: carimbo, quando: Date.now(), meses: guardados
+    }));
+  } catch (e) {}
+}
+
+function distanciaEmMeses(m) {
+  const hoje = new Date();
+  return (m.ano - hoje.getFullYear()) * 12 + (m.mes - hoje.getMonth());
+}
+
+/** Os últimos lançamentos guardados, para quem quiser sem ir à rede. */
+function lancamentosGuardados() {
+  try {
+    const p = JSON.parse(localStorage.getItem(LANCAMENTOS_CHAVE) || "null");
+    return (p && p.itens) ? p.itens : [];
+  } catch (e) {
+    return [];
+  }
 }
 
 function tempoRelativo(timestamp) {
@@ -5222,6 +5334,12 @@ async function executarEntradaNoApp() {
   // 3. Checa aprovações pendentes em segundo plano (para mostrar o badge)
   checarPendentesAprovacao();
 
+  // 4. O ano inteiro, atrás da tela. Depois disto, trocar de mês é instantâneo
+  //    mesmo em mês nunca aberto.
+  if (!precargaEstaEmDia()) {
+    emSegundoPlano("Guardando 12 meses para frente e para trás...", preCarregarAno);
+  }
+
   // 3. Busca os dados frescos (em segundo plano se o cache já apareceu)
   try {
     const lido = await lerDoServidor("dashboard", { mes: mesExibido, ano: anoExibido });
@@ -5318,7 +5436,9 @@ async function recarregarDados(conferirOutrosAparelhos) {
   // justamente essa a mudança que faz a pessoa apertar o botão.
   if (conferirOutrosAparelhos) {
     esquecerTudo();
+    try { localStorage.removeItem(PRECARGA_MARCA); } catch (e) {}
     await sincronizarCarimbos();
+    emSegundoPlano("Recarregando os 12 meses...", preCarregarAno);
   }
 
   // Se houver cache do mês pedido, mostra na hora enquanto busca o novo
@@ -11407,7 +11527,7 @@ async function executarBusca(novaBusca) {
         pagina: paginaBusca
       };
 
-      const r = await chamarServidor("buscarLancamentos", params);
+      const r = await lerCacheado("buscarLancamentos", params);
       if (minhaBusca !== buscaSequencia) return;   // chegou atrasada
 
       if (r.ok) {
