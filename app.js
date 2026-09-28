@@ -218,9 +218,8 @@ async function sincronizarCarimbos() {
     // erro na tela: o app só volta a parecer lento, para sempre.
     if (sujos.length) guardarCarimbos();
 
-    sujos.forEach(function (d) {
-      try { esquecerDominio(d); } catch (e) {}
-    });
+    // Não apaga: o carimbo novo já torna as entradas daquele domínio
+    // SUSPEITAS, e suspeito se resolve mostrando e conferindo atrás.
     return true;
   } catch (e) {
     return false;
@@ -300,9 +299,19 @@ function esquecerDominio(dominio) {
  */
 function sujarDominio(dominio) {
   if (!dominio) return;
+
+  // Só esquece o CARIMBO, nunca os dados.
+  //
+  // Antes isto apagava tudo do domínio -- e uma conta de R$ 20 lançada jogava
+  // fora os 25 meses da pré-carga, que voltavam a ser buscados um a um. O que
+  // está guardado continua quase inteiramente certo: o certo é MOSTRAR e
+  // conferir atrás, não apagar e esperar.
   delete carimbosConhecidos[dominio];
   guardarCarimbos();
-  esquecerDominio(dominio);
+
+  // O carimbo novo do servidor, em segundo plano. Sem isto os dados ficariam
+  // "suspeitos para sempre" e toda leitura revalidaria.
+  setTimeout(function () { sincronizarCarimbos(); }, 1200);
 }
 
 /**
@@ -311,7 +320,12 @@ function sujarDominio(dominio) {
  * Devolve { ok, dados, doCache }. Quem chama não precisa saber de carimbo
  * nenhum -- troca chamarServidor por esta e pronto.
  */
-async function lerDoServidor(acao, params) {
+/**
+ * @param aoRevalidar  Quando existe e o guardado está suspeito, a função
+ *   devolve o guardado NA HORA e busca o novo atrás; quando a resposta chega,
+ *   chama isto com ela. Sem esta função, suspeito equivale a não ter: espera.
+ */
+async function lerDoServidor(acao, params, aoRevalidar) {
   // Campo vazio sai antes da chave. Uma busca sem filtro chega da tela com
   // sete campos em branco; sem limpar, ela nunca casaria com a mesma busca
   // guardada pela pré-carga, que manda só { pagina: 0 }.
@@ -320,19 +334,29 @@ async function lerDoServidor(acao, params) {
   const dominio = DOMINIO_DA_LEITURA[acao];
   const chave = CACHE_LEITURA + acao + "|" + JSON.stringify(params);
 
-  if (dominio && carimbosConhecidos[dominio] !== undefined) {
+  let guardado = null;
+  if (dominio) {
     try {
       const bruto = localStorage.getItem(chave);
-      if (bruto) {
-        const p = JSON.parse(bruto);
-        // O carimbo gravado junto é o que diz se ainda vale. Comparar data
-        // não serviria: dado de um ano atrás continua certo se nada mudou.
-        const velho = !p.quando || (Date.now() - p.quando) > CACHE_IDADE_MAX;
-        if (p && p.carimbo === carimbosConhecidos[dominio] && !velho) {
-          return { ok: true, dados: p.dados, doCache: true, quando: p.quando };
-        }
-      }
+      if (bruto) guardado = JSON.parse(bruto);
     } catch (e) {}
+  }
+
+  if (guardado && guardado.dados) {
+    const velho = !guardado.quando || (Date.now() - guardado.quando) > CACHE_IDADE_MAX;
+    const fresco = carimbosConhecidos[dominio] !== undefined &&
+                   guardado.carimbo === carimbosConhecidos[dominio] && !velho;
+
+    if (fresco) return { ok: true, dados: guardado.dados, doCache: true, quando: guardado.quando };
+
+    // Suspeito, mas existe. Devolve agora e confere atrás: a tela aparece
+    // instantânea e se corrige sozinha um segundo depois, em vez de ficar
+    // vazia esperando.
+    if (typeof aoRevalidar === "function" && !velho) {
+      revalidarAtras(acao, params, chave, dominio, aoRevalidar);
+      return { ok: true, dados: guardado.dados, doCache: true,
+               suspeito: true, quando: guardado.quando };
+    }
   }
 
   const r = await chamarServidor(acao, params);
@@ -358,6 +382,129 @@ async function lerDoServidor(acao, params) {
  * r.planos, r.mensagem. É o que permite trocar uma pela outra sem mexer no
  * resto da tela.
  */
+/**
+ * Soma um lançamento recém-criado nos meses já guardados.
+ *
+ * Por quê: depois de salvar, o app pedia tudo de novo à planilha e a tela
+ * ficava com o número velho até a resposta chegar -- segundos olhando para um
+ * saldo que você sabe que mudou. O app tem todos os dados para fazer essa
+ * conta sozinho: valor, data, parcelas e se já foi pago.
+ *
+ * É uma ESTIMATIVA, e assumida como tal: logo depois a revalidação traz o
+ * número do servidor e escreve por cima. Se eu errar a conta aqui, o erro
+ * dura um segundo e se corrige sozinho -- e é por isso que ela pode ser
+ * simples em vez de reimplementar o dashboard inteiro.
+ *
+ * O que ela NÃO mexe: categorias, contas a vencer, faturas e score. Aqueles
+ * dependem de regras que só o servidor tem (ciclo de fatura, limite,
+ * pontuação), e chutar ali daria um número plausível e errado -- pior que um
+ * número velho, porque não se sabe que é chute.
+ */
+function somarLancamentoNoCache(params) {
+  const total = Number(params.valorTotal) || 0;
+  if (!(total > 0)) return;
+
+  const partes = Math.max(1, parseInt(params.totalParcelas) || 1);
+  const porParcela = total / partes;
+  const pago = (params.jaPago === "true" || params.jaPago === true);
+
+  const venc = dataDeTexto(params.vencimento);
+  if (!venc) return;
+
+  for (let i = 0; i < partes; i++) {
+    const d = new Date(venc.getFullYear(), venc.getMonth() + i, 1);
+    somarNoMesGuardado(d.getMonth(), d.getFullYear(), porParcela, pago);
+  }
+}
+
+/** "2026-10-15" ou "15/10/2026" -> Date. Vazio ou estranho -> null. */
+function dataDeTexto(txt) {
+  const v = (txt || "").toString().trim();
+  if (!v) return null;
+
+  let p = v.split("-");
+  if (p.length === 3 && p[0].length === 4) {
+    return new Date(+p[0], +p[1] - 1, +p[2]);
+  }
+  p = v.split("/");
+  if (p.length === 3) return new Date(+p[2], +p[1] - 1, +p[0]);
+  return null;
+}
+
+/**
+ * Soma num mês específico, nos dois caches que o dashboard usa.
+ *
+ * Só toca no que é aritmética pura: despesa, saldo e o par pago/pendente. O
+ * mês que ainda não foi guardado não recebe nada -- ele vai ser buscado do
+ * servidor completo quando for aberto, já com o lançamento dentro.
+ */
+function somarNoMesGuardado(mes, ano, valor, pago) {
+  const chave = CACHE_LEITURA + "dashboard|" + JSON.stringify({ ano: ano, mes: mes });
+
+  try {
+    const bruto = localStorage.getItem(chave);
+    if (!bruto) return;
+
+    const p = JSON.parse(bruto);
+    const d = p && p.dados;
+    if (!d || !d.saldo) return;
+
+    d.saldo.despesas = arredondarCentavos(d.saldo.despesas + valor);
+    d.saldo.saldo = arredondarCentavos(d.saldo.saldo - valor);
+    d.saldo.despesasEsperadas = arredondarCentavos((d.saldo.despesasEsperadas || 0) + valor);
+    d.saldo.despesasComPlanos = arredondarCentavos((d.saldo.despesasComPlanos || 0) + valor);
+
+    if (d.despesasStatus) {
+      if (pago) d.despesasStatus.pagas = arredondarCentavos(d.despesasStatus.pagas + valor);
+      else d.despesasStatus.pendentes = arredondarCentavos(d.despesasStatus.pendentes + valor);
+    }
+
+    // Guarda com carimbo inválido de propósito: assim a entrada continua
+    // SUSPEITA e a revalidação acontece. Um número estimado não pode virar
+    // verdade guardada só porque ficou bonito na tela.
+    localStorage.setItem(chave, JSON.stringify({
+      carimbo: "estimado", quando: p.quando || Date.now(), dados: d
+    }));
+
+    // O cache de pintura instantânea recebe a mesma conta.
+    salvarCache(mes, ano, d);
+  } catch (e) {}
+}
+
+function arredondarCentavos(v) {
+  return Math.round((Number(v) || 0) * 100) / 100;
+}
+
+/**
+ * Busca o valor certo atrás da tela e avisa quem pediu.
+ *
+ * Uma por chave de cada vez: o dashboard dispara isto a cada pintura, e sem a
+ * trava trocar de mês três vezes deixaria três buscas do mesmo mês correndo
+ * juntas, com a mais lenta chegando por último e escrevendo por cima.
+ */
+const revalidando = {};
+
+function revalidarAtras(acao, params, chave, dominio, aoRevalidar) {
+  if (revalidando[chave]) return;
+  revalidando[chave] = true;
+
+  chamarServidor(acao, params).then(function (r) {
+    if (!r || !r.ok) return;
+
+    try {
+      localStorage.setItem(chave, JSON.stringify({
+        carimbo: carimbosConhecidos[dominio], quando: Date.now(), dados: r
+      }));
+    } catch (e) {}
+
+    aoRevalidar(r);
+  }).catch(function () {
+    // Sem rede: fica o que estava na tela, que é o que a pessoa já está lendo.
+  }).then(function () {
+    delete revalidando[chave];
+  });
+}
+
 async function lerCacheado(acao, params) {
   return (await lerDoServidor(acao, params)).dados;
 }
@@ -459,8 +606,13 @@ const LANCAMENTOS_CHAVE = "sb_lancamentos";
 function precargaEstaEmDia() {
   try {
     const p = JSON.parse(localStorage.getItem(PRECARGA_MARCA) || "null");
-    if (!p || p.carimbo === undefined) return false;
-    if (p.carimbo !== carimbosConhecidos.transacoes) return false;
+    if (!p) return false;
+
+    // A pergunta aqui é "os meses ESTÃO guardados?", não "estão atualizados?".
+    //
+    // Enquanto valia o carimbo, lançar uma despesa fazia os 25 meses serem
+    // baixados de novo na abertura seguinte. Agora eles ficam, e cada um se
+    // atualiza sozinho quando é aberto -- um mês de cada vez, atrás da tela.
 
     // Confere se o dado está MESMO lá, em vez de acreditar só na marca.
     //
@@ -5486,12 +5638,21 @@ async function recarregarDados(conferirOutrosAparelhos) {
   }
 
   try {
-    const lido = await lerDoServidor("dashboard", { mes: mesExibido, ano: anoExibido });
+    // O mês pedido, guardado: se estiver suspeito, vem o guardado AGORA e o
+    // certo chega alguns instantes depois, por aqui.
+    const pedido = { mes: mesExibido, ano: anoExibido };
+    const lido = await lerDoServidor("dashboard", pedido, function (novo) {
+      if (mesExibido !== pedido.mes || anoExibido !== pedido.ano) return;
+      salvarCache(pedido.mes, pedido.ano, novo);
+      preencherDashboard(novo);
+      mostrarAvisoAtualizando(null);
+    });
+
     const r = lido.dados;
     if (lido.ok) {
       salvarCache(mesExibido, anoExibido, r);
       preencherDashboard(r);
-      mostrarAvisoAtualizando(null);
+      mostrarAvisoAtualizando(lido.suspeito ? "conferindo..." : null);
 
       const hj = new Date();
       if (mesExibido === hj.getMonth() && anoExibido === hj.getFullYear()) {
@@ -7968,6 +8129,11 @@ function enviarNovaDespesa() {
   // Fecha na hora e envia em segundo plano
   fecharModalDespesa();
   mostrarToast("⏳ Lançando \"" + desc + "\"...", true);
+
+  // A conta na hora, antes de a planilha responder. Se der erro no envio, a
+  // revalidação devolve o número certo -- e o toast diz que não lançou.
+  somarLancamentoNoCache(params);
+  recarregarDados();
 
   gravarNovaDespesa(params, desc);
 }
