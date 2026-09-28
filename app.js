@@ -5760,6 +5760,7 @@ function preencherDashboard(d) {
   pintarTendenciaDoScore(d, sc);
 
   pintarRitmo(d);
+  pintarAvisoVencidas(d);
 
   // ---- CONTAS A VENCER ----
   const listaVencer = document.getElementById("lista-vencer");
@@ -5870,6 +5871,17 @@ function preencherDashboard(d) {
               (c.variacao > 0 ? "▲" : "▼") + " " +
               Math.abs(c.variacao).toFixed(0) + "%</span>";
       }
+
+      // A categoria abre a busca já filtrada nela e no mês exibido. Antes era
+      // texto morto: você via "Viagens R$ 887" e tinha de ir à busca montar o
+      // filtro na mão para descobrir o que era.
+      item.setAttribute("role", "button");
+      item.setAttribute("tabindex", "0");
+      item.className = "cat-item cat-tocavel";
+      item.onclick = function () { abrirBuscaPorCategoria(c.categoria); };
+      item.onkeydown = function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); item.onclick(); }
+      };
 
       item.innerHTML =
         '<div class="cat-topo"><span class="cat-nome">' + escaparHtml(nome) + '</span>' +
@@ -9441,6 +9453,69 @@ function pintarMetricasDoScore(metricas) {
         '<span class="sm-pontos">' + bolinhas + '</span>' +
       '</div>';
   }).join("");
+}
+
+/**
+ * O aviso de contas vencidas, no topo da tela.
+ *
+ * Elas já apareciam na lista, com faixa vermelha -- mas no MEIO dela, depois
+ * de rolar. Uma conta vencida é a única coisa do dashboard que pede ação
+ * hoje, e era a que exigia mais esforço para descobrir.
+ *
+ * Só no mês corrente: "vencida" num mês passado que você está revisando é
+ * história, não tarefa.
+ */
+function pintarAvisoVencidas(d) {
+  const el = document.getElementById("aviso-vencidas");
+  if (!el) return;
+
+  const v = d.vencidas || {};
+  const hj = new Date();
+  const ehMesCorrente = (d.mes === hj.getMonth() && d.ano === hj.getFullYear());
+
+  if (!v.quantidade || !ehMesCorrente) { el.style.display = "none"; return; }
+
+  const uma = v.quantidade === 1;
+  el.style.display = "flex";
+  el.innerHTML =
+    '<span class="av-marca"></span>' +
+    '<span class="av-txt">' +
+      '<b>' + v.quantidade + (uma ? " conta vencida" : " contas vencidas") + '</b>' +
+      '<span>' + formatarMoeda(v.total) + (uma ? " em atraso" : " somados em atraso") + '</span>' +
+    '</span>' +
+    '<span class="av-ir">ver ›</span>';
+
+  el.onclick = function () {
+    const alvo = document.getElementById("lista-vencer");
+    if (alvo) alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+}
+
+/**
+ * Abre a busca já filtrada numa categoria, no mês que está na tela.
+ *
+ * O mês vai junto de propósito: o número que você tocou é o gasto DAQUELE
+ * mês, e abrir a busca sem ele mostraria uma lista maior que o número --
+ * aí some a ligação entre o que se tocou e o que apareceu.
+ */
+function abrirBuscaPorCategoria(categoria) {
+  categoriasSelecionadas = [categoria];
+
+  trocarAba("busca");
+
+  // Depois de trocar de aba: os campos do filtro só existem com a tela montada.
+  setTimeout(function () {
+    const mes = document.getElementById("bl-mes");
+    const ano = document.getElementById("bl-ano");
+    if (mes) mes.value = String(mesExibido);
+    if (ano) ano.value = String(anoExibido);
+
+    const texto = document.getElementById("bl-texto");
+    if (texto) texto.value = "";
+
+    atualizarBotaoCategorias();
+    executarBusca(true);
+  }, 60);
 }
 
 /**

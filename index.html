@@ -1134,6 +1134,30 @@
     }
     .linha-item.vencida .li-chip b { color: var(--vermelho); }
 
+    /* ---- aviso de contas vencidas ---- */
+    /* Relevo, não fundo colorido: neste app o que separa uma superfície é a
+       sombra. A cor entra na marca, no número e na seta. */
+    .aviso-vencidas {
+      display: flex; align-items: center; gap: 11px; cursor: pointer;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 14px; padding: 13px 15px; margin-bottom: 14px;
+    }
+    .aviso-vencidas:active { box-shadow: var(--afundado-leve); }
+    .av-marca {
+      width: 4px; align-self: stretch; min-height: 30px; flex-shrink: 0;
+      border-radius: 999px; background: var(--vermelho);
+    }
+    .av-txt { display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0; }
+    .av-txt b { font-size: 13px; color: var(--vermelho); }
+    .av-txt span { font-size: 11px; color: var(--cinza-texto); }
+    .av-ir { font-size: 11.5px; font-weight: 700; color: var(--azul-claro); white-space: nowrap; }
+
+    /* ---- categoria tocável ---- */
+    .cat-tocavel { cursor: pointer; border-radius: 12px; }
+    .cat-tocavel:active { box-shadow: var(--afundado-leve); }
+    /* Alvo de toque inteiro: a linha toda, não só o nome. */
+    .cat-tocavel { padding: 8px 10px; margin: 0 -10px; }
+
     /* ---- tendência do score ---- */
     .score-tendencia {
       display: flex; align-items: center; gap: 7px; margin-top: 9px;
@@ -3317,6 +3341,10 @@
       <div id="aviso-cache"></div>
       <div id="aviso-vencimento" class="aviso-venc"></div>
 
+      <!-- Contas vencidas: a unica coisa do dashboard que pede acao hoje.
+           Elas ja apareciam na lista, mas no meio dela, depois de rolar. -->
+      <div id="aviso-vencidas" class="aviso-vencidas" style="display:none;"></div>
+
       <!-- SALDO
            Um número herói só, e uma BARRA no lugar dos quatro números soltos
            que havia antes (receita, despesas, pagas, pendentes). A barra diz a
@@ -5371,7 +5399,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=93"></script>
+  <script src="app.js?v=94"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
