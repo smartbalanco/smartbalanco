@@ -5586,7 +5586,9 @@ function preencherDashboard(d) {
   document.getElementById("score-classificacao").style.color = cor;
   document.getElementById("score-barra-preenchida").style.width = (sc.valor || 0) + "%";
   document.getElementById("score-barra-preenchida").style.background = cor;
-  document.getElementById("score-detalhes").textContent = sc.detalhes || "";
+  pintarMetricasDoScore(sc.metricas || []);
+
+  pintarRitmo(d);
 
   // ---- CONTAS A VENCER ----
   const listaVencer = document.getElementById("lista-vencer");
@@ -5681,10 +5683,29 @@ function preencherDashboard(d) {
       const pct = (c.valor / maxCat) * 100;
       const item = document.createElement("div");
       item.className = "cat-item";
+      // O código da categoria ("2.3.007.") sai da tela. Ele é chave de
+      // planilha, não nome de gasto -- e ocupava a largura que o nome queria.
+      const nome = c.categoria.replace(/^[\d.]+\s*/, "") || c.categoria;
+
+      // Variacao que arredonda para zero vira "igual". Uma seta para cima com
+      // 0% ao lado e pior que nao mostrar nada: aponta uma mudanca que nao houve.
+      let variacao = "";
+      if (c.variacao !== null && c.variacao !== undefined) {
+        variacao = (Math.abs(c.variacao) < 1)
+          ? '<span class="cat-peso">igual ao mês passado</span>'
+          : '<span class="cat-var ' + (c.variacao > 0 ? "subiu" : "caiu") + '">' +
+              (c.variacao > 0 ? "▲" : "▼") + " " +
+              Math.abs(c.variacao).toFixed(0) + "%</span>";
+      }
+
       item.innerHTML =
-        '<div class="cat-topo"><span class="cat-nome">' + escaparHtml(c.categoria) + '</span>' +
+        '<div class="cat-topo"><span class="cat-nome">' + escaparHtml(nome) + '</span>' +
         '<span class="cat-valor">' + formatarMoeda(c.valor) + '</span></div>' +
-        '<div class="cat-barra"><div class="cat-barra-preenchida" style="width:' + pct + '%"></div></div>';
+        '<div class="cat-barra"><div class="cat-barra-preenchida" style="width:' + pct + '%"></div></div>' +
+        '<div class="cat-meta">' +
+          '<span class="cat-peso">' + (c.peso || 0).toFixed(0) + '% do mês</span>' +
+          variacao +
+        '</div>';
       listaCat.appendChild(item);
     });
   }
@@ -9135,6 +9156,97 @@ function explicarBaseDeCalculo() {
   mostrarToast(explicandoSuposicao
     ? "Este mês ainda não tem receita lançada, então o cálculo usa a última que entrou de verdade. É estimativa, por isso o ≈."
     : "O mês gasta o que entrou no mês anterior. Por isso a base é a receita do mês passado, e não a deste mês.");
+}
+
+/**
+ * As quatro partes do score, uma por linha.
+ *
+ * Era uma frase só: "Comprometimento: 89.3% | Parcelas: 21.6% | Reserva: 0.0
+ * meses | Poupança: 10.7%". Quatro números separados por barra vertical,
+ * quebrando em duas linhas no celular -- ninguém lê isso, e mesmo lendo não
+ * dá para saber qual deles está puxando o 35/100 para baixo.
+ *
+ * As bolinhas acesas são os pontos que cada item rendeu, de 25. É o que
+ * transforma um score num diagnóstico.
+ */
+function pintarMetricasDoScore(metricas) {
+  const alvo = document.getElementById("score-metricas");
+  if (!alvo) return;
+
+  if (!metricas.length) { alvo.innerHTML = ""; return; }
+
+  alvo.innerHTML = metricas.map(function (m) {
+    // 25 pontos = 4 bolinhas, uma a cada 6,25. O arredondamento para cima
+    // evita que 5 pontos (um quarto do caminho) apareça como zero aceso.
+    const acesas = Math.ceil((m.pontos / m.maximo) * 4);
+    let bolinhas = "";
+    for (let i = 0; i < 4; i++) {
+      bolinhas += '<span class="sm-ponto' + (i < acesas ? " aceso" : "") + '"></span>';
+    }
+
+    const casas = m.unidade === " meses" ? 1 : 0;
+
+    return '<div class="sm-linha">' +
+        '<span class="sm-nome">' + escaparHtml(m.nome) + '</span>' +
+        '<span class="sm-val">' + m.valor.toFixed(casas) + m.unidade + '</span>' +
+        '<span class="sm-pontos">' + bolinhas + '</span>' +
+      '</div>';
+  }).join("");
+}
+
+/**
+ * O ritmo do mês: o que dá para gastar por dia daqui até o fim.
+ *
+ * É o número mais acionável do app -- o saldo diz como o mês está, este diz o
+ * que fazer hoje. Já existia no widget da tela inicial do celular e não
+ * existia dentro do app, que é onde a pessoa olha quando está decidindo.
+ *
+ * Só no mês corrente: num mês fechado não há "quanto ainda dá", e num mês
+ * futuro o dia de hoje não quer dizer nada.
+ */
+function pintarRitmo(d) {
+  const card = document.getElementById("card-ritmo");
+  const r = d.ritmo;
+  if (!card) return;
+
+  if (!r) { card.style.display = "none"; return; }
+  card.style.display = "block";
+
+  const negativo = r.porDia < 0;
+
+  document.getElementById("rt-grade").innerHTML =
+    '<div class="rt-caixa">' +
+      '<span class="rt-rot">Por dia até o fim</span>' +
+      '<span class="rt-val" style="color:' + (negativo ? "var(--vermelho)" : "var(--verde)") + '">' +
+        formatarMoeda(Math.abs(r.porDia)) + '</span>' +
+      '<span class="rt-sub">' + (negativo ? "já passou do que tinha" : "em " + r.diasRestantes + " dias que faltam") + '</span>' +
+    '</div>' +
+    '<div class="rt-caixa">' +
+      '<span class="rt-rot">Dia do mês</span>' +
+      '<span class="rt-val">' + r.dia + '<span style="font-size:13px;font-weight:600;color:var(--cinza-texto)">/' + r.diasNoMes + '</span></span>' +
+      '<span class="rt-sub">' + Math.round((r.dia / r.diasNoMes) * 100) + '% do mês</span>' +
+    '</div>';
+
+  // A comparação com o mês passado, no MESMO recorte de dias. Sem o recorte,
+  // todo começo de mês diria "você gastou 80% menos", que é verdade e não
+  // serve para nada.
+  const c = d.comparacao || {};
+  const nota = document.getElementById("rt-nota");
+
+  if (c.variacao === null || c.variacao === undefined) {
+    nota.innerHTML = "Sem gasto no mês anterior para comparar.";
+    return;
+  }
+
+  const subiu = c.variacao >= 0;
+  nota.innerHTML =
+    '<div class="comparacao">' +
+      '<span class="cp-seta ' + (subiu ? "subiu" : "caiu") + '">' + (subiu ? "▲" : "▼") + '</span>' +
+      '<span>Até o dia ' + c.ateODiaDoMes + ' você gastou <b>' + formatarMoeda(c.ateODia) +
+      '</b> — ' + (subiu ? "mais" : "menos") + ' <b>' + Math.abs(c.variacao).toFixed(0) +
+      '%</b> que no mesmo ponto de ' + escaparHtml(c.mesBaseNome || "mês passado").toLowerCase() +
+      ' (' + formatarMoeda(c.anterior) + ').</span>' +
+    '</div>';
 }
 
 // ---------- Renderiza o relatório ----------
