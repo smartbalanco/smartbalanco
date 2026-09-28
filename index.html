@@ -222,9 +222,21 @@
     }
     .cartao-venc { font-size: 11px; font-weight: 500; color: var(--cinza-texto); }
     .cartao-valores { display: flex; gap: 10px; }
-    .cartao-valores div { flex: 1; background: var(--cinza-fundo); border-radius: 8px; padding: 9px 10px; }
-    .cv-label { display: block; font-size: 10px; color: var(--cinza-texto); text-transform: uppercase; }
-    .cv-num { display: block; font-size: 15px; font-weight: 700; color: var(--azul); margin-top: 3px; }
+    /* O mesmo molde das caixas do Ritmo do mês: afundadas, não chapadas.
+       Duas linguagens para a mesma coisa (um número com rótulo) fazem
+       procurar diferença onde não há. */
+    .cartao-valores div {
+      flex: 1; background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 14px; padding: 11px 13px;
+    }
+    .cv-label {
+      display: block; font-size: 10px; font-weight: 700; letter-spacing: .6px;
+      color: var(--cinza-texto); text-transform: uppercase;
+    }
+    .cv-num {
+      display: block; font-size: 17px; font-weight: 800; color: var(--azul);
+      margin-top: 3px; font-variant-numeric: tabular-nums; letter-spacing: -.4px;
+    }
     .cv-num.cinza { color: var(--cinza-texto); }
 
     /* OUTROS MÉTODOS */
@@ -1121,6 +1133,32 @@
       vertical-align: middle;
     }
     .linha-item.vencida .li-chip b { color: var(--vermelho); }
+
+    /* ---- tendência do score ---- */
+    .score-tendencia {
+      display: flex; align-items: center; gap: 7px; margin-top: 9px;
+      font-size: 11px; color: var(--cinza-texto);
+    }
+    .st-seta { font-size: 13px; font-weight: 800; }
+    /* Score que SOBE é bom: verde para cima, ao contrário das despesas.
+       É por isso que a seta vem sempre com o texto do lado. */
+    .st-seta.subiu { color: var(--verde); }
+    .st-seta.caiu { color: var(--vermelho); }
+    .st-igual { font-style: italic; }
+
+    /* ---- despesas fora do cartão ---- */
+    .om-barra {
+      display: flex; gap: 2px; height: 8px; padding: 2px; margin-top: 8px;
+      border-radius: 999px; background: var(--cinza-fundo);
+      box-shadow: var(--afundado-leve); overflow: hidden;
+    }
+    .om-barra > span { border-radius: 999px; min-width: 2px; }
+    .om-status {
+      display: flex; flex-wrap: wrap; gap: 14px; margin-top: 7px;
+      font-size: 10.5px; color: var(--cinza-texto);
+    }
+    .om-status span { display: inline-flex; align-items: center; gap: 5px; }
+    .om-pt { width: 7px; height: 7px; border-radius: 2px; display: inline-block; }
 
     /* ---- limite do cartão ---- */
     .lim-bloco { margin-top: 11px; }
@@ -3337,6 +3375,9 @@
           <span class="score-class" id="score-classificacao"></span>
         </div>
         <div class="score-barra"><div class="score-barra-preenchida" id="score-barra-preenchida"></div></div>
+        <!-- Contra o mês passado. Um score sozinho não diz se está
+             melhorando, que é a pergunta que importa num número desses. -->
+        <div class="score-tendencia" id="score-tendencia" style="display:none;"></div>
         <!-- Os quatro pedaços do score, um por linha, com o que cada um
              rendeu. A versão anterior era uma frase com barras verticais:
              informação demais para ler, de menos para agir. -->
@@ -5330,7 +5371,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=92"></script>
+  <script src="app.js?v=93"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

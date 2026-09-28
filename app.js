@@ -5735,8 +5735,17 @@ function preencherDashboard(d) {
     ? "supondo a última receita conhecida · por quê?"
     : "sobre a receita de " + (d.mesBaseNome || "-").toLowerCase() + " · por quê?";
 
-  document.getElementById("receita-mes-atual").textContent =
-    "Receita já recebida em " + (d.mesReferencia || "") + ": " + formatarMoeda(s.receitaDoMes);
+  // Só aparece quando há receita recebida. "R$ 0,00" todo mês, no rodapé de
+  // um card, é uma linha que nunca diz nada -- e ela sobrava justamente no
+  // começo do mês, quando a tela já está cheia de número.
+  const elReceita = document.getElementById("receita-mes-atual");
+  if (s.receitaDoMes > 0) {
+    elReceita.style.display = "block";
+    elReceita.textContent =
+      "Já entrou em " + (d.mesReferencia || "") + ": " + formatarMoeda(s.receitaDoMes);
+  } else {
+    elReceita.style.display = "none";
+  }
 
   // ---- SCORE ----
   const sc = d.score || {};
@@ -5748,6 +5757,7 @@ function preencherDashboard(d) {
   document.getElementById("score-barra-preenchida").style.width = (sc.valor || 0) + "%";
   document.getElementById("score-barra-preenchida").style.background = cor;
   pintarMetricasDoScore(sc.metricas || []);
+  pintarTendenciaDoScore(d, sc);
 
   pintarRitmo(d);
 
@@ -5908,14 +5918,25 @@ function preencherDashboard(d) {
     d.outrosMetodos.forEach(function (m) {
       const item = document.createElement("div");
       item.className = "outro-item";
-      let statusTxt = "";
-      if (m.pendente > 0 && m.pago > 0) {
-        statusTxt = '<span class="om-status">✅ ' + formatarMoeda(m.pago) + ' &middot; ⏳ ' + formatarMoeda(m.pendente) + '</span>';
-      } else if (m.pendente > 0) {
-        statusTxt = '<span class="om-status pend">⏳ pendente</span>';
-      } else {
-        statusTxt = '<span class="om-status pago">✅ pago</span>';
-      }
+      // Pago e pendente viram uma barra, não dois emojis.
+      //
+      // O "⏳ pendente" dizia que havia algo a pagar e escondia QUANTO -- e
+      // quando havia os dois, a linha virava uma fileira de emoji com dois
+      // valores. A barra responde as duas coisas de uma vez.
+      const pctPago = m.total > 0 ? (m.pago / m.total) * 100 : 0;
+
+      let statusTxt =
+        '<div class="om-barra">' +
+          (m.pago > 0 ? '<span style="width:' + pctPago + '%; background:var(--verde)"></span>' : '') +
+          (m.pendente > 0 ? '<span style="flex-grow:1; background:var(--laranja)"></span>' : '') +
+        '</div>' +
+        '<div class="om-status">' +
+          (m.pago > 0 ? '<span><i class="om-pt" style="background:var(--verde)"></i>' +
+            formatarMoeda(m.pago) + ' pago</span>' : '') +
+          (m.pendente > 0 ? '<span><i class="om-pt" style="background:var(--laranja)"></i>' +
+            formatarMoeda(m.pendente) + ' a pagar</span>' : '') +
+        '</div>';
+
       item.innerHTML =
         '<div class="om-topo"><span class="om-nome">' + escaparHtml(m.metodo) + '</span>' +
         '<span class="om-valor">' + formatarMoeda(m.total) + '</span></div>' + statusTxt;
@@ -9420,6 +9441,56 @@ function pintarMetricasDoScore(metricas) {
         '<span class="sm-pontos">' + bolinhas + '</span>' +
       '</div>';
   }).join("");
+}
+
+/**
+ * "35/100, era 42 em setembro."
+ *
+ * Um score sozinho não diz se a vida está melhorando ou piorando, que é a
+ * única pergunta que importa num número desses.
+ *
+ * Sai de GRAÇA: o mês anterior já está guardado no aparelho pela pré-carga, e
+ * o score dele foi calculado pelo mesmo servidor, com a mesma fórmula. Pedir
+ * isso ao servidor custaria uma conta a mais em cada um dos 25 meses da
+ * pré-carga para responder o que já está aqui.
+ *
+ * Sem o mês anterior guardado, não mostra nada -- nunca busca só para isto.
+ */
+function pintarTendenciaDoScore(d, sc) {
+  const alvo = document.getElementById("score-tendencia");
+  if (!alvo) return;
+  alvo.style.display = "none";
+
+  if (!sc || sc.valor === null || sc.valor === undefined) return;
+
+  let mes = d.mes - 1, ano = d.ano;
+  if (mes < 0) { mes = 11; ano--; }
+
+  let antes = null;
+  try {
+    const bruto = localStorage.getItem(
+      CACHE_LEITURA + "dashboard|" + JSON.stringify({ ano: ano, mes: mes }));
+    if (bruto) {
+      const p = JSON.parse(bruto);
+      if (p && p.dados && p.dados.score) antes = p.dados.score.valor;
+    }
+  } catch (e) {}
+
+  // Score zero do mês anterior quase sempre quer dizer "não havia receita
+  // lançada ainda", não "a vida estava péssima". Comparar com ele daria um
+  // salto de 35 pontos que não aconteceu.
+  if (antes === null || antes === undefined || antes === 0) return;
+
+  const dif = sc.valor - antes;
+  const nome = (d.mesBaseNome || "").toLowerCase();
+
+  alvo.style.display = "block";
+  alvo.innerHTML = (Math.abs(dif) < 1)
+    ? '<span class="st-igual">igual a ' + escaparHtml(nome) + '</span>'
+    : '<span class="st-seta ' + (dif > 0 ? "subiu" : "caiu") + '">' +
+        (dif > 0 ? "▲" : "▼") + '</span>' +
+      '<span>' + (dif > 0 ? "+" : "−") + Math.abs(dif) +
+      ' contra ' + escaparHtml(nome) + ' (' + antes + ')</span>';
 }
 
 /**
