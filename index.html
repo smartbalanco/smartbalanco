@@ -195,8 +195,8 @@
 
     /* LISTAS */
     .linha-item {
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 10px 0; border-bottom: 1px solid #f1f3f4; font-size: 14px; gap: 10px;
+      display: flex; align-items: flex-start;
+      padding: 10px 0; border-bottom: 1px solid #f1f3f4; font-size: 14px; gap: 11px;
     }
     .linha-item:last-child { border-bottom: none; }
     .li-esq { color: #334155; flex: 1; }
@@ -836,27 +836,27 @@
     .pv-seta { font-size: 15px; color: var(--cinza-texto); transition: transform .15s ease; }
     .pv-seta.aberta { transform: rotate(90deg); }
     .pv-corpo { padding: 0 16px 15px; }
-    .pv-item {
+    .pvd-item {
       display: flex; align-items: baseline; gap: 8px; padding: 4px 0;
       font-size: 11.5px; color: var(--cinza-texto);
     }
-    .pv-item span { flex-grow: 1; }
-    .pv-item b { font-weight: 700; color: #1e293b; font-variant-numeric: tabular-nums; }
-    .pv-item.roxo b { color: var(--roxo); }
-    .pv-total {
+    .pvd-item span { flex-grow: 1; }
+    .pvd-item b { font-weight: 700; color: #1e293b; font-variant-numeric: tabular-nums; }
+    .pvd-item.roxo b { color: var(--roxo); }
+    .pvd-total {
       display: flex; align-items: baseline; gap: 8px;
       border-top: 1px solid var(--borda); margin-top: 8px; padding-top: 10px;
       font-size: 11.5px; font-weight: 600; color: #1e293b;
     }
-    .pv-total span { flex-grow: 1; }
-    .pv-total b { font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
-    .pv-nota { font-size: 10px; color: var(--cinza-texto); line-height: 1.5; margin-top: 10px; }
-    .pv-lista { margin-top: 9px; }
-    .pv-sub-item {
+    .pvd-total span { flex-grow: 1; }
+    .pvd-total b { font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .pvd-nota { font-size: 10px; color: var(--cinza-texto); line-height: 1.5; margin-top: 10px; }
+    .pvd-lista { margin-top: 9px; }
+    .pvd-sub-item {
       display: flex; align-items: baseline; gap: 8px; padding: 3px 0;
       font-size: 11px; color: var(--cinza-texto);
     }
-    .pv-sub-item span { flex-grow: 1; }
+    .pvd-sub-item span { flex-grow: 1; }
 
     /* ---- frequência de uso ---- */
     /* Cada faixa é um alvo de toque inteiro, não um rádio de 16px ao lado de
@@ -1120,7 +1120,33 @@
       font-size: 10px; font-weight: 700; white-space: nowrap;
       vertical-align: middle;
     }
-    .linha-item.vencida .li-data { color: var(--vermelho); }
+    .linha-item.vencida .li-chip b { color: var(--vermelho); }
+
+    /* ---- a linha de conta a vencer ---- */
+    /* Duas colunas: a plaquinha da data e o corpo. Antes era esquerda/direita
+       com o botão numa coluna própria, e o nome disputava largura com ele --
+       daí "Fatura Cartão / C XP" quebrando em duas linhas. */
+    .li-chip {
+      width: 40px; height: 40px; flex-shrink: 0; border-radius: 13px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .li-chip b {
+      font-size: 14px; font-weight: 800; color: var(--azul);
+      line-height: 1; font-variant-numeric: tabular-nums;
+    }
+    .li-chip i {
+      font-style: normal; font-size: 8px; font-weight: 700;
+      color: var(--cinza-texto); letter-spacing: .5px; margin-top: 1px;
+    }
+    .li-corpo { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; }
+    .li-l1 { display: flex; align-items: baseline; gap: 10px; }
+    .li-nome {
+      flex-grow: 1; min-width: 0; font-size: 13px; font-weight: 600;
+      color: #1e293b; line-height: 1.35;
+    }
+    .li-l2 { display: flex; align-items: center; gap: 8px; }
+    .li-l2 .li-mov { flex-grow: 1; margin-top: 0; }
 
     /* ---- Vencimento dos cartoes ---- */
     .cart-item {
@@ -2929,6 +2955,9 @@
     /* Listas: o item vira uma plaquinha em relevo, sem risco separando */
     .linha-item,
     .cfg-item,
+    /* .pv-item aqui é o da Previsão Orçamentária, NÃO o do bloco de previsto
+       do dashboard -- aquele é .pvd-item justamente para não cair nesta
+       regra, que transforma a linha numa plaquinha com sombra e margem. */
     .pv-item {
       background: var(--cinza-fundo);
       border: none !important;
@@ -5281,7 +5310,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=89"></script>
+  <script src="app.js?v=90"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

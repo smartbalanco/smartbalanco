@@ -5629,18 +5629,19 @@ function preencherDashboard(d) {
         }).join("");
 
         item.innerHTML =
-          '<div class="li-esq">' +
-            '<div><b class="li-data">' + c.data + '</b> 💳 ' + escaparHtml(c.descricao) + selo + '</div>' +
-            '<div class="li-mov fatura-toggle" onclick="alternarItensFatura(\'' + idItens + '\', this)">' +
-              (c.itens || []).length + ' compras · ver' +
+          chipDeData(c.data) +
+          '<div class="li-corpo">' +
+            '<div class="li-l1">' +
+              '<span class="li-nome">💳 ' + escaparHtml(c.descricao) + selo + '</span>' +
+              '<span class="li-valor vermelho">' + formatarMoeda(c.valor) + '</span>' +
+            '</div>' +
+            '<div class="li-l2">' +
+              '<span class="li-mov fatura-toggle" onclick="alternarItensFatura(\'' + idItens + '\', this)">' +
+                (c.itens || []).length + ' compras · ver' +
+              '</span>' +
+              '<button class="btn-liquidar" onclick="liquidarFaturaNaTela(' + iFatura + ')">Liquidar</button>' +
             '</div>' +
             '<div class="fatura-itens" id="' + idItens + '">' + htmlItens + '</div>' +
-          '</div>' +
-          '<div class="li-dir">' +
-            '<span class="li-valor vermelho">' + formatarMoeda(c.valor) + '</span>' +
-            '<div class="li-botoes">' +
-              '<button class="btn-liquidar" onclick="liquidarFaturaNaTela(' + iFatura + ')">Liquidar fatura</button>' +
-            '</div>' +
           '</div>';
         listaVencer.appendChild(item);
         return;
@@ -5653,13 +5654,14 @@ function preencherDashboard(d) {
         : '';
 
       item.innerHTML =
-        '<div class="li-esq">' +
-          '<div><b class="li-data">' + c.data + '</b> ' + escaparHtml(c.descricao) + selo + '</div>' +
-          '<div class="li-mov">MOV-' + c.numMov + '</div>' +
-        '</div>' +
-        '<div class="li-dir">' +
-          '<span class="li-valor vermelho">' + formatarMoeda(c.valor) + '</span>' +
-          '<div class="li-botoes">' +
+        chipDeData(c.data) +
+        '<div class="li-corpo">' +
+          '<div class="li-l1">' +
+            '<span class="li-nome">' + escaparHtml(c.descricao) + selo + '</span>' +
+            '<span class="li-valor vermelho">' + formatarMoeda(c.valor) + '</span>' +
+          '</div>' +
+          '<div class="li-l2">' +
+            '<span class="li-mov">MOV-' + c.numMov + '</span>' +
             btnCopiar +
             '<button class="btn-liquidar" onclick="abrirLiquidacao(' + c.numMov + ')">Liquidar</button>' +
           '</div>' +
@@ -9089,34 +9091,34 @@ function pintarPrevisto(d, s, receitaDaConta) {
   let html = "";
 
   if (fixas > 0) {
-    html += '<div class="pv-item"><span>fixas ainda não lançadas</span><b>' +
+    html += '<div class="pvd-item"><span>fixas ainda não lançadas</span><b>' +
             formatarMoeda(fixas) + '</b></div>';
     if (itens.length) {
-      html += '<div class="pv-lista">' + itens.map(function (f) {
-        return '<div class="pv-sub-item"><span>' + escaparHtml(f.descricao) +
+      html += '<div class="pvd-lista">' + itens.map(function (f) {
+        return '<div class="pvd-sub-item"><span>' + escaparHtml(f.descricao) +
                ' · dia ' + f.dia + '</span><b>' + formatarMoeda(f.valor) + '</b></div>';
       }).join("") + '</div>';
     }
   }
 
   if (planos > 0) {
-    html += '<div class="pv-item roxo"><span>planos de compra em aberto</span><b>' +
+    html += '<div class="pvd-item roxo"><span>planos de compra em aberto</span><b>' +
             formatarMoeda(planos) + '</b></div>';
   }
 
-  html += '<div class="pv-total"><span>despesas se tudo acontecer</span><b>' +
+  html += '<div class="pvd-total"><span>despesas se tudo acontecer</span><b>' +
           formatarMoeda(esperadas) + '</b></div>';
 
   if (receita > 0) {
     const sobraria = receita - esperadas;
-    html += '<div class="pv-total" style="border:none; margin-top:0; padding-top:4px">' +
+    html += '<div class="pvd-total" style="border:none; margin-top:0; padding-top:4px">' +
         '<span>' + (sobraria >= 0 ? "sobra que restaria" : "faltaria") + '</span>' +
         '<b style="color:' + (sobraria >= 0 ? "var(--verde)" : "var(--vermelho)") + '">' +
           formatarMoeda(Math.abs(sobraria)) + '</b>' +
       '</div>';
   }
 
-  html += '<div class="pv-nota">' +
+  html += '<div class="pvd-nota">' +
     (planos > 0 && fixas > 0
       ? "As fixas vão chegar; os planos são vontade. Nenhum dos dois foi lançado."
       : (planos > 0
@@ -9156,6 +9158,24 @@ function explicarBaseDeCalculo() {
   mostrarToast(explicandoSuposicao
     ? "Este mês ainda não tem receita lançada, então o cálculo usa a última que entrou de verdade. É estimativa, por isso o ≈."
     : "O mês gasta o que entrou no mês anterior. Por isso a base é a receita do mês passado, e não a deste mês.");
+}
+
+/**
+ * O dia do vencimento numa plaquinha, à esquerda da linha.
+ *
+ * A data era um "01/10" em negrito colado no começo do nome, e o nome
+ * empurrava tudo: "Fatura Cartão" numa linha e "C XP" na outra, com o botão
+ * descendo junto. Com a data fora do fluxo do texto, o nome fica com a
+ * largura inteira e nada mais quebra por causa dela.
+ */
+function chipDeData(data) {
+  const p = (data || "").toString().split("/");
+  const dia = p[0] || "--";
+  const meses = ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN",
+                 "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"];
+  const mes = meses[(parseInt(p[1], 10) || 1) - 1] || "";
+
+  return '<span class="li-chip"><b>' + escaparHtml(dia) + '</b><i>' + mes + '</i></span>';
 }
 
 /**
