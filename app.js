@@ -5729,7 +5729,8 @@ function preencherDashboard(d) {
           '<span class="cv-num">' + formatarMoeda(c.atual) + '</span></div>' +
           '<div><span class="cv-label">Seguinte &middot; ' + escaparHtml(c.mesProxima) + '</span>' +
           '<span class="cv-num cinza">' + formatarMoeda(c.proxima) + '</span></div>' +
-        '</div>';
+        '</div>' +
+        blocoDeLimite(c);
       listaCartoes.appendChild(item);
     });
   }
@@ -9158,6 +9159,47 @@ function explicarBaseDeCalculo() {
   mostrarToast(explicandoSuposicao
     ? "Este mês ainda não tem receita lançada, então o cálculo usa a última que entrou de verdade. É estimativa, por isso o ≈."
     : "O mês gasta o que entrou no mês anterior. Por isso a base é a receita do mês passado, e não a deste mês.");
+}
+
+/**
+ * Quanto do limite do cartão está ocupado.
+ *
+ * O limite já estava na planilha (coluna B de 'Config Cartões') e já era
+ * lido -- o dashboard é que nunca tinha usado. E é o número que decide se
+ * uma compra cabe: a fatura aberta diz o que você vai pagar agora, o limite
+ * ocupado diz o que o banco está segurando.
+ *
+ * O ocupado inclui TODA parcela que ainda vai vencer, não só a fatura do
+ * mês. É assim que o banco conta, e contar diferente daria a impressão de
+ * folga que não existe.
+ */
+function blocoDeLimite(c) {
+  // Sem limite cadastrado não há barra: inventar um teto para desenhar a
+  // barra seria desenhar uma folga que ninguém informou.
+  if (!c.limite || c.usoPct === null || c.usoPct === undefined) {
+    return '<div class="lim-semdado">Limite não cadastrado para este cartão.</div>';
+  }
+
+  // Três faixas, e a cor muda de significado junto: perto do teto, o que
+  // importa não é quanto foi usado, é quanto falta.
+  const cor = c.usoPct >= 90 ? "var(--vermelho)"
+            : (c.usoPct >= 70 ? "var(--laranja)" : "var(--verde)");
+
+  return '<div class="lim-bloco">' +
+      '<div class="lim-topo">' +
+        '<span>' + formatarMoeda(c.comprometido) + ' de ' + formatarMoeda(c.limite) + '</span>' +
+        '<b style="color:' + cor + '">' + c.usoPct.toFixed(0) + '%</b>' +
+      '</div>' +
+      '<div class="lim-barra">' +
+        '<span style="width:' + c.usoPct + '%; background:' + cor + '"></span>' +
+      '</div>' +
+      '<div class="lim-livre">' +
+        (c.livre > 0
+          ? '<b>' + formatarMoeda(c.livre) + '</b> livres'
+          : '<b style="color:var(--vermelho)">sem limite livre</b>') +
+        ' &middot; inclui as parcelas que ainda vão vencer' +
+      '</div>' +
+    '</div>';
 }
 
 /**

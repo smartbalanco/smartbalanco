@@ -1122,6 +1122,26 @@
     }
     .linha-item.vencida .li-chip b { color: var(--vermelho); }
 
+    /* ---- limite do cartão ---- */
+    .lim-bloco { margin-top: 11px; }
+    .lim-topo {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 11px; color: var(--cinza-texto); margin-bottom: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+    .lim-topo b { font-size: 12.5px; font-weight: 800; }
+    .lim-barra {
+      display: flex; height: 9px; padding: 2px; border-radius: 999px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      overflow: hidden;
+    }
+    .lim-barra > span { border-radius: 999px; min-width: 2px; }
+    .lim-livre { font-size: 10.5px; color: var(--cinza-texto); margin-top: 6px; }
+    .lim-livre b { color: #1e293b; }
+    .lim-semdado {
+      font-size: 10.5px; color: var(--cinza-texto); margin-top: 10px; font-style: italic;
+    }
+
     /* ---- a linha de conta a vencer ---- */
     /* Duas colunas: a plaquinha da data e o corpo. Antes era esquerda/direita
        com o botão numa coluna própria, e o nome disputava largura com ele --
@@ -5310,7 +5330,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=90"></script>
+  <script src="app.js?v=91"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
