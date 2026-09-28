@@ -5674,6 +5674,24 @@ async function recarregarDados(conferirOutrosAparelhos) {
 // ============================================================================
 // FORMATAÇÃO
 // ============================================================================
+/**
+ * O nome da categoria, sem o codigo.
+ *
+ * "2.3.009. Viagem de App" vira "Viagem de App". O codigo e chave de
+ * planilha: nao diz nada na tela e ocupa a largura que o nome queria.
+ *
+ * Função única de propósito. A regra estava escrita duas vezes, e numa delas
+ * as barras invertidas se perderam na edição: a expressão passou a procurar a
+ * letra "d" em vez de um dígito, o que não casa com nada. E falha CALADA —
+ * o código continuava aparecendo na tela e nada acusava.
+ */
+const CODIGO_DA_CATEGORIA = /^[\d.]+\s*/;
+
+function nomeDaCategoria(cat) {
+  const c = (cat || "").toString();
+  return c.replace(CODIGO_DA_CATEGORIA, "") || c;
+}
+
 function formatarMoeda(valor) {
   if (isNaN(valor) || valor === null) return "R$ 0,00";
   return "R$ " + Number(valor).toFixed(2).replace(".", ",").replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
@@ -5859,7 +5877,7 @@ function preencherDashboard(d) {
       item.className = "cat-item";
       // O código da categoria ("2.3.007.") sai da tela. Ele é chave de
       // planilha, não nome de gasto -- e ocupava a largura que o nome queria.
-      const nome = c.categoria.replace(/^[\d.]+\s*/, "") || c.categoria;
+      const nome = nomeDaCategoria(c.categoria);
 
       // Variacao que arredonda para zero vira "igual". Uma seta para cima com
       // 0% ao lado e pior que nao mostrar nada: aponta uma mudanca que nao houve.
@@ -8408,6 +8426,39 @@ function renderizarAprovacoes() {
     return;
   }
 
+  // O que é IGUAL em todos sobe para um cabeçalho e some das linhas.
+  //
+  // Nos sete pendentes da tela, vencimento e método eram os mesmos em todos:
+  // catorze blocos rotulados repetindo a mesma informação, ocupando metade da
+  // altura da lista. O que não varia não distingue nada.
+  // Pela MAIORIA, não por unanimidade.
+  //
+  // A primeira versão só subia o campo quando era igual em TODOS -- e bastava
+  // um Pix no meio de seis compras no cartão para os seis voltarem a repetir
+  // "01/11/2026 · Cartão C XP" um por um. Agora o comum sobe e só quem foge
+  // dele carrega o chip, que é justamente onde a informação está.
+  const vencComum = valorDaMaioria(gruposAprovacao, function (g) { return g.primeiroVenc || ""; });
+  const metodoComum = valorDaMaioria(gruposAprovacao, function (g) { return (g.metodo || "").trim(); });
+
+  if (vencComum || metodoComum) {
+    const cab = document.createElement("div");
+    cab.className = "ap-comum";
+    cab.innerHTML =
+      (vencComum
+        ? '<span>' + (vencComum.todos ? "todos vencem em " : "a maioria vence em ") +
+          '<b>' + formatarDataBr(vencComum.valor) + '</b></span>'
+        : '') +
+      (metodoComum
+        ? '<span>' + (metodoComum.todos ? "todos no " : "a maioria no ") +
+          '<b>' + escaparHtml(metodoComum.valor) + '</b></span>'
+        : '');
+    lista.appendChild(cab);
+  }
+
+  const caixa = document.createElement("div");
+  caixa.className = "card";
+  lista.appendChild(caixa);
+
   gruposAprovacao.forEach(function (g, idx) {
     const faixa = (g.movInicial === g.movFinal)
       ? "MOV-" + g.movInicial
@@ -8417,54 +8468,117 @@ function renderizarAprovacoes() {
       ? g.totalParcelas + "x de " + formatarMoeda(g.valorParcela)
       : "À vista";
 
-    const card = document.createElement("div");
-    // Pré-lançamento sai amarelo: veio de leitura automática (notificação do
-    // banco) e ainda não passou por olho humano. A cor é o aviso — no meio de
-    // uma lista de aprovações, ele exige mais atenção que os outros.
-    // Duas origens automáticas, duas aparências. As duas pedem conferência, mas
-    // erram de jeitos diferentes: a foto erra a categoria, a notificação erra o
-    // nome do estabelecimento ("PAG*PADAR IA CENT"). Saber qual é de relance
-    // muda o que você vai conferir.
     const daNotificacao = (g.origem === "notificacao");
-    card.className = "card card-aprov" +
+
+    const linha = document.createElement("div");
+    linha.className = "ap-linha" +
       (g.preLancamento ? (daNotificacao ? " do-cartao" : " pre-lancamento") : "");
 
-    const avisoPre = !g.preLancamento ? '' :
-      '<div class="ap-pre-aviso' + (daNotificacao ? ' do-cartao' : '') + '">' +
+    // Chips: só o que DIFERE do cabeçalho. Repetir o comum aqui desfaria todo
+    // o ganho de tê-lo subido.
+    const chips = [];
+    // Sem o codigo da categoria, como nos Maiores Gastos: "2.3.009." e chave
+    // de planilha, e aqui ele estourava o chip e quebrava a linha em duas.
+    if (g.categoria) {
+      const catCurta = nomeDaCategoria(g.categoria);
+      chips.push('<span class="ap-l-chip">' + escaparHtml(catCurta) + '</span>');
+    }
+    else chips.push('<span class="ap-l-chip alerta">sem categoria</span>');
+
+    if (g.preLancamento) {
+      chips.push('<span class="ap-l-chip origem' + (daNotificacao ? '' : ' doc') + '">' +
+        (daNotificacao ? '💳 do cartão' : '⚡ do documento') + '</span>');
+    }
+    // Só o que FOGE do cabeçalho. É o chip que diz "este aqui é diferente".
+    if (!vencComum || (g.primeiroVenc || "") !== vencComum.valor) {
+      chips.push('<span class="ap-l-chip destaque">' + formatarDataBr(g.primeiroVenc) + '</span>');
+    }
+    if (!metodoComum || (g.metodo || "").trim() !== metodoComum.valor) {
+      chips.push('<span class="ap-l-chip destaque">' + escaparHtml(g.metodo || "-") + '</span>');
+    }
+    if (g.totalParcelas > 1) chips.push('<span class="ap-l-chip">' + g.totalParcelas + 'x</span>');
+
+    chips.push('<span>' + faixa + '</span>');
+
+    const aviso = !g.preLancamento ? '' :
+      '<div class="ap-det-nota">' +
         (daNotificacao
-          ? '<b>💳 Automático do cartão</b> · lido da notificação do banco. ' +
-            'Confira o nome e a categoria antes de aprovar.'
-          : '<b>⚡ Pré-lançamento</b> · lido do documento. ' +
-            'Confira antes de aprovar.') +
-        '<button class="ap-pre-foto" onclick="anexarFotoAoPreLancamento(\'' +
-          g.chave + '\')">📷 Melhorar com foto do comprovante</button>' +
+          ? 'Lido da notificação do banco. O nome do estabelecimento costuma vir abreviado — confira antes de aprovar.'
+          : 'Lido do documento. Confira a categoria antes de aprovar.') +
+      '</div>' +
+      '<button class="ap-det-foto" onclick="event.stopPropagation(); anexarFotoAoPreLancamento(\'' +
+        g.chave + '\')">📷 Melhorar com foto do comprovante</button>';
+
+    linha.innerHTML =
+      '<div class="ap-l-topo" onclick="alternarDetalheAprovacao(' + idx + ')">' +
+        '<span class="ap-l-desc">' + escaparHtml(g.descricao) + '</span>' +
+      '</div>' +
+      '<div class="ap-l-sub" onclick="alternarDetalheAprovacao(' + idx + ')">' +
+        '<b class="ap-l-valor">' + formatarMoeda(g.valorTotal) + '</b>' +
+        chips.join("") +
+      '</div>' +
+      '<div class="ap-l-acoes">' +
+        '<button class="ap-ic rej" aria-label="Rejeitar" title="Rejeitar" ' +
+          'onclick="confirmarRejeicao(' + idx + ')">✕</button>' +
+        '<button class="ap-ic" aria-label="Editar" title="Editar" ' +
+          'onclick="abrirEdicaoAprovacao(' + idx + ')">✎</button>' +
+        '<button class="ap-ic ok" aria-label="Aprovar" title="Aprovar" ' +
+          'onclick="aprovarDireto(' + idx + ')">✓</button>' +
+      '</div>' +
+      '<div class="ap-l-det" id="ap-det-' + idx + '" style="display:none;">' +
+        '<div class="ap-det-grade">' +
+          '<div class="ap-det-item"><span>Vencimento</span><b>' +
+            formatarDataBr(g.primeiroVenc) + '</b></div>' +
+          '<div class="ap-det-item"><span>Método</span><b>' +
+            escaparHtml(g.metodo || "-") + '</b></div>' +
+          '<div class="ap-det-item"><span>Parcelas</span><b>' + parcTxt + '</b></div>' +
+        '</div>' +
+        '<div class="ap-det-nota"><b>' + escaparHtml(g.descricao) + '</b></div>' +
+        aviso +
       '</div>';
 
-    card.innerHTML =
-      avisoPre +
-      '<div class="ap-topo">' +
-        '<div class="ap-desc">' + escaparHtml(g.descricao) + '</div>' +
-        '<div class="ap-mov">' + faixa + '</div>' +
-      '</div>' +
-
-      '<div class="ap-valor">' + formatarMoeda(g.valorTotal) +
-        '<span class="ap-parc">' + parcTxt + '</span>' +
-      '</div>' +
-
-      '<div class="ap-infos">' +
-        '<div><span>Vencimento</span><b>' + formatarDataBr(g.primeiroVenc) + '</b></div>' +
-        '<div><span>Método</span><b>' + escaparHtml(g.metodo || "-") + '</b></div>' +
-      '</div>' +
-      '<div class="ap-cat">' + escaparHtml(g.categoria || "sem categoria") + '</div>' +
-
-      '<div class="ap-acoes">' +
-        '<button class="ap-btn rejeitar" onclick="confirmarRejeicao(' + idx + ')">🗑️ Rejeitar</button>' +
-        '<button class="ap-btn editar" onclick="abrirEdicaoAprovacao(' + idx + ')">✏️ Editar</button>' +
-        '<button class="ap-btn aprovar" onclick="aprovarDireto(' + idx + ')">✅ Aprovar</button>' +
-      '</div>';
-
-    lista.appendChild(card);
+    caixa.appendChild(linha);
   });
+}
+
+/**
+ * O valor mais repetido de um campo, quando ele domina a lista.
+ *
+ * Abaixo de 60% não é "o comum", é só o mais frequente -- e subir isso para o
+ * cabeçalho faria metade das linhas carregarem um chip de exceção, que é pior
+ * que não ter cabeçalho nenhum.
+ */
+function valorDaMaioria(itens, ler) {
+  if (itens.length < 2) return null;
+
+  const contagem = {};
+  itens.forEach(function (g) {
+    const v = ler(g);
+    if (!v) return;
+    contagem[v] = (contagem[v] || 0) + 1;
+  });
+
+  let melhor = null, quantos = 0;
+  Object.keys(contagem).forEach(function (v) {
+    if (contagem[v] > quantos) { melhor = v; quantos = contagem[v]; }
+  });
+
+  if (!melhor || quantos / itens.length < 0.6) return null;
+  return { valor: melhor, quantos: quantos, todos: quantos === itens.length };
+}
+
+/**
+ * Abre o detalhe de um lançamento aguardando aprovação.
+ *
+ * Fechado por padrão: vencimento, método e parcelas são iguais na maioria das
+ * vezes, e mostrá-los sempre foi o que fez sete pendentes virarem três telas.
+ * Quando um deles é diferente do resto, ele já aparece como chip na linha --
+ * então abrir é para conferir, não para descobrir.
+ */
+function alternarDetalheAprovacao(idx) {
+  const el = document.getElementById("ap-det-" + idx);
+  if (!el) return;
+  el.style.display = (el.style.display === "none") ? "block" : "none";
 }
 
 function atualizarBadgeAprovacoes(n) {

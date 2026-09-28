@@ -1134,6 +1134,92 @@
     }
     .linha-item.vencida .li-chip b { color: var(--vermelho); }
 
+    /* ---- aprovações: uma linha por lançamento ---- */
+    /* Eram cards de ~350px cada. Sete pendentes davam três telas de rolagem
+       para aprovar R$ 531 -- e vencimento e método se repetiam IGUAIS em
+       todos, ocupando metade da altura sem dizer nada. */
+    .ap-comum {
+      display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline;
+      font-size: 11px; color: var(--cinza-texto);
+      padding: 11px 14px; margin-bottom: 12px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 12px;
+    }
+    .ap-comum b { color: #1e293b; font-weight: 700; }
+
+    .ap-linha {
+      display: grid; grid-template-columns: 1fr auto; gap: 5px 10px;
+      align-items: center; padding: 12px 0;
+      border-bottom: 1px solid var(--borda);
+    }
+    .ap-linha:last-child { border-bottom: none; }
+    /* Origem automática: um fio na lateral, não um bloco de aviso. O texto
+       inteiro continua existindo, dentro do detalhe. */
+    .ap-linha.do-cartao { border-left: 3px solid var(--azul-claro); padding-left: 10px; }
+    .ap-linha.pre-lancamento { border-left: 3px solid var(--laranja); padding-left: 10px; }
+
+    .ap-l-topo { grid-column: 1; cursor: pointer; min-width: 0; }
+    /* Duas linhas no maximo. Nome longo e cortado aqui e aparece inteiro no
+       detalhe -- aprovar sem poder ler o nome todo seria pior que rolar, mas
+       tres linhas por item era o que fazia sete pendentes virarem tres telas. */
+    .ap-l-desc {
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden; font-size: 13.5px; font-weight: 700;
+      color: #1e293b; line-height: 1.3;
+    }
+    .ap-l-valor {
+      font-size: 13px; font-weight: 800; color: var(--azul);
+      white-space: nowrap; font-variant-numeric: tabular-nums; margin-right: 2px;
+    }
+    .ap-l-sub {
+      grid-column: 1; display: flex; flex-wrap: wrap; gap: 5px 8px;
+      align-items: center; font-size: 10.5px; color: var(--cinza-texto); cursor: pointer;
+    }
+    .ap-l-chip {
+      padding: 2px 7px; border-radius: 999px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+    }
+    /* Sem categoria é AVISO, não informação: aprovar assim estraga o
+       relatório de categorias depois, e o erro não aparece na hora. */
+    .ap-l-chip.alerta { color: var(--laranja); font-weight: 700; }
+    /* Este lançamento foge do cabeçalho -- vence noutro dia ou é de outro
+       método. É a única razão de o chip existir, então ele se destaca. */
+    .ap-l-chip.destaque { color: var(--azul); font-weight: 700; }
+    .ap-l-chip.origem { color: var(--azul-claro); font-weight: 700; }
+    .ap-l-chip.origem.doc { color: var(--laranja); }
+
+    .ap-l-acoes { grid-column: 2; grid-row: 1 / span 2; display: flex; gap: 6px; }
+    .ap-ic {
+      width: 36px; height: 36px; flex-shrink: 0; border-radius: 11px;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+      border: none; cursor: pointer; font-size: 15px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--cinza-texto);
+    }
+    .ap-ic:active { box-shadow: var(--afundado-leve); }
+    .ap-ic.rej { color: var(--vermelho); }
+    .ap-ic.ok { background: var(--verde) !important; color: #fff; box-shadow: var(--relevo-baixo); }
+
+    .ap-l-det {
+      grid-column: 1 / -1; margin-top: 8px; padding: 11px 13px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 12px;
+    }
+    .ap-det-grade { display: flex; flex-wrap: wrap; gap: 8px 22px; }
+    .ap-det-item { display: flex; flex-direction: column; gap: 1px; }
+    .ap-det-item span {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .5px;
+      color: var(--cinza-texto); text-transform: uppercase;
+    }
+    .ap-det-item b { font-size: 12px; color: #1e293b; }
+    .ap-det-nota { font-size: 10.5px; color: var(--cinza-texto); line-height: 1.5; margin-top: 9px; }
+    .ap-det-foto {
+      margin-top: 9px; width: 100%; padding: 9px; border: none; cursor: pointer;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+      border-radius: 10px; font-family: inherit; font-size: 11.5px;
+      font-weight: 600; color: var(--azul);
+    }
+
     /* ---- aviso de contas vencidas ---- */
     /* Relevo, não fundo colorido: neste app o que separa uma superfície é a
        sombra. A cor entra na marca, no número e na seta. */
@@ -1780,10 +1866,15 @@
       cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
     }
     .abas button.ativa { background: rgba(255,255,255,0.92); color: var(--azul); }
-    #badge-aprov {
-      display: none; background: var(--vermelho); color: #fff;
-      border-radius: 10px; min-width: 18px; height: 18px; padding: 0 5px;
-      font-size: 11px; font-weight: 700; align-items: center; justify-content: center;
+    /* O contador vinha DENTRO do fluxo do botão e somava largura: com ele, o
+       rótulo não cabia mais na aba e era cortado dos dois lados
+       ("provações"). Agora ele flutua no canto e não empurra nada. */
+    #badge-aprov, #badge-planos {
+      display: none; position: absolute; top: 1px; right: 2px;
+      background: var(--vermelho); color: #fff;
+      border-radius: 999px; min-width: 15px; height: 15px; padding: 0 4px;
+      font-size: 9.5px; font-weight: 800; line-height: 15px; text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,.25);
     }
 
     /* ---------- CARDS DE APROVAÇÃO ---------- */
@@ -3126,7 +3217,9 @@
          empurra as vizinhas para fora do trilho. */
       flex: 1 1 0;
       min-width: 0;
-      overflow: hidden;
+      overflow: visible;
+      /* Âncora do contador, que é posicionado no canto do botão. */
+      position: relative;
     }
     .abas button.ativa {
       background: var(--cinza-fundo) !important;
@@ -5399,7 +5492,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=94"></script>
+  <script src="app.js?v=95"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
