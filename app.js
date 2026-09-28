@@ -1467,23 +1467,6 @@ async function carregarPlanos() {
   }
 }
 
-/**
- * Abre a lista das fixas previstas do mês.
- *
- * Fechada por padrão: o número importa sempre, a lista só quando ele surpreende.
- */
-function alternarFixasPrevistas() {
-  const lista = document.getElementById("lf-lista");
-  const ver = document.getElementById("lf-ver");
-  if (!lista) return;
-
-  const aberta = lista.style.display !== "none";
-  lista.style.display = aberta ? "none" : "block";
-  if (ver) ver.textContent = aberta
-    ? "ver as " + lista.children.length
-    : "esconder";
-}
-
 function pintarCofre(valor) {
   const alvo = document.getElementById("planos-cofre");
   if (!valor) { alvo.innerHTML = ""; return; }
@@ -5563,72 +5546,36 @@ function preencherDashboard(d) {
 
   // ---- SALDO (base = receita do mês anterior) ----
   const s = d.saldo || {};
+
+  // Mês futuro: a receita do mês base ainda não foi lançada, e o saldo do
+  // servidor sai de uma receita ZERO -- o que faz um mês tranquilo aparecer
+  // como "FALTA R$ 349". A última receita conhecida entra no lugar, e a tela
+  // DIZ que está supondo: número supondo é útil, número errado não.
+  const supondo = !(s.receitaBase > 0) && s.receitaPrevista > 0;
+  const receitaDaConta = s.receitaBase > 0 ? s.receitaBase : (s.receitaPrevista || 0);
+  const sobraReal = supondo ? (receitaDaConta - (s.despesas || 0)) : (s.saldo || 0);
+
   const elSaldo = document.getElementById("saldo-valor");
-  elSaldo.textContent = formatarMoeda(s.saldo);
-  elSaldo.style.color = (s.saldo >= 0) ? "#2e9e6b" : "#dc2626";
+  elSaldo.textContent = (supondo ? "≈ " : "") + formatarMoeda(sobraReal);
+  elSaldo.style.color = (sobraReal >= 0) ? "#2e9e6b" : "#dc2626";
 
-  document.getElementById("receita-base-label").textContent = "Receita de " + (d.mesBaseNome || "-");
-  document.getElementById("saldo-receitas").textContent = formatarMoeda(s.receitaBase);
-  document.getElementById("saldo-despesas").textContent = formatarMoeda(s.despesas);
+  const ds = d.despesasStatus || {};
+  pintarBarraDoSaldo(d, s, ds, supondo, receitaDaConta, sobraReal);
+  pintarPrevisto(d, s, receitaDaConta);
 
-  // As fixas que ainda não viraram lançamento neste mês. Vêm ANTES dos planos
-  // porque são mais certas: conta cadastrada vai chegar, plano é vontade.
-  const elFixas = document.getElementById("linha-fixas");
-  if (s.fixasPrevistas > 0) {
-    const itens = s.fixasPrevistasItens || [];
-    elFixas.style.display = "block";
-    elFixas.innerHTML =
-      '<div class="lf-topo" onclick="alternarFixasPrevistas()">' +
-        '<span class="lf-rot">+ fixas ainda não lançadas</span>' +
-        '<span class="lf-val">' + formatarMoeda(s.fixasPrevistas) + '</span>' +
-      '</div>' +
-      '<div class="lf-total">despesas esperadas <b>' +
-        formatarMoeda(s.despesasEsperadas) + '</b></div>' +
-      (s.receitaPrevista > 0
-        ? '<div class="lf-nota">Sem receita lançada no mês base. Usando a última ' +
-          'conhecida (' + formatarMoeda(s.receitaPrevista) + ') como previsão, o ' +
-          'saldo esperado é <b>' + formatarMoeda(s.saldoEsperado) + '</b>.</div>'
-        : '') +
-      '<div class="lf-lista" id="lf-lista" style="display:none;">' +
-        itens.map(function (f) {
-          return '<div class="lf-item"><span>' + escaparHtml(f.descricao) +
-                 ' · dia ' + f.dia + '</span><b>' + formatarMoeda(f.valor) + '</b></div>';
-        }).join("") +
-      '</div>' +
-      '<div class="lf-ver" id="lf-ver" onclick="alternarFixasPrevistas()">ver as ' +
-        itens.length + '</div>';
-  } else {
-    elFixas.style.display = "none";
-  }
+  document.getElementById("saldo-rotulo").textContent =
+    (sobraReal >= 0 ? (supondo ? "SOBRA PREVISTA EM " : "SOBRA EM ") : "FALTA EM ") +
+    (d.mesReferencia || "").split("/")[0].toUpperCase();
 
-  // A linha só aparece quando há plano aberto pesando no mês: zero seria
-  // uma linha a mais dizendo nada.
-  const elPlanos = document.getElementById("linha-planos");
-  if (s.planos > 0) {
-    elPlanos.style.display = "block";
-    elPlanos.innerHTML =
-      '<div class="lf-topo">' +
-        '<span class="lf-rot">+ planos de compra em aberto</span>' +
-        '<span class="lf-val">' + formatarMoeda(s.planos) + '</span>' +
-      '</div>' +
-      '<div class="lf-total">' +
-        (s.fixasPrevistas > 0 ? 'esperadas + planos' : 'despesas com os planos') +
-        ' <b>' + formatarMoeda(s.despesasComPlanos) + '</b></div>' +
-      '<div class="lf-nota">Nada disso foi comprado ainda. É o que aconteceria ' +
-        'se todos os planos abertos virassem compra.</div>';
-  } else {
-    elPlanos.style.display = "none";
-  }
-
-  document.getElementById("aviso-base").textContent =
-    "Base de cálculo: receita de " + (d.mesBaseNome || "-") + " (o que entrou no mês anterior é o que se gasta agora).";
+  // A explicação virou um link de uma linha. O texto inteiro continua
+  // existindo, atrás de um toque -- ele importa uma vez, não toda abertura.
+  explicandoSuposicao = supondo;
+  document.getElementById("aviso-base").textContent = supondo
+    ? "supondo a última receita conhecida · por quê?"
+    : "sobre a receita de " + (d.mesBaseNome || "-").toLowerCase() + " · por quê?";
 
   document.getElementById("receita-mes-atual").textContent =
     "Receita já recebida em " + (d.mesReferencia || "") + ": " + formatarMoeda(s.receitaDoMes);
-
-  const ds = d.despesasStatus || {};
-  document.getElementById("desp-pagas").textContent = formatarMoeda(ds.pagas);
-  document.getElementById("desp-pendentes").textContent = formatarMoeda(ds.pendentes);
 
   // ---- SCORE ----
   const sc = d.score || {};
@@ -9026,6 +8973,168 @@ async function alternarPlanosNoRelatorio() {
   } catch (e) {
     mostrarToast("⚠ Sem conexão.");
   }
+}
+
+/**
+ * A barra: para onde vai a receita do mês.
+ *
+ * Substituiu quatro números soltos (receita, despesas, pagas, pendentes) que
+ * contavam a mesma história duas vezes. A barra diz o mesmo com PROPORÇÃO --
+ * dá para ver que o mês está no limite sem ler número nenhum -- e os quatro
+ * valores continuam escritos embaixo, na legenda.
+ *
+ * A base é a receita, não a despesa: a pergunta é quanto do que entrou já
+ * está comprometido.
+ */
+function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra) {
+  const pagas = Math.max(0, ds.pagas || 0);
+  const pendentes = Math.max(0, ds.pendentes || 0);
+
+  // A suposição e a sobra vêm DE FORA, já decididas por quem pintou o herói.
+  // Recalcular aqui foi o que deixou o número de cima dizer "falta" enquanto
+  // a barra mostrava o mês quase vazio -- dois cálculos para a mesma coisa.
+  const bloco = document.getElementById("sd-barra-bloco");
+
+  // Sem receita nenhuma não há proporção possível: a barra some e sobram os
+  // números. Uma barra cheia de despesa sobre base zero diria "100% gasto",
+  // o que não é verdade -- é "não sei".
+  if (!(receita > 0) && !(pagas + pendentes > 0)) {
+    bloco.style.display = "none";
+    return;
+  }
+  bloco.style.display = "block";
+
+  document.getElementById("sd-barra-rotulo").textContent =
+    supondo ? "PARA ONDE IRIA" : "PARA ONDE VAI";
+  document.getElementById("sd-barra-total").textContent = formatarMoeda(receita);
+
+  // Estourou a receita: a barra fica cheia de despesa e não há verde. Fingir
+  // uma fatia de sobra num mês negativo seria mentir na única coisa que a
+  // barra existe para mostrar.
+  const teto = Math.max(receita, pagas + pendentes, 1);
+  const pct = function (v) { return Math.max(0, (v / teto) * 100); };
+
+  const faixas = [];
+  if (pagas > 0) faixas.push('<span style="width:' + pct(pagas) + '%; background:var(--azul)"></span>');
+  if (pendentes > 0) faixas.push('<span style="width:' + pct(pendentes) + '%; background:var(--laranja)"></span>');
+  if (sobra > 0) faixas.push('<span style="flex-grow:1; background:var(--verde)"></span>');
+  document.getElementById("sd-barra").innerHTML = faixas.join("");
+
+  const linha = function (cor, nome, valor, corNum) {
+    return '<div class="sd-linha">' +
+        '<span class="sd-ponto" style="background:' + cor + '"></span>' +
+        '<span class="sd-nome">' + nome + '</span>' +
+        '<span class="sd-num"' + (corNum ? ' style="color:' + corNum + '"' : '') + '>' +
+          formatarMoeda(valor) + '</span>' +
+      '</div>';
+  };
+
+  document.getElementById("sd-legenda").innerHTML =
+    linha("var(--azul)", "já pago", pagas) +
+    linha("var(--laranja)", "a pagar ainda", pendentes) +
+    (sobra >= 0
+      ? linha("var(--verde)", supondo ? "sobraria" : "sobra", sobra, "var(--verde)")
+      : linha("var(--vermelho)", "falta", Math.abs(sobra), "var(--vermelho)"));
+}
+
+/**
+ * O bloco do que ainda não aconteceu: fixas não lançadas + planos de compra.
+ *
+ * Fechado por padrão, e FORA do card do saldo. Os dois moravam lá dentro, com
+ * o mesmo peso visual do dinheiro real -- e era isso que fazia a tela parecer
+ * uma pilha de números. Aqui o real fica em cima e a suposição embaixo, que é
+ * a mesma regra que o resto do app já segue.
+ */
+function pintarPrevisto(d, s, receitaDaConta) {
+  const bloco = document.getElementById("bloco-previsto");
+  const fixas = s.fixasPrevistas || 0;
+  const planos = s.planos || 0;
+  const total = fixas + planos;
+
+  if (!(total > 0)) { bloco.style.display = "none"; return; }
+  bloco.style.display = "block";
+
+  const partes = [];
+  if (fixas > 0) partes.push("contas fixas");
+  if (planos > 0) partes.push("planos de compra");
+
+  document.getElementById("pv-sub").textContent = partes.join(" e ");
+  document.getElementById("pv-val").textContent = "+ " + formatarMoeda(total);
+
+  const itens = s.fixasPrevistasItens || [];
+  const esperadas = (s.despesas || 0) + total;
+  const receita = receitaDaConta || 0;
+
+  let html = "";
+
+  if (fixas > 0) {
+    html += '<div class="pv-item"><span>fixas ainda não lançadas</span><b>' +
+            formatarMoeda(fixas) + '</b></div>';
+    if (itens.length) {
+      html += '<div class="pv-lista">' + itens.map(function (f) {
+        return '<div class="pv-sub-item"><span>' + escaparHtml(f.descricao) +
+               ' · dia ' + f.dia + '</span><b>' + formatarMoeda(f.valor) + '</b></div>';
+      }).join("") + '</div>';
+    }
+  }
+
+  if (planos > 0) {
+    html += '<div class="pv-item roxo"><span>planos de compra em aberto</span><b>' +
+            formatarMoeda(planos) + '</b></div>';
+  }
+
+  html += '<div class="pv-total"><span>despesas se tudo acontecer</span><b>' +
+          formatarMoeda(esperadas) + '</b></div>';
+
+  if (receita > 0) {
+    const sobraria = receita - esperadas;
+    html += '<div class="pv-total" style="border:none; margin-top:0; padding-top:4px">' +
+        '<span>' + (sobraria >= 0 ? "sobra que restaria" : "faltaria") + '</span>' +
+        '<b style="color:' + (sobraria >= 0 ? "var(--verde)" : "var(--vermelho)") + '">' +
+          formatarMoeda(Math.abs(sobraria)) + '</b>' +
+      '</div>';
+  }
+
+  html += '<div class="pv-nota">' +
+    (planos > 0 && fixas > 0
+      ? "As fixas vão chegar; os planos são vontade. Nenhum dos dois foi lançado."
+      : (planos > 0
+        ? "Nada disso foi comprado. Os números de cima seguem valendo."
+        : "Contas cadastradas que ainda não viraram lançamento neste mês.")) +
+    '</div>';
+
+  document.getElementById("pv-corpo").innerHTML = html;
+}
+
+/**
+ * Abre e fecha o bloco do previsto.
+ *
+ * Nasce fechado: o total importa sempre, o detalhe só quando ele surpreende.
+ */
+function alternarPrevisto() {
+  const corpo = document.getElementById("pv-corpo");
+  const seta = document.getElementById("pv-seta");
+  const topo = document.getElementById("pv-topo");
+  if (!corpo) return;
+
+  const aberto = corpo.style.display !== "none";
+  corpo.style.display = aberto ? "none" : "block";
+  if (seta) seta.classList.toggle("aberta", !aberto);
+  if (topo) topo.setAttribute("aria-expanded", aberto ? "false" : "true");
+}
+
+/**
+ * O texto que estava sempre na tela, agora atrás de um toque.
+ *
+ * Ele explica uma regra do app que se entende UMA vez -- deixá-lo fixo custava
+ * mais altura que a receita e a despesa juntas, todo dia, para sempre.
+ */
+let explicandoSuposicao = false;
+
+function explicarBaseDeCalculo() {
+  mostrarToast(explicandoSuposicao
+    ? "Este mês ainda não tem receita lançada, então o cálculo usa a última que entrou de verdade. É estimativa, por isso o ≈."
+    : "O mês gasta o que entrou no mês anterior. Por isso a base é a receita do mês passado, e não a deste mês.");
 }
 
 // ---------- Renderiza o relatório ----------

@@ -139,6 +139,10 @@
 
     /* CONTEÚDO */
     .conteudo { padding: 16px; max-width: 620px; margin: 0 auto; transition: opacity 0.2s; }
+    /* Chão embaixo dos dois botões flutuantes. Sem isto o último card fica
+       PARCIALMENTE COBERTO por eles -- e não há rolagem que resolva, porque o
+       fim do conteúdo é o fim da rolagem. */
+    #conteudo-dash { padding-bottom: 170px; }
     .card {
       background: #fff; border: 1px solid var(--borda); border-radius: 14px;
       padding: 18px; margin-bottom: 14px;
@@ -685,23 +689,6 @@
     }
     .sim-outros-aviso.estoura { color: var(--vermelho); font-weight: 600; }
 
-    /* ---- a linha dos planos no dashboard ---- */
-    /* Mesmo molde da linha das fixas: as duas dizem "isto ainda não é real",
-       e duas caixas diferentes para a mesma ideia fariam procurar diferença
-       onde não há. */
-    .linha-planos {
-      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
-      border-radius: 12px; padding: 12px 14px; margin: 10px 0 4px;
-    }
-    .sim-ok {
-      font-size: 10.5px; color: var(--verde); margin-top: 9px;
-      line-height: 1.5; font-weight: 600;
-    }
-    .sim-aviso {
-      font-size: 10.5px; color: var(--laranja); margin-top: 9px;
-      line-height: 1.5; font-weight: 600;
-    }
-
     /* ---- barra de tarefas em segundo plano ---- */
     /* Acima da navegação e SEM cobrir a tela: o ponto dela é justamente a
        tela continuar utilizável enquanto a tarefa roda. */
@@ -730,6 +717,95 @@
       animation: bf-girar .7s linear infinite;
     }
     @keyframes bf-girar { to { transform: rotate(360deg); } }
+
+    /* ---- saldo: rótulo, "por quê" e a barra ---- */
+    .sd-rotulo {
+      font-size: 10.5px; font-weight: 700; letter-spacing: 1.1px;
+      color: var(--cinza-texto); margin-bottom: 3px;
+    }
+    /* A explicação era um parágrafo emoldurado que ocupava mais espaço que a
+       receita e a despesa juntas. Virou um link de uma linha. */
+    .sd-porque {
+      display: block; background: none !important; box-shadow: none !important;
+      border: none; padding: 0; margin: 4px 0 0; text-align: left;
+      font-family: inherit; font-size: 11px; color: var(--cinza-texto);
+      text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
+    }
+    .sd-barra-bloco { margin-top: 17px; }
+    .sd-barra-topo {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 10.5px; font-weight: 700; letter-spacing: .7px;
+      color: var(--cinza-texto); margin-bottom: 9px;
+    }
+    .sd-barra-topo b {
+      font-size: 12px; color: #1e293b; letter-spacing: 0;
+      font-variant-numeric: tabular-nums;
+    }
+    /* Afundada, como todo recipiente neste app: o relevo é que diz "aqui
+       dentro cabe alguma coisa". */
+    .sd-barra {
+      display: flex; gap: 2px; height: 22px; padding: 3px;
+      border-radius: 999px; background: var(--cinza-fundo);
+      box-shadow: var(--afundado-leve); overflow: hidden;
+    }
+    .sd-barra > span { border-radius: 999px; min-width: 3px; }
+    .sd-legenda { display: flex; flex-direction: column; gap: 7px; margin-top: 11px; }
+    .sd-linha { display: flex; align-items: center; gap: 8px; }
+    .sd-ponto { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+    .sd-nome { flex-grow: 1; font-size: 12px; color: var(--cinza-texto); }
+    .sd-num {
+      font-size: 12.5px; font-weight: 700; color: #1e293b;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ---- o que ainda não aconteceu ---- */
+    .previsto {
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 16px; padding: 0; margin: -4px 0 14px;
+    }
+    .pv-topo {
+      display: flex; align-items: center; gap: 11px; width: 100%;
+      background: none !important; box-shadow: none !important; border: none;
+      padding: 14px 16px; font-family: inherit; text-align: left; cursor: pointer;
+    }
+    /* Listrada em roxo: a mesma marca que o estudo dos seis meses usa para o
+       que ainda é vontade. Cor sozinha não diria isso. */
+    .pv-marca {
+      width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0;
+      background: repeating-linear-gradient(45deg, var(--roxo) 0 2px, transparent 2px 4px);
+      background-color: rgba(139, 92, 246, .18);
+    }
+    .pv-txt { display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0; }
+    .pv-titulo { font-size: 12.5px; font-weight: 700; color: var(--azul); }
+    .pv-sub { font-size: 10.5px; color: var(--cinza-texto); }
+    .pv-val {
+      font-size: 13.5px; font-weight: 700; color: var(--roxo);
+      font-variant-numeric: tabular-nums;
+    }
+    .pv-seta { font-size: 15px; color: var(--cinza-texto); transition: transform .15s ease; }
+    .pv-seta.aberta { transform: rotate(90deg); }
+    .pv-corpo { padding: 0 16px 15px; }
+    .pv-item {
+      display: flex; align-items: baseline; gap: 8px; padding: 4px 0;
+      font-size: 11.5px; color: var(--cinza-texto);
+    }
+    .pv-item span { flex-grow: 1; }
+    .pv-item b { font-weight: 700; color: #1e293b; font-variant-numeric: tabular-nums; }
+    .pv-item.roxo b { color: var(--roxo); }
+    .pv-total {
+      display: flex; align-items: baseline; gap: 8px;
+      border-top: 1px solid var(--borda); margin-top: 8px; padding-top: 10px;
+      font-size: 11.5px; font-weight: 600; color: #1e293b;
+    }
+    .pv-total span { flex-grow: 1; }
+    .pv-total b { font-size: 13.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .pv-nota { font-size: 10px; color: var(--cinza-texto); line-height: 1.5; margin-top: 10px; }
+    .pv-lista { margin-top: 9px; }
+    .pv-sub-item {
+      display: flex; align-items: baseline; gap: 8px; padding: 3px 0;
+      font-size: 11px; color: var(--cinza-texto);
+    }
+    .pv-sub-item span { flex-grow: 1; }
 
     /* ---- frequência de uso ---- */
     /* Cada faixa é um alvo de toque inteiro, não um rádio de 16px ao lado de
@@ -796,38 +872,6 @@
       position: absolute; bottom: 0; left: 0; right: 0; border-radius: 5px 5px 0 0;
       background: repeating-linear-gradient(45deg,
         var(--cinza-texto) 0 4px, transparent 4px 8px); opacity: .5;
-    }
-
-    /* ---- fixas previstas no dashboard ---- */
-    .linha-fixas {
-      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
-      border-radius: 12px; padding: 12px 14px; margin: 14px 0 4px;
-    }
-    .lf-topo {
-      display: flex; justify-content: space-between; align-items: baseline;
-      gap: 10px; cursor: pointer;
-    }
-    .lf-rot { font-size: 11.5px; color: var(--cinza-texto); font-weight: 600; }
-    .lf-val { font-size: 15px; color: var(--laranja); font-weight: 700; }
-    .lf-total {
-      display: flex; justify-content: space-between; align-items: baseline;
-      font-size: 11.5px; color: var(--cinza-texto); margin-top: 8px;
-      padding-top: 8px; border-top: 1px solid var(--borda);
-    }
-    .lf-total b { font-size: 15px; color: #1e293b; }
-    .lf-nota {
-      font-size: 10.5px; color: var(--cinza-texto); line-height: 1.5; margin-top: 8px;
-    }
-    .lf-nota b { color: #1e293b; }
-    .lf-lista { margin-top: 9px; }
-    .lf-item {
-      display: flex; justify-content: space-between; align-items: baseline;
-      font-size: 11px; color: var(--cinza-texto); padding: 4px 0;
-    }
-    .lf-item b { color: #1e293b; }
-    .lf-ver {
-      font-size: 10.5px; color: var(--azul-claro); font-weight: 600;
-      margin-top: 7px; cursor: pointer;
     }
 
     /* ---- fixas previstas na projeção ---- */
@@ -3126,35 +3170,44 @@
       <div id="aviso-cache"></div>
       <div id="aviso-vencimento" class="aviso-venc"></div>
 
-      <!-- SALDO -->
+      <!-- SALDO
+           Um número herói só, e uma BARRA no lugar dos quatro números soltos
+           que havia antes (receita, despesas, pagas, pendentes). A barra diz a
+           mesma coisa com proporção: dá para ver quanto do mês já está
+           comprometido sem ler número nenhum. -->
       <div class="card">
-        <h2>Saldo do mês</h2>
+        <div class="sd-rotulo" id="saldo-rotulo">SOBRA DO MÊS</div>
         <div class="saldo-destaque" id="saldo-valor">R$ 0,00</div>
-        <div class="aviso-base" id="aviso-base"></div>
-        <div class="saldo-sub">
-          <div>
-            <span class="lbl" id="receita-base-label">Receita base</span><br>
-            <span class="val rec" id="saldo-receitas">R$ 0,00</span>
-          </div>
-          <div>
-            <span class="lbl">Despesas</span><br>
-            <span class="val des" id="saldo-despesas">R$ 0,00</span>
-          </div>
-        </div>
-        <!-- Despesas + o que os planos de compra pesariam. Fica numa linha à
-             parte, e não somada à de cima: são duas perguntas diferentes, e o
-             gasto real não pode parecer maior do que é. -->
-        <!-- As recorrentes que ainda não viraram lançamento. Separadas do
-             valor lançado de propósito: são duas certezas diferentes. -->
-        <div class="linha-fixas" id="linha-fixas" style="display:none;"></div>
+        <button class="sd-porque" id="aviso-base" onclick="explicarBaseDeCalculo()"></button>
 
-        <div class="linha-planos" id="linha-planos" style="display:none;"></div>
+        <div class="sd-barra-bloco" id="sd-barra-bloco">
+          <div class="sd-barra-topo">
+            <span id="sd-barra-rotulo">PARA ONDE VAI</span>
+            <b id="sd-barra-total">R$ 0,00</b>
+          </div>
+          <div class="sd-barra" id="sd-barra"></div>
+          <div class="sd-legenda" id="sd-legenda"></div>
+        </div>
 
         <div class="receita-secundaria" id="receita-mes-atual"></div>
-        <div class="status-desp">
-          <div><div class="lbl">✅ Pagas</div><div class="val paga" id="desp-pagas">R$ 0,00</div></div>
-          <div><div class="lbl">⏳ Pendentes</div><div class="val pend" id="desp-pendentes">R$ 0,00</div></div>
-        </div>
+      </div>
+
+      <!-- O QUE AINDA NÃO ACONTECEU
+           As fixas ainda não lançadas e os planos de compra, juntos e
+           FECHADOS. Ficam fora do card de cima de propósito: o de cima é
+           dinheiro real, este é suposição, e misturar os dois foi o que
+           deixou a tela confusa. -->
+      <div class="previsto" id="bloco-previsto" style="display:none;">
+        <button class="pv-topo" id="pv-topo" aria-expanded="false" onclick="alternarPrevisto()">
+          <span class="pv-marca"></span>
+          <span class="pv-txt">
+            <span class="pv-titulo">Ainda não aconteceu</span>
+            <span class="pv-sub" id="pv-sub"></span>
+          </span>
+          <b class="pv-val" id="pv-val">R$ 0,00</b>
+          <span class="pv-seta" id="pv-seta">&#8250;</span>
+        </button>
+        <div class="pv-corpo" id="pv-corpo" style="display:none;"></div>
       </div>
 
       <!-- SCORE -->
@@ -5154,7 +5207,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=87"></script>
+  <script src="app.js?v=88"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
