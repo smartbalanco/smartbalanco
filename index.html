@@ -1134,6 +1134,49 @@
     }
     .linha-item.vencida .li-chip b { color: var(--vermelho); }
 
+    /* ---- grupos de saldo ---- */
+    .gs-item { padding: 11px 0; border-bottom: 1px solid var(--borda); }
+    .gs-item:first-child { padding-top: 0; }
+    .gs-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .gs-topo { display: flex; align-items: baseline; gap: 9px; margin-bottom: 7px; }
+    .gs-nome { flex-grow: 1; font-size: 12.5px; font-weight: 700; color: var(--azul); }
+    .gs-num { font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .gs-de { font-size: 10.5px; color: var(--cinza-texto); font-variant-numeric: tabular-nums; }
+    .gs-editar {
+      width: 26px; height: 26px; flex-shrink: 0; border: none; cursor: pointer;
+      border-radius: 8px; font-size: 11px; line-height: 1;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+      color: var(--cinza-texto);
+    }
+    .gs-barra {
+      height: 9px; border-radius: 999px; padding: 2px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+    }
+    .gs-barra > span { display: block; height: 100%; border-radius: 999px; }
+    .gs-nota { font-size: 10px; color: var(--cinza-texto); margin-top: 6px; line-height: 1.5; }
+    .gs-nota b { color: var(--vermelho); }
+    .gs-aviso {
+      font-size: 10px; color: var(--cinza-texto); line-height: 1.5;
+      margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--borda);
+    }
+
+    /* ---- o grupo na ficha do lançamento ---- */
+    .det-grupo { margin-top: 14px; }
+    .det-grupo-rot {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .5px;
+      color: var(--cinza-texto); text-transform: uppercase; margin-bottom: 8px;
+    }
+    .det-grupo-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+    .det-grupo-chips button {
+      height: 32px; padding: 0 13px; border: none; cursor: pointer;
+      border-radius: 999px; font-family: inherit; font-size: 11.5px; font-weight: 600;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+      color: var(--cinza-texto);
+    }
+    .det-grupo-chips button.ativo {
+      box-shadow: var(--afundado-leve); color: var(--verde); font-weight: 700;
+    }
+
     /* ---- busca: filtros rápidos ---- */
     .busca-rapidos {
       display: flex; gap: 7px; margin-bottom: 14px;
@@ -3572,6 +3615,15 @@
         <div class="pv-corpo" id="pv-corpo" style="display:none;"></div>
       </div>
 
+      <!-- GRUPOS DE SALDO
+           A máscara: quanto ainda cabe em cada combinado. Fica fora do card
+           de saldo de propósito -- saldo é dinheiro, grupo é combinado. -->
+      <div class="card" id="card-grupos" style="display:none;">
+        <h2>Grupos de saldo</h2>
+        <div id="grupos-lista"></div>
+        <div class="gs-aviso">Este saldo não está reservado em lugar nenhum. Ele sai do dinheiro do mês em que você gastar.</div>
+      </div>
+
       <!-- RITMO DO MÊS
            O número mais acionável da tela: quanto dá para gastar por dia com o
            que sobrou. Vem antes do score porque responde "e hoje?", enquanto o
@@ -5599,7 +5651,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=96"></script>
+  <script src="app.js?v=97"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

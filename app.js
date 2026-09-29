@@ -5777,6 +5777,7 @@ function preencherDashboard(d) {
   pintarMetricasDoScore(sc.metricas || []);
   pintarTendenciaDoScore(d, sc);
 
+  pintarGruposDeSaldo(d);
   pintarRitmo(d);
   pintarAvisoVencidas(d);
 
@@ -9570,6 +9571,154 @@ function pintarMetricasDoScore(metricas) {
 }
 
 /**
+ * Os botões de grupo da ficha de um lançamento.
+ *
+ * É por aqui que uma despesa ANTIGA entra numa mesada: abre o lançamento na
+ * busca e toca no grupo. O gasto passa a contar naquele grupo no mês em que
+ * ele aconteceu, não no mês de hoje.
+ */
+function chipsDeGrupo(atual) {
+  const agora = (atual || "").toString().trim();
+
+  const opcoes = [{ nome: "", rotulo: "nenhum" }].concat(
+    gruposConhecidos.map(function (n) { return { nome: n, rotulo: n }; }));
+
+  return opcoes.map(function (o) {
+    const ligado = (o.nome === agora);
+    return '<button type="button" class="' + (ligado ? "ativo" : "") +
+      '" onclick="escolherGrupoDoLancamento(this, ' +
+      JSON.stringify(o.nome).replace(/"/g, "&quot;") + ')">' +
+      escaparHtml(o.rotulo) + '</button>';
+  }).join("");
+}
+
+async function escolherGrupoDoLancamento(botao, nome) {
+  if (!itemDetalhe) return;
+
+  const caixa = document.getElementById("det-grupo-chips");
+  if (caixa) {
+    caixa.querySelectorAll("button").forEach(function (b) { b.classList.remove("ativo"); });
+    botao.classList.add("ativo");
+  }
+
+  try {
+    const r = await chamarServidor("definirGrupoDoLancamento", {
+      numMov: itemDetalhe.numMov, grupo: nome
+    });
+    if (!r.ok) { mostrarToast("⚠ " + (r.mensagem || "Não deu para marcar.")); return; }
+
+    itemDetalhe.grupo = nome;
+    mostrarToast("✅ " + r.mensagem);
+
+    // O grupo mudou o quanto sobrou: o dashboard precisa refazer a conta.
+    await recarregarDados();
+  } catch (e) {
+    mostrarToast("⚠ Sem conexão.");
+  }
+}
+
+/** Os nomes dos grupos, para a ficha do lançamento poder oferecer a escolha. */
+let gruposConhecidos = [];
+
+/**
+ * Quanto ainda cabe em cada combinado.
+ *
+ * O valor do aporte NÃO é despesa e não aparece em lugar nenhum das contas
+ * reais: é só a referência contra a qual o gasto é medido. Quem gastou já
+ * pesou no saldo do mês, uma vez só.
+ */
+function pintarGruposDeSaldo(d) {
+  const card = document.getElementById("card-grupos");
+  const lista = document.getElementById("grupos-lista");
+  if (!card || !lista) return;
+
+  const grupos = (d.gruposDeSaldo || []).filter(function (g) { return !g.antesDaOrigem; });
+  gruposConhecidos = (d.gruposDeSaldo || []).map(function (g) { return g.nome; });
+
+  if (!grupos.length) { card.style.display = "none"; return; }
+  card.style.display = "block";
+
+  lista.innerHTML = grupos.map(function (g, i) {
+    const estourou = g.saldo < 0;
+
+    // A barra mede o GASTO contra o disponível. Cheia e vermelha quando
+    // passou: mostrar 110% de barra seria desenhar o que não cabe na régua.
+    const pct = g.disponivel > 0
+      ? Math.min(100, (g.gasto / g.disponivel) * 100)
+      : (g.gasto > 0 ? 100 : 0);
+
+    const cor = estourou ? "var(--vermelho)"
+              : (pct >= 80 ? "var(--laranja)" : "var(--verde)");
+
+    let nota = "";
+    if (estourou) {
+      nota = '<div class="gs-nota">Passou <b>' + formatarMoeda(Math.abs(g.saldo)) +
+             '</b>' + (g.acumula ? ", que sai do mês que vem." : ".") + '</div>';
+    } else if (g.acumulado > 0) {
+      nota = '<div class="gs-nota">Inclui ' + formatarMoeda(g.acumulado) +
+             ' que sobrou dos meses anteriores.</div>';
+    } else if (g.acumulado < 0) {
+      nota = '<div class="gs-nota">Já entrou devendo <b>' +
+             formatarMoeda(Math.abs(g.acumulado)) + '</b> do mês passado.</div>';
+    }
+
+    return '<div class="gs-item">' +
+        '<div class="gs-topo">' +
+          '<span class="gs-nome">' + escaparHtml(g.nome) + '</span>' +
+          '<span class="gs-num" style="color:' + (estourou ? "var(--vermelho)" : "var(--verde)") + '">' +
+            formatarMoeda(g.saldo) + '</span>' +
+          '<span class="gs-de">de ' + formatarMoeda(g.disponivel) + '</span>' +
+          (g.editavel
+            ? '<button class="gs-editar" aria-label="Mudar o valor de ' + escaparHtml(g.nome) +
+              '" onclick="mudarAporteDoGrupo(' + i + ')">&#9998;</button>'
+            : '') +
+        '</div>' +
+        '<div class="gs-barra"><span style="width:' + pct + '%; background:' + cor + '"></span></div>' +
+        nota +
+      '</div>';
+  }).join("");
+
+  // Guardado para o lápis saber de quem é o valor que está mudando.
+  pintarGruposDeSaldo.atuais = grupos;
+}
+
+/**
+ * Muda o valor mensal de um grupo — só no mês corrente.
+ *
+ * O novo valor vira a base e segue sendo corrigido pela inflação a partir
+ * dali. Um aumento só deste mês não precisa disto: basta gastar a mais, que o
+ * acúmulo desconta do mês seguinte.
+ */
+async function mudarAporteDoGrupo(i) {
+  const g = (pintarGruposDeSaldo.atuais || [])[i];
+  if (!g) return;
+
+  const txt = prompt(
+    "Novo valor mensal de " + g.nome + "\n\n" +
+    "Vale deste mês em diante, e segue corrigindo pela inflação.\n" +
+    "Hoje: " + formatarMoeda(g.aporte) +
+    (g.aporteBase !== g.aporte ? " (combinado original: " + formatarMoeda(g.aporteBase) + ")" : ""),
+    String(g.aporte).replace(".", ","));
+
+  if (txt === null) return;
+
+  const valor = parseFloat(txt.toString().replace(/\./g, "").replace(",", "."));
+  if (isNaN(valor) || valor < 0) { mostrarToast("⚠ Valor inválido."); return; }
+
+  try {
+    const r = await chamarServidor("ajustarAporteDoGrupo", {
+      grupo: g.nome, valor: valor, mes: mesExibido, ano: anoExibido
+    });
+    if (!r.ok) { mostrarToast("⚠ " + (r.mensagem || "Não deu para mudar.")); return; }
+
+    mostrarToast("✅ " + r.mensagem);
+    await recarregarDados();
+  } catch (e) {
+    mostrarToast("⚠ Sem conexão.");
+  }
+}
+
+/**
  * O aviso de contas vencidas, no topo da tela.
  *
  * Elas já apareciam na lista, com faixa vermelha -- mas no MEIO dela, depois
@@ -12658,6 +12807,11 @@ function abrirDetalheBusca(idx) {
       '<button class="det-btn editar" onclick="fecharDetalhe(); duplicarLancamento(' + it.numMov + ');">Duplicar</button>' +
       '<button class="det-btn doc" onclick="buscarDocsDoMov(' + it.numMov + ', true)">Documentos</button>' +
       '<button class="det-btn email" onclick="buscarDocsDoMov(' + it.numMov + ', false)">E-mails</button>' +
+    '</div>' +
+
+    '<div class="det-grupo">' +
+      '<div class="det-grupo-rot">Grupo de saldo</div>' +
+      '<div class="det-grupo-chips" id="det-grupo-chips">' + chipsDeGrupo(it.grupo) + '</div>' +
     '</div>' +
 
     '<div class="det-rodape">' +
