@@ -1134,6 +1134,13 @@
     }
     .linha-item.vencida .li-chip b { color: var(--vermelho); }
 
+    /* ---- grupo na aprovação ---- */
+    .ap-det-grupo { margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--borda); }
+    .ap-det-grupo-rot {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .5px;
+      color: var(--cinza-texto); text-transform: uppercase; margin-bottom: 8px;
+    }
+
     /* ---- grupo de saldo nos formulários ---- */
     .gsf-opcional {
       font-size: 9.5px; font-weight: 600; color: var(--cinza-texto);
@@ -5775,7 +5782,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=99"></script>
+  <script src="app.js?v=100"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

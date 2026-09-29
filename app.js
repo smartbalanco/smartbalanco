@@ -8506,6 +8506,9 @@ function renderizarAprovacoes() {
       chips.push('<span class="ap-l-chip destaque">' + escaparHtml(g.metodo || "-") + '</span>');
     }
     if (g.totalParcelas > 1) chips.push('<span class="ap-l-chip">' + g.totalParcelas + 'x</span>');
+    if (g.grupo) {
+      chips.push('<span class="ap-l-chip origem">' + escaparHtml(g.grupo) + '</span>');
+    }
 
     chips.push('<span>' + faixa + '</span>');
 
@@ -8543,6 +8546,14 @@ function renderizarAprovacoes() {
           '<div class="ap-det-item"><span>Parcelas</span><b>' + parcTxt + '</b></div>' +
         '</div>' +
         '<div class="ap-det-nota"><b>' + escaparHtml(g.descricao) + '</b></div>' +
+        (gruposConhecidos.length
+          ? '<div class="ap-det-grupo">' +
+              '<div class="ap-det-grupo-rot">Grupo de saldo</div>' +
+              '<div class="det-grupo-chips" id="ap-grupo-' + idx + '">' +
+                chipsDeGrupoAprovacao(idx, g.grupo) +
+              '</div>' +
+            '</div>'
+          : '') +
         aviso +
       '</div>';
 
@@ -8574,6 +8585,53 @@ function valorDaMaioria(itens, ler) {
 
   if (!melhor || quantos / itens.length < 0.6) return null;
   return { valor: melhor, quantos: quantos, todos: quantos === itens.length };
+}
+
+/**
+ * Os botoes de grupo de um lancamento aguardando aprovacao.
+ *
+ * A aprovacao e a ultima conferencia antes de virar despesa de verdade, e e
+ * ali que se costuma perceber que a compra era da mesada. Depois de aprovada
+ * ela ainda pode ser marcada pela ficha -- isto so evita ter de lembrar.
+ */
+function chipsDeGrupoAprovacao(idx, atual) {
+  const agora = (atual || "").toString().trim();
+
+  return [{ v: "", r: "nenhum" }]
+    .concat(gruposConhecidos.map(function (n) { return { v: n, r: n }; }))
+    .map(function (o) {
+      return '<button type="button" class="' + (o.v === agora ? "ativo" : "") +
+        '" onclick="event.stopPropagation(); escolherGrupoDaAprovacao(' + idx + ', ' +
+        JSON.stringify(o.v).replace(/"/g, "&quot;") + ')">' +
+        escaparHtml(o.r) + '</button>';
+    }).join("");
+}
+
+async function escolherGrupoDaAprovacao(idx, nome) {
+  const g = gruposAprovacao[idx];
+  if (!g) return;
+
+  const caixa = document.getElementById("ap-grupo-" + idx);
+  if (caixa) caixa.innerHTML = chipsDeGrupoAprovacao(idx, nome);
+
+  try {
+    const r = await chamarServidor("definirGrupoDaAprovacao", {
+      movInicial: g.movInicial, movFinal: g.movFinal, grupo: nome
+    });
+    if (!r.ok) {
+      mostrarToast("⚠ " + (r.mensagem || "Nao deu para marcar."));
+      if (caixa) caixa.innerHTML = chipsDeGrupoAprovacao(idx, g.grupo);
+      return;
+    }
+
+    g.grupo = nome;
+    mostrarToast("✅ " + r.mensagem);
+    renderizarAprovacoes();
+    alternarDetalheAprovacao(idx);
+  } catch (e) {
+    mostrarToast("⚠ Sem conexao.");
+    if (caixa) caixa.innerHTML = chipsDeGrupoAprovacao(idx, g.grupo);
+  }
 }
 
 /**
