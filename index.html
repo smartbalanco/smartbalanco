@@ -209,31 +209,103 @@
     #tela-interna { display: none; padding-bottom: 30px; }
     .topo {
       background: var(--azul); color: #fff;
-      padding: 14px 16px; padding-top: max(14px, env(safe-area-inset-top));
+      padding: 12px 14px; padding-top: max(12px, env(safe-area-inset-top));
       position: sticky; top: 0; z-index: 10;
     }
-    .topo-linha1 { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .topo-linha1 { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
     .topo .nome-app { font-size: 18px; font-weight: 700; }
     .topo .acoes { display: flex; gap: 8px; align-items: center; }
     .topo button {
       background: rgba(255,255,255,0.15); color: #fff; border: none;
       padding: 7px 12px; border-radius: 8px; font-size: 13px; cursor: pointer;
     }
-    #btn-atualizar { font-size: 16px; padding: 7px 11px; }
+    .topo-ic {
+      width: 36px; height: 36px; padding: 0; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .topo-ic svg { width: 17px; height: 17px; }
     #btn-atualizar.girando { animation: girar 0.8s linear infinite; }
+    .topo .nome-app { display: flex; align-items: center; gap: 5px; }
 
     /* Navegador de mês */
-    .nav-mes {
-      display: flex; align-items: center; justify-content: center; gap: 6px;
-      background: rgba(0,0,0,0.18); border-radius: 10px; padding: 6px;
-    }
+    .nav-mes { display: flex; align-items: center; justify-content: center; gap: 7px; }
     .nav-mes button.seta {
-      background: transparent; font-size: 20px; line-height: 1; padding: 4px 14px; border-radius: 6px;
+      width: 34px; height: 44px; flex-shrink: 0; padding: 0;
+      display: flex; align-items: center; justify-content: center;
     }
-    .nav-mes button.seta:active { background: rgba(255,255,255,0.15); }
-    .nav-mes .mes-txt { font-size: 15px; font-weight: 700; min-width: 130px; text-align: center; }
+    .nav-mes button.seta svg { width: 16px; height: 16px; }
+    .nav-mes .mes-btn {
+      flex: 1 1 auto; min-width: 0; max-width: 320px; height: 44px; padding: 0 10px;
+      display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .nav-mes .mes-txt {
+      font-size: 15px; font-weight: 700;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .nav-mes > .mes-txt { flex: 1; min-width: 130px; text-align: center; }
+    .mes-chevron { display: flex; color: var(--azul-claro); }
+    .mes-chevron svg { width: 12px; height: 12px; }
+    /* A vaga é SEMPRE ocupada: com display:none os três ícones da linha de
+       cima andavam de lugar conforme o mês aberto. */
     #btn-hoje {
-      display: none; font-size: 11px; padding: 4px 10px; background: var(--verde);
+      visibility: hidden; width: 46px; height: 44px; flex-shrink: 0; padding: 0;
+      font-size: 11.5px; font-weight: 700; color: var(--verde);
+    }
+
+    /* ---------- SELETOR DE MÊS ---------- */
+    .sel-ano {
+      display: flex; align-items: center; gap: 9px;
+      padding: 0 16px 14px; border-bottom: 1px solid var(--borda);
+    }
+    .sel-ano-seta {
+      width: 34px; height: 38px; flex-shrink: 0; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--azul);
+    }
+    .sel-ano-seta svg { width: 15px; height: 15px; }
+    .sel-ano-txt { flex: 1; text-align: center; min-width: 0; }
+    .sel-ano-num {
+      font-size: 19px; font-weight: 800; color: var(--azul);
+      font-variant-numeric: tabular-nums;
+    }
+    .sel-ano-total { font-size: 10px; color: var(--cinza-texto); margin-top: 1px; }
+    .sel-hoje {
+      height: 32px; padding: 0 13px; flex-shrink: 0; border: none; cursor: pointer;
+      font-size: 11.5px; font-weight: 700; color: var(--verde) !important;
+    }
+    .sel-mes {
+      display: flex; align-items: center; gap: 11px; width: 100%;
+      background: none; border: none; cursor: pointer; font-family: inherit;
+      padding: 0 16px; height: 46px; text-align: left;
+      border-bottom: 1px solid var(--borda);
+    }
+    .sel-mes:last-child { border-bottom: none; }
+    /* Selecionado é AFUNDADO, como todo estado ligado no app. */
+    .sel-mes.aberto { box-shadow: var(--afundado-leve); }
+    .sel-nome {
+      width: 34px; flex-shrink: 0; font-size: 12.5px; font-weight: 700;
+      color: var(--texto); text-transform: uppercase; letter-spacing: .4px;
+    }
+    .sel-mes.aberto .sel-nome { color: var(--verde); }
+    .sel-mes.vazio .sel-nome { color: var(--fraco-2); }
+    /* O canal afundado é o mesmo das outras barras do app. */
+    .sel-barra {
+      flex: 1 1 auto; min-width: 0; height: 5px; border-radius: 3px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      overflow: hidden; display: flex;
+    }
+    .sel-barra span { display: block; height: 100%; }
+    .sel-vl {
+      width: 92px; flex-shrink: 0; text-align: right;
+      font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    .sel-vl small {
+      display: block; font-size: 9.5px; font-weight: 600;
+      color: var(--cinza-texto); letter-spacing: .2px;
+    }
+    .sel-rodape {
+      font-size: 10px; color: var(--cinza-texto); line-height: 1.5;
+      padding: 12px 16px 16px; border-top: 1px solid var(--borda);
     }
 
     /* CONTEÚDO */
@@ -522,7 +594,8 @@
     .linha-dupla .campo-bloco { flex: 1; }
 
     /* ---------- MENU DE PRODUTOS (no nome do topo) ---------- */
-    .seta-produtos { font-size: 11px; margin-left: 5px; opacity: 0.7; }
+    .seta-produtos { display: flex; opacity: 0.7; }
+    .seta-produtos svg { width: 11px; height: 11px; }
     #menu-produtos {
       display: none; position: absolute; top: 52px; left: 12px; z-index: 120;
       border-radius: 14px; padding: 6px; min-width: 210px;
@@ -1234,11 +1307,6 @@
     .linha-item.vencida .li-chip b { color: var(--vermelho); }
 
     /* ---- escolha de tema ---- */
-    .cfg-tema { margin-bottom: 16px; }
-    .cfg-tema-rot {
-      font-size: 10.5px; font-weight: 700; letter-spacing: .8px;
-      color: var(--cinza-texto); text-transform: uppercase; margin-bottom: 10px;
-    }
     .cfg-tema-grade { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
     .cfg-tema-op {
       border: none; cursor: pointer; padding: 9px; border-radius: 13px;
@@ -1256,6 +1324,92 @@
     .cfg-tema-ponto { width: 8px; height: 8px; border-radius: 50%; }
     .cfg-tema-nome { font-size: 10.5px; font-weight: 700; color: var(--azul); }
     .cfg-tema-op.ativo .cfg-tema-nome { color: var(--verde); }
+
+    /* ---- Configurações: fileiras ----------------------------------------
+       A tela tinha SEIS títulos de seção com um único botão de largura
+       inteira embaixo de cada um: 1.560px de rolagem para sete decisões.
+       Agrupar o que é da mesma natureza em fileiras é o que encurta isso
+       sem remover item nenhum.
+       ------------------------------------------------------------------- */
+    .cfg-rot {
+      font-size: 10px; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--cinza-texto);
+      margin: 22px 0 10px;
+    }
+    .cfg-rot.primeiro { margin-top: 0; }
+    .cfg-cx {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 16px; padding: 2px 14px;
+    }
+    .cfg-lin {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      background: none; border: none; padding: 13px 0; text-align: left;
+      font-family: inherit; cursor: pointer;
+      border-bottom: 1px solid var(--borda);
+    }
+    .cfg-lin:last-child { border-bottom: none; }
+    /* Sem relevo para afundar, o toque se anuncia na cor do título. */
+    .cfg-lin:active .cfg-lin-tit { color: var(--azul-claro); }
+    .cfg-lin-estatica { cursor: default; }
+    .cfg-lin-estatica:active .cfg-lin-tit { color: var(--texto); }
+    .cfg-lin-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .cfg-lin-tit { font-size: 13px; font-weight: 600; color: var(--texto); }
+    .cfg-lin-sub { font-size: 10.5px; color: var(--cinza-texto); line-height: 1.45; }
+    .cfg-lin-sub.ok { color: var(--verde); }
+    .cfg-lin-sub.alerta { color: var(--laranja); }
+    .cfg-lin-val {
+      font-size: 11.5px; color: var(--cinza-texto); flex-shrink: 1;
+      max-width: 58%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .cfg-lin-seta { font-size: 16px; color: var(--fraco-2); flex-shrink: 0; }
+    .cfg-lin-acao { font-size: 11.5px; font-weight: 700; color: var(--azul-claro); flex-shrink: 0; }
+    .cfg-lin-perigo .cfg-lin-tit { color: var(--vermelho); }
+    .cfg-lin-verde .cfg-lin-tit { color: var(--verde); }
+
+    /* A fileira de temas ROLA de lado: sete numa grade de três colunas
+       deixava dois buracos na última linha. */
+    #cfg-tema-grade {
+      display: flex; gap: 9px; overflow-x: auto; overflow-y: hidden;
+      padding-bottom: 4px; -webkit-overflow-scrolling: touch;
+    }
+    #cfg-tema-grade::-webkit-scrollbar { height: 0; }
+    #cfg-tema-grade .cfg-tema-op { flex: 0 0 auto; width: 64px; padding: 8px 6px; }
+    #cfg-tema-grade .cfg-tema-amostra { width: 100%; height: 38px; }
+
+    /* ---- sub-tela de Configurações ----
+       As seções longas (categorias, fixas, cartões) abriam POR DENTRO da
+       lista, empurrando as outras seis para fora da tela -- e para fechar
+       era preciso rolar de volta e achar o mesmo botão. */
+    .cfg-sub-topo {
+      display: flex; align-items: center; gap: 12px;
+      padding: 6px 0 14px; margin-bottom: 16px;
+      border-bottom: 1px solid var(--borda);
+      /* Gruda abaixo do topo do modal (75px). A lista de categorias tem 48
+         itens: sem isto, a seta de voltar sobe junto com eles e sair exige
+         rolar tudo de volta. O fundo e opaco porque o que passa por baixo
+         apareceria atraves dele. */
+      position: sticky; top: 75px; z-index: 1;
+      background: var(--cinza-fundo);
+    }
+    .cfg-sub-voltar, .cfg-sub-add {
+      width: 34px; height: 34px; flex-shrink: 0; border: none; cursor: pointer;
+      border-radius: 50% !important; font-family: inherit; line-height: 1;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+    }
+    .cfg-sub-voltar:active, .cfg-sub-add:active { box-shadow: var(--afundado-leve); }
+    .cfg-sub-voltar { font-size: 17px; color: var(--azul-claro) !important; }
+    .cfg-sub-add { font-size: 19px; color: var(--verde) !important; }
+    .cfg-sub-txt { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .cfg-sub-tit { font-size: 15px; font-weight: 700; color: var(--azul); }
+    .cfg-sub-dica { font-size: 10.5px; color: var(--cinza-texto); }
+
+    /* ---- código de acesso revelado ---- */
+    .cfg-codigo-bloco { padding: 13px 0 4px; }
+    .cfg-codigo-topo { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+    .cfg-codigo-topo .cfg-lin-tit { flex: 1; }
+    .cfg-codigo-conta { font-size: 10.5px; font-weight: 700; color: var(--laranja); }
+    .cfg-codigo-acoes { display: flex; gap: 9px; padding-bottom: 8px; }
+    .cfg-codigo-acoes .btn-modal { flex: 1; }
 
     /* ---- grupo na aprovação ---- */
     .ap-det-grupo { margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--borda); }
@@ -2167,7 +2321,7 @@
     /* ---------- ABAS (Dashboard / Aprovações) ---------- */
     .abas {
       display: flex; background: rgba(0,0,0,0.18); border-radius: 10px;
-      padding: 4px; margin-top: 10px; gap: 4px;
+      padding: 4px; margin-top: 8px; gap: 4px;
     }
     .abas button {
       flex: 1; background: transparent; color: var(--mt-sub); border: none;
@@ -3478,7 +3632,8 @@
     .btn-modal, .det-btn, .btn-liquidar, .cfg-btn, .pv-chip, .edt-op,
     .btn-categoria, .rb-btn, .cb-btn, .busca-modos button, .br-mais,
     #busca-btn-filtros, #btn-hoje, #btn-buscar, #btn-atualizar, #btn-config,
-    #btn-voltar, .icone-btn, .fechar, .amigo-menu {
+    #btn-voltar, .icone-btn, .fechar, .amigo-menu,
+    .nav-mes .seta, .nav-mes .mes-btn, .sel-ano-seta, .sel-hoje {
       background: var(--cinza-fundo) !important;
       border: none !important;
       border-radius: 12px !important;
@@ -3486,7 +3641,9 @@
     }
     .btn-modal:active, .det-btn:active, .btn-liquidar:active, .cfg-btn:active,
     .pv-chip:active, .edt-op:active, .btn-categoria:active, .rb-btn:active,
-    #btn-hoje:active, #btn-buscar:active, #btn-atualizar:active, #btn-config:active {
+    #btn-hoje:active, #btn-buscar:active, #btn-atualizar:active, #btn-config:active,
+    .nav-mes .seta:active, .nav-mes .mes-btn:active, .sel-ano-seta:active,
+    .sel-hoje:active, .sel-mes:active {
       box-shadow: var(--afundado-leve) !important;
     }
 
@@ -3506,14 +3663,26 @@
        As duas usavam rgba(0,0,0,0.18), que vinha do topo azul-escuro antigo.
        Sobre fundo claro isso virava uma mancha cinza. */
     .abas, .nav-mes {
-      background: var(--cinza-fundo) !important;
+      background: none !important;
       border: none !important;
       border-radius: 14px;
-      box-shadow: var(--afundado);
+      box-shadow: none;
     }
-    .abas { padding: 5px; gap: 4px; }
-    .nav-mes { padding: 5px; }
+    .abas { padding: 0; gap: 4px; }
+    .nav-mes { padding: 0; }
+
+    /* O navegador de competência do Smarttrabalho não mudou de desenho:
+       lá o trilho é o que segura as setas e o texto. */
+    #trab-nav-comp {
+      background: var(--cinza-fundo) !important;
+      box-shadow: var(--afundado);
+      padding: 5px;
+    }
     .nav-mes button.seta, .nav-mes .mes-txt { color: var(--azul) !important; }
+    .topo .nome-app {
+      background: none !important; box-shadow: none !important;
+      font-size: 15px !important; padding: 4px 2px !important;
+    }
 
     .abas button {
       background: transparent !important;
@@ -3535,7 +3704,7 @@
     }
     .abas button.ativa {
       background: var(--cinza-fundo) !important;
-      box-shadow: var(--relevo-baixo);
+      box-shadow: var(--afundado-leve);
       color: var(--azul) !important;
     }
 
@@ -3696,7 +3865,7 @@
         <div style="display:flex; align-items:center; gap:8px;">
           <button id="btn-voltar" onclick="voltarAoDashboard()" style="display:none;">‹</button>
           <button class="nome-app" id="titulo-topo" onclick="alternarMenuProdutos()">
-            <span id="titulo-texto">Smartbalanço</span><span class="seta-produtos">▾</span>
+            <span id="titulo-texto">Smartbalanço</span><span class="seta-produtos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
           </button>
           <div id="menu-produtos">
             <button onclick="voltarAosModulos()">🧭 Módulos</button>
@@ -3707,16 +3876,19 @@
           </div>
         </div>
         <div class="acoes">
-          <button id="btn-hoje" onclick="irParaMesAtual()">Hoje</button>
-          <button id="btn-buscar" onclick="trocarAba('busca')" title="Últimos lançamentos e busca">🚀</button>
-          <button id="btn-atualizar" onclick="recarregarDados(true)" title="Atualizar">&#8635;</button>
-          <button id="btn-config" onclick="abrirConfig()" title="Configurações">&#9881;</button>
+          <button id="btn-buscar" class="topo-ic" onclick="trocarAba('busca')" aria-label="Lançamentos e busca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg></button>
+          <button id="btn-atualizar" class="topo-ic" onclick="recarregarDados(true)" aria-label="Atualizar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.6-5.9"></path><path d="M20 4v4h-4"></path></svg></button>
+          <button id="btn-config" class="topo-ic" onclick="abrirConfig()" aria-label="Configurações"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"></circle><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.1z"></path></svg></button>
         </div>
       </div>
       <div class="nav-mes" id="nav-mes-wrap">
-        <button class="seta" onclick="mudarMes(-1)">&#8249;</button>
-        <span class="mes-txt" id="mes-referencia"></span>
-        <button class="seta" onclick="mudarMes(1)">&#8250;</button>
+        <button class="seta" onclick="mudarMes(-1)" aria-label="Mês anterior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button>
+        <button class="mes-btn" onclick="abrirSeletorMeses()" aria-label="Escolher mês">
+          <span class="mes-txt" id="mes-referencia"></span>
+          <span class="mes-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></span>
+        </button>
+        <button class="seta" onclick="mudarMes(1)" aria-label="Próximo mês"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+        <button id="btn-hoje" onclick="irParaMesAtual()">Hoje</button>
       </div>
 
       <div class="abas" id="abas-principais">
@@ -5340,28 +5512,105 @@
       <div class="modal-topo">
         <div>
           <div class="mt-titulo">&#9881; Configurações</div>
-          <div style="font-size:11px; color:var(--mt-sub); margin-top:3px;">Categorias do plano de contas</div>
+          <div style="font-size:11px; color:var(--mt-sub); margin-top:3px;">Aparência, lançamentos e conta</div>
         </div>
         <button class="fechar" onclick="fecharConfig()">&times;</button>
       </div>
 
       <div class="modal-conteudo">
 
-        <div class="cfg-tema">
-          <div class="cfg-tema-rot">Aparência</div>
-          <div class="cfg-tema-grade" id="cfg-tema-grade"></div>
+        <!-- ================= A LISTA ================= -->
+        <div id="cfg-lista">
+
+          <div class="cfg-rot primeiro">Aparência</div>
+          <div id="cfg-tema-grade"></div>
+
+          <!-- As cinco coisas que decidem como um lançamento nasce. Cada linha
+               diz o ESTADO em vez de repetir a explicação: era isso que os
+               parágrafos abertos para sempre faziam, ocupando altura mesmo
+               depois de lidos uma vez. -->
+          <div class="cfg-rot">Lançamentos</div>
+          <div class="cfg-cx">
+
+            <button type="button" class="cfg-lin" onclick="abrirSubConfig('categorias')">
+              <span class="cfg-lin-txt">
+                <span class="cfg-lin-tit">Categorias</span>
+                <span class="cfg-lin-sub" id="cfg-dica-categorias">plano de contas</span>
+              </span>
+              <span class="cfg-lin-seta">&#8250;</span>
+            </button>
+
+            <!-- Grupos de saldo entra aqui porque o único caminho até agora era
+                 o "Gerenciar" do card do dashboard -- e esse card se esconde
+                 quando não há grupo para mostrar. Antes de outubro/2026 não
+                 existia como chegar na tela. -->
+            <button type="button" class="cfg-lin" onclick="fecharConfig(); abrirGerenciarGrupos();">
+              <span class="cfg-lin-txt">
+                <span class="cfg-lin-tit">Grupos de saldo</span>
+                <span class="cfg-lin-sub" id="cfg-dica-grupos">mesadas e combinados</span>
+              </span>
+              <span class="cfg-lin-seta">&#8250;</span>
+            </button>
+
+            <button type="button" class="cfg-lin" onclick="abrirSubConfig('fixas')">
+              <span class="cfg-lin-txt">
+                <span class="cfg-lin-tit">Despesas fixas</span>
+                <span class="cfg-lin-sub" id="cfg-dica-fixas">as que se repetem todo mês</span>
+              </span>
+              <span class="cfg-lin-seta">&#8250;</span>
+            </button>
+
+            <button type="button" class="cfg-lin" onclick="abrirSubConfig('cartoes')">
+              <span class="cfg-lin-txt">
+                <span class="cfg-lin-tit">Cartões</span>
+                <span class="cfg-lin-sub" id="cfg-dica-cartoes">vencimento e compras em aberto</span>
+              </span>
+              <span class="cfg-lin-seta">&#8250;</span>
+            </button>
+
+            <button type="button" class="cfg-lin" id="cfg-btn-capturadas"
+                    onclick="fecharConfig(); abrirComprasCapturadas();">
+              <span class="cfg-lin-txt">
+                <span class="cfg-lin-tit">Compras por notificação</span>
+                <span class="cfg-lin-sub" id="cfg-dica-capturadas">leitura das notificações do XP e do Inter</span>
+              </span>
+              <span class="cfg-lin-seta">&#8250;</span>
+            </button>
+
+          </div>
+
+          <div class="cfg-rot">Aplicativo</div>
+          <div class="cfg-cx" id="cfg-versao"></div>
+
+          <div class="cfg-rot">Conta</div>
+          <div class="cfg-cx">
+            <div class="cfg-lin cfg-lin-estatica">
+              <span class="cfg-lin-txt"><span class="cfg-lin-tit">Conectado como</span></span>
+              <span class="cfg-lin-val" id="cfg-conta-email"></span>
+            </div>
+            <div id="cfg-codigo"></div>
+            <button type="button" class="cfg-lin cfg-lin-perigo" onclick="fecharConfig(); sair();">
+              <span class="cfg-lin-txt"><span class="cfg-lin-tit">Sair da conta</span></span>
+            </button>
+          </div>
+
         </div>
 
-        <!-- A lista de categorias é longa; fica recolhida para não empurrar o
-             resto das configurações para fora da tela. -->
-        <button class="btn-modal cancelar" style="width:100%;" onclick="alternarSecaoCategorias()">
-          <span id="cfg-cat-rotulo">🏷️ Editar categorias</span>
-        </button>
+        <!-- ================= A SUB-TELA =================
+             Uma só, com cabeçalho próprio; o conteúdo troca. A seta volta para
+             a lista, e o "+" faz o que o botão de largura inteira fazia
+             dentro de cada seção. -->
+        <div id="cfg-sub" style="display:none;">
+          <div class="cfg-sub-topo">
+            <button type="button" class="cfg-sub-voltar" onclick="voltarDoSubConfig()" aria-label="Voltar">&#8249;</button>
+            <span class="cfg-sub-txt">
+              <span class="cfg-sub-tit" id="cfg-sub-tit"></span>
+              <span class="cfg-sub-dica" id="cfg-sub-dica"></span>
+            </span>
+            <button type="button" class="cfg-sub-add" id="cfg-sub-add" onclick="acaoDoSubConfig()" aria-label="Novo">+</button>
+          </div>
 
         <div id="cfg-secao-categorias" style="display:none;">
-          <button class="btn-modal confirmar" style="width:100%; margin-top:10px;" onclick="alternarNovaCategoria()">
-            + Nova categoria
-          </button>
 
         <div id="cfg-nova" class="cfg-nova">
           <div class="campo-bloco">
@@ -5382,11 +5631,6 @@
           <div id="cfg-categorias"></div>
         </div>
 
-        <div class="cfg-grupo-titulo" style="margin-top:22px;">Cartões</div>
-        <button class="btn-modal cancelar" style="width:100%;" onclick="alternarSecaoCartoes()">
-          <span id="cfg-cart-rotulo">💳 Vencimento dos cartões</span>
-        </button>
-
         <div id="cfg-secao-cartoes" style="display:none;">
           <div class="cfg-aviso">
             O dia do vencimento decide em qual fatura cada compra nova cai.
@@ -5396,26 +5640,7 @@
           <div id="cfg-lista-cartoes"></div>
         </div>
 
-        <div class="cfg-grupo-titulo" style="margin-top:22px;">Compras do cartão</div>
-        <button class="btn-modal cancelar" style="width:100%;" id="cfg-btn-capturadas"
-                onclick="fecharConfig(); abrirComprasCapturadas();">
-          💳 Compras detectadas nas notificações
-        </button>
-        <div class="cfg-aviso" style="margin-top:8px;">
-          Mostra se a leitura das notificações do XP e do Inter está funcionando,
-          o que já foi capturado e o que foi ignorado — e tem o botão para reler
-          o que está na barra agora.
-        </div>
-
-        <div class="cfg-grupo-titulo" style="margin-top:22px;">Despesas fixas</div>
-        <button class="btn-modal cancelar" style="width:100%;" onclick="alternarSecaoFixas()">
-          <span id="cfg-fix-rotulo">🔁 Gerenciar despesas fixas</span>
-        </button>
-
         <div id="cfg-secao-fixas" style="display:none;">
-          <button class="btn-modal confirmar" style="width:100%; margin-top:10px;" onclick="abrirFormFixa()">
-            + Nova despesa fixa
-          </button>
 
           <div id="fix-form" class="cfg-nova">
             <input type="hidden" id="fix-linha" />
@@ -5496,18 +5721,40 @@
           </div>
         </div>
 
-        <div class="cfg-grupo-titulo" style="margin-top:22px;">Aplicativo</div>
-        <div id="cfg-versao"></div>
+        </div><!-- /#cfg-sub -->
+      </div>
+    </div>
+  </div>
 
-        <div class="cfg-grupo-titulo" style="margin-top:22px;">Acesso pelo aplicativo</div>
-        <div id="cfg-codigo"></div>
+  <!-- ============ MODAL: ESCOLHER MÊS ============ -->
+  <div class="modal-fundo" id="modal-meses">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Escolher mês</div>
+          <div style="font-size:11px; color:var(--mt-sub); margin-top:3px;">o resultado de cada mês do ano</div>
+        </div>
+        <button class="fechar" onclick="fecharSeletorMeses()">&times;</button>
+      </div>
 
-        <div class="cfg-grupo-titulo" style="margin-top:22px;">Conta</div>
-        <div class="cfg-aviso" id="cfg-conta-email"></div>
-        <button class="btn-modal cancelar" style="width:100%; color:var(--vermelho);"
-                onclick="fecharConfig(); sair();">
-          Sair da conta
-        </button>
+      <div class="modal-conteudo" style="padding:14px 0 0;">
+
+        <div class="sel-ano">
+          <button type="button" class="sel-ano-seta" onclick="mudarAnoSeletor(-1)" aria-label="Ano anterior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button>
+          <div class="sel-ano-txt">
+            <div class="sel-ano-num" id="sel-ano-num"></div>
+            <div class="sel-ano-total" id="sel-ano-total"></div>
+          </div>
+          <button type="button" class="sel-ano-seta" onclick="mudarAnoSeletor(1)" aria-label="Próximo ano"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+          <button type="button" class="sel-hoje" onclick="escolherMesDoSeletor(-1, -1)">Hoje</button>
+        </div>
+
+        <div id="sel-meses"></div>
+
+        <div class="sel-rodape">
+          Estes números já estão no aparelho: 12 meses para trás e 12 para frente.
+          Abrir qualquer um deles não espera a internet.
+        </div>
       </div>
     </div>
   </div>
@@ -5911,7 +6158,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=101"></script>
+  <script src="app.js?v=103"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

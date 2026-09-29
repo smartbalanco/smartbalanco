@@ -715,19 +715,19 @@ function lancamentosGuardados() {
 const TEMA_CHAVE = "sb_tema";
 
 const TEMAS = [
-  { v: "",          nome: "Padrao",   fundo: "#e8ecf3", texto: "#1e293b",
+  { v: "",          nome: "Padrão",   fundo: "#e8ecf3", texto: "#1e293b",
     pontos: ["#2e9e6b", "#f97316", "#b91c1c"] },
   { v: "papel",     nome: "Papel",    fundo: "#ece6dd", texto: "#332e28",
     pontos: ["#3f7d55", "#b06f22", "#ab3b2b"] },
-  { v: "salvia",    nome: "Salvia",   fundo: "#e3e9e1", texto: "#26302a",
+  { v: "salvia",    nome: "Sálvia",   fundo: "#e3e9e1", texto: "#26302a",
     pontos: ["#2f6b4f", "#a96826", "#a13429"] },
-  { v: "petroleo",  nome: "Petroleo", fundo: "#e2ecea", texto: "#1c2b2a",
+  { v: "petroleo",  nome: "Petróleo", fundo: "#e2ecea", texto: "#1c2b2a",
     pontos: ["#0f766e", "#b1661a", "#a93a34"] },
-  { v: "indigo",    nome: "Indigo",   fundo: "#e8e7f2", texto: "#23213a",
+  { v: "indigo",    nome: "Índigo",   fundo: "#e8e7f2", texto: "#23213a",
     pontos: ["#2f7d5e", "#b0620f", "#a83055"] },
-  { v: "ardosia",   nome: "Ardosia",  fundo: "#2a2f37", texto: "#e6ebf2",
+  { v: "ardosia",   nome: "Ardósia",  fundo: "#2a2f37", texto: "#e6ebf2",
     pontos: ["#4ade80", "#fbbf24", "#f87171"] },
-  { v: "cafe",      nome: "Cafe",     fundo: "#2b2622", texto: "#f0e9e1",
+  { v: "cafe",      nome: "Café",     fundo: "#2b2622", texto: "#f0e9e1",
     pontos: ["#7cc79a", "#e0a34a", "#ef8272"] }
 ];
 
@@ -780,6 +780,20 @@ function pintarEscolhaDeTema() {
         '<span class="cfg-tema-nome">' + escaparHtml(x.nome) + '</span>' +
       '</button>';
   }).join("");
+
+  // A fileira rola de lado, e o tema escolhido pode estar fora da parte
+  // visível -- o Café, que é o último, começa 126px além da borda. Abrir
+  // Configurações e não enxergar qual está ligado é o mesmo que não marcar.
+  const ligado = alvo.querySelector(".cfg-tema-op.ativo");
+  if (ligado) {
+    // Pela POSICAO NA TELA, nao por offsetLeft: offsetLeft e medido a partir
+    // do primeiro ancestral posicionado, que aqui nao e o proprio rolador --
+    // medir por ele rolava 37px em vez dos 134 que faltavam.
+    const cx = alvo.getBoundingClientRect();
+    const op = ligado.getBoundingClientRect();
+    if (op.right > cx.right) alvo.scrollLeft += (op.right - cx.right) + 8;
+    else if (op.left < cx.left) alvo.scrollLeft -= (cx.left - op.left) + 8;
+  }
 }
 
 function tempoRelativo(timestamp) {
@@ -4794,8 +4808,11 @@ async function atualizarWidget(dashboard) {
 // nenhuma.
 // ============================================================================
 async function abrirConfig() {
-  pintarEscolhaDeTema();
+  // O modal aparece ANTES de pintar os temas: a fileira rola para mostrar o
+  // tema escolhido, e elemento escondido nao tem largura nem posicao -- com
+  // display:none o calculo da rolagem da zero e nada se move.
   document.getElementById("modal-config").style.display = "flex";
+  pintarEscolhaDeTema();
   document.getElementById("cfg-nova").classList.remove("aberto");
 
   const alvo = document.getElementById("cfg-categorias");
@@ -4820,18 +4837,9 @@ async function abrirConfig() {
   const conta = document.getElementById("cfg-conta-email");
   if (conta) conta.textContent = emailUsuarioAtual || "";
 
-  // Reabre sempre recolhida
-  const secao = document.getElementById("cfg-secao-categorias");
-  const rotulo = document.getElementById("cfg-cat-rotulo");
-  if (secao) secao.style.display = "none";
-  if (rotulo) rotulo.textContent = "🏷️ Editar categorias";
-
-  // Fixas também começam recolhidas, senão Configurações reabre gigante
-  const secaoFix = document.getElementById("cfg-secao-fixas");
-  const rotuloFix = document.getElementById("cfg-fix-rotulo");
-  if (secaoFix) secaoFix.style.display = "none";
-  if (rotuloFix) rotuloFix.textContent = "🔁 Gerenciar despesas fixas";
-  fecharFormFixa();
+  // Reabre sempre na lista: sair de Configurações dentro de uma sub-tela e
+  // voltar lá dentro seria reabrir no meio de um assunto já resolvido.
+  voltarDoSubConfig();
 }
 
 // Bloco de versão em Configurações: mostra a instalada e um botão que abre o
@@ -4841,10 +4849,16 @@ async function montarVersaoApp() {
   if (!alvo) return;
 
   if (!rodandoNoAplicativo()) {
-    alvo.innerHTML = '<div class="cfg-aviso">Você está pelo navegador. ' +
-      'O aplicativo Android tem widgets e avisos de vencimento.</div>' +
-      '<button class="btn-modal confirmar" style="width:100%;" ' +
-      'onclick="baixarAtualizacao(\'' + LINK_APK + '\')">📲 Baixar o aplicativo</button>';
+    alvo.innerHTML =
+      '<div class="cfg-lin cfg-lin-estatica"><span class="cfg-lin-txt">' +
+        '<span class="cfg-lin-tit">Você está pelo navegador</span>' +
+        '<span class="cfg-lin-sub">o aplicativo Android tem widgets e avisos de vencimento</span>' +
+      '</span></div>' +
+      '<button type="button" class="cfg-lin cfg-lin-verde" ' +
+      'onclick="baixarAtualizacao(\'' + LINK_APK + '\')">' +
+        '<span class="cfg-lin-txt"><span class="cfg-lin-tit">Baixar o aplicativo</span></span>' +
+        '<span class="cfg-lin-seta">&#8250;</span>' +
+      '</button>';
     return;
   }
 
@@ -4855,13 +4869,24 @@ async function montarVersaoApp() {
   } catch (e) {}
 
   alvo.innerHTML =
-    '<div class="cfg-aviso">Versão instalada: <b>' + escaparHtml(instalada) + '</b></div>' +
-    '<button class="btn-modal confirmar" style="width:100%;" ' +
-    'onclick="baixarAtualizacao(\'' + LINK_APK + '\')">📲 Baixar a última versão</button>';
+    '<div class="cfg-lin cfg-lin-estatica">' +
+      '<span class="cfg-lin-txt"><span class="cfg-lin-tit">Versão instalada</span></span>' +
+      '<span class="cfg-lin-val">' + escaparHtml(instalada) + '</span>' +
+    '</div>' +
+    '<button type="button" class="cfg-lin cfg-lin-verde" ' +
+    'onclick="baixarAtualizacao(\'' + LINK_APK + '\')">' +
+      '<span class="cfg-lin-txt"><span class="cfg-lin-tit">Baixar a última versão</span></span>' +
+      '<span class="cfg-lin-seta">&#8250;</span>' +
+    '</button>';
 }
 
 function fecharConfig() {
   document.getElementById("modal-config").style.display = "none";
+
+  // Fechar com o código revelado não pode deixá-lo revelado para a próxima
+  // abertura -- e o relógio não tem por que continuar correndo.
+  if (cfgCodigoRelogio) { clearInterval(cfgCodigoRelogio); cfgCodigoRelogio = null; }
+  montarCodigoAcesso();
 }
 
 // Separa "2.2.004. Padaria" em código e nome
@@ -4940,16 +4965,7 @@ let fixasCarregadas = [];
 // ============================================================================
 let cartoesConfig = [];
 
-function alternarSecaoCartoes() {
-  const secao = document.getElementById("cfg-secao-cartoes");
-  const rotulo = document.getElementById("cfg-cart-rotulo");
-  const abriu = secao.style.display === "none";
-
-  secao.style.display = abriu ? "block" : "none";
-  rotulo.textContent = abriu ? "💳 Ocultar cartões" : "💳 Vencimento dos cartões";
-
-  if (abriu) carregarCartoesConfig();
-}
+function alternarSecaoCartoes() { abrirSubConfig("cartoes"); }
 
 async function carregarCartoesConfig() {
   const alvo = document.getElementById("cfg-lista-cartoes");
@@ -4962,7 +4978,13 @@ async function carregarCartoesConfig() {
     cartoesConfig = r.cartoes || [];
     if (!cartoesConfig.length) {
       alvo.innerHTML = '<p class="vazio">Nenhum cartão configurado.</p>';
+      if (subConfigAberta === "cartoes") dicaDoSubConfig("nenhum configurado");
       return;
+    }
+
+    if (subConfigAberta === "cartoes") {
+      dicaDoSubConfig(cartoesConfig.length +
+        (cartoesConfig.length === 1 ? " cartão" : " cartões") + " · vencimento e limite");
     }
 
     alvo.innerHTML = cartoesConfig.map(function (c, i) {
@@ -5077,25 +5099,7 @@ async function alinharCartao(indice) {
   }
 }
 
-function alternarSecaoFixas() {
-  const secao = document.getElementById("cfg-secao-fixas");
-  const rotulo = document.getElementById("cfg-fix-rotulo");
-  const abriu = secao.style.display === "none";
-
-  secao.style.display = abriu ? "block" : "none";
-  rotulo.textContent = abriu ? "🔁 Ocultar despesas fixas" : "🔁 Gerenciar despesas fixas";
-
-  if (abriu) {
-    const hoje = new Date();
-    const selMes = document.getElementById("fix-mes");
-    if (selMes && !selMes.options.length) {
-      // Começa no mês que vem: fixa se lança para o ciclo seguinte
-      selMes.innerHTML = opcoesMeses((hoje.getMonth() + 1) % 12);
-      document.getElementById("fix-ano").innerHTML = opcoesAnos(hoje.getFullYear());
-    }
-    carregarFixas();
-  }
-}
+function alternarSecaoFixas() { abrirSubConfig("fixas"); }
 
 async function carregarFixas() {
   const alvo = document.getElementById("cfg-fixas-lista");
@@ -5111,6 +5115,7 @@ async function carregarFixas() {
 
   if (fixasCarregadas.length === 0) {
     alvo.innerHTML = '<p class="vazio">Nenhuma despesa fixa cadastrada.</p>';
+    if (subConfigAberta === "fixas") dicaDoSubConfig("nenhuma cadastrada");
     return;
   }
 
@@ -5130,9 +5135,15 @@ async function carregarFixas() {
       '</div>';
   });
 
-  alvo.innerHTML = html +
-    '<div class="cfg-aviso" style="margin-top:8px;">' + fixasCarregadas.length +
-    ' fixa(s) · ' + formatarMoeda(total) + ' por mês</div>';
+  alvo.innerHTML = html;
+
+  // O resumo vai para o cabeçalho da sub-tela, onde serve para conferir sem
+  // rolar até o fim da lista.
+  if (subConfigAberta === "fixas") {
+    dicaDoSubConfig(fixasCarregadas.length +
+      (fixasCarregadas.length === 1 ? " cadastrada · " : " cadastradas · ") +
+      formatarMoeda(total) + " por mês");
+  }
 }
 
 function abrirFormFixa(indice) {
@@ -5275,16 +5286,146 @@ async function gerarFixasApp() {
   }
 }
 
-// A lista de categorias é longa demais para ficar sempre aberta em
-// Configurações: empurrava conta, versão e código para fora da tela.
-function alternarSecaoCategorias() {
-  const secao = document.getElementById("cfg-secao-categorias");
-  const rotulo = document.getElementById("cfg-cat-rotulo");
-  const abriu = secao.style.display === "none";
+// ============================================================================
+// SUB-TELAS DE CONFIGURAÇÕES
+// ----------------------------------------------------------------------------
+// Categorias, fixas e cartões abriam POR DENTRO da lista, cada uma empurrando
+// as outras seções para fora da tela -- e para fechar era preciso rolar de
+// volta e encontrar o mesmo botão que abriu. Agora a lista dá lugar a uma
+// sub-tela com título próprio e seta de voltar.
+//
+// É UMA sub-tela só: o cabeçalho é o mesmo, o conteúdo troca. Três cabeçalhos
+// iguais seriam três lugares para corrigir a mesma coisa.
+// ============================================================================
+let subConfigAberta = "";
 
-  secao.style.display = abriu ? "block" : "none";
-  rotulo.textContent = abriu ? "🏷️ Ocultar categorias" : "🏷️ Editar categorias";
+function abrirSubConfig(qual) {
+  const lista = document.getElementById("cfg-lista");
+  const sub = document.getElementById("cfg-sub");
+  const tit = document.getElementById("cfg-sub-tit");
+  const add = document.getElementById("cfg-sub-add");
+  if (!lista || !sub) return;
+
+  ["categorias", "cartoes", "fixas"].forEach(function (n) {
+    const el = document.getElementById("cfg-secao-" + n);
+    if (el) el.style.display = (n === qual) ? "block" : "none";
+  });
+
+  subConfigAberta = qual;
+  lista.style.display = "none";
+  sub.style.display = "block";
+
+  if (qual === "categorias") {
+    tit.textContent = "Categorias";
+    add.style.display = "";
+    dicaDoSubConfig(contarCategorias()
+      ? contarCategorias() + " no plano de contas"
+      : "plano de contas");
+
+  } else if (qual === "cartoes") {
+    tit.textContent = "Cartões";
+    // Cartão não se cria aqui: ele nasce de um lançamento. Um "+" que não
+    // cria nada é pior do que nenhum.
+    add.style.display = "none";
+    dicaDoSubConfig("carregando...");
+    carregarCartoesConfig();
+
+  } else if (qual === "fixas") {
+    tit.textContent = "Despesas fixas";
+    add.style.display = "";
+    dicaDoSubConfig("carregando...");
+
+    // Os seletores de mês/ano só existem depois de abrir a seção. Começam no
+    // mês que vem: fixa se lança para o ciclo seguinte.
+    const hoje = new Date();
+    const selMes = document.getElementById("fix-mes");
+    if (selMes && !selMes.options.length) {
+      selMes.innerHTML = opcoesMeses((hoje.getMonth() + 1) % 12);
+      document.getElementById("fix-ano").innerHTML = opcoesAnos(hoje.getFullYear());
+    }
+    carregarFixas();
+  }
+
+  // Entrar já rolado no meio é o que faz parecer que o topo não existe.
+  const caixa = sub.closest(".modal-caixa");
+  if (caixa) caixa.scrollTop = 0;
 }
+
+function voltarDoSubConfig() {
+  const lista = document.getElementById("cfg-lista");
+  const sub = document.getElementById("cfg-sub");
+  if (!lista || !sub) return;
+
+  // Formulário meio preenchido não sobrevive à saída: reabrir e encontrar
+  // dados de uma fixa que não foi salva é o caminho para salvar sem querer.
+  fecharFormFixa();
+  const nova = document.getElementById("cfg-nova");
+  if (nova) nova.classList.remove("aberto");
+
+  subConfigAberta = "";
+  sub.style.display = "none";
+  lista.style.display = "block";
+  pintarDicasDeConfig();
+
+  const caixa = lista.closest(".modal-caixa");
+  if (caixa) caixa.scrollTop = 0;
+}
+
+/** O "+" do cabeçalho faz o que o botão de largura inteira fazia. */
+function acaoDoSubConfig() {
+  if (subConfigAberta === "categorias") alternarNovaCategoria();
+  else if (subConfigAberta === "fixas") abrirFormFixa();
+}
+
+function dicaDoSubConfig(texto) {
+  const el = document.getElementById("cfg-sub-dica");
+  if (el) el.textContent = texto || "";
+}
+
+function contarCategorias() {
+  return (listasValidas && listasValidas.categorias) ? listasValidas.categorias.length : 0;
+}
+
+/**
+ * Escreve o estado de cada fileira embaixo do nome dela.
+ *
+ * Só mostra número que já está na memória -- nenhuma destas linhas dispara
+ * leitura do servidor. Abrir Configurações não deve custar cinco chamadas
+ * para preencher legendas que ninguém pediu; o que ainda não foi carregado
+ * fica com a descrição, e ganha o número quando a sub-tela abrir.
+ */
+function pintarDicasDeConfig() {
+  function por(id, texto) {
+    const el = document.getElementById(id);
+    if (el && texto) el.textContent = texto;
+  }
+
+  const cats = contarCategorias();
+  if (cats) por("cfg-dica-categorias", cats + " no plano de contas");
+
+  // gruposCompletos vem do dashboard, que já carregou antes daqui.
+  const g = (typeof gruposCompletos !== "undefined" ? gruposCompletos : []).length;
+  por("cfg-dica-grupos", g
+    ? g + (g === 1 ? " grupo" : " grupos") + " · mesadas e combinados"
+    : "nenhum ainda · toque para criar");
+
+  if (fixasCarregadas.length) {
+    let soma = 0;
+    fixasCarregadas.forEach(function (f) { soma += f.valor || 0; });
+    por("cfg-dica-fixas", fixasCarregadas.length +
+      (fixasCarregadas.length === 1 ? " cadastrada · " : " cadastradas · ") +
+      formatarMoeda(soma) + " por mês");
+  }
+
+  if (cartoesConfig.length) {
+    por("cfg-dica-cartoes", cartoesConfig.length +
+      (cartoesConfig.length === 1 ? " cartão" : " cartões") + " · vencimento e limite");
+  }
+}
+
+// Os nomes antigos continuam existindo: eram o que o HTML chamava, e podem
+// estar em atalho ou teste em algum lugar.
+function alternarSecaoCategorias() { abrirSubConfig("categorias"); }
 
 function alternarNovaCategoria() {
   const box = document.getElementById("cfg-nova");
@@ -5636,6 +5777,132 @@ async function executarEntradaNoApp() {
 }
 
 // ============================================================================
+// SELETOR DE MÊS
+// ----------------------------------------------------------------------------
+// Chegar a um mês distante custava um toque por mês, e cada toque chamava
+// recarregarDados(). De setembro a março do ano seguinte eram seis idas.
+//
+// A folha lê o que a PRÉ-CARGA já guardou: preCarregarAno() grava um
+// dashboard inteiro por mês em localStorage, 12 para trás e 12 para frente.
+// Por isso a lista sai com os valores de todos os meses sem UMA chamada de
+// rede -- e abre igual sem internet.
+// ============================================================================
+let anoDoSeletor = null;
+
+function abrirSeletorMeses() {
+  anoDoSeletor = anoExibido;
+  document.getElementById("modal-meses").style.display = "flex";
+  pintarSeletorMeses();
+}
+
+function fecharSeletorMeses() {
+  document.getElementById("modal-meses").style.display = "none";
+}
+
+function mudarAnoSeletor(delta) {
+  anoDoSeletor += delta;
+  pintarSeletorMeses();
+}
+
+/** Sem centavos: são doze números empilhados, e o centavo atrapalha varrer. */
+function semCentavos(v) {
+  return Math.round(v || 0).toLocaleString("pt-BR");
+}
+
+async function escolherMesDoSeletor(mes, ano) {
+  fecharSeletorMeses();
+
+  if (mes < 0) { await irParaMesAtual(); return; }
+  if (mes === mesExibido && ano === anoExibido) return;
+
+  mesExibido = mes;
+  anoExibido = ano;
+  await recarregarDados();
+}
+
+function pintarSeletorMeses() {
+  const alvo = document.getElementById("sel-meses");
+  if (!alvo) return;
+
+  const hoje = new Date();
+  const linhas = [];
+  let maior = 0;
+  let somaFechada = 0;
+  let fechados = 0;
+
+  for (let m = 0; m < 12; m++) {
+    const c = lerCache(m, anoDoSeletor);
+    if (!c) { linhas.push({ mes: m, tem: false }); continue; }
+
+    const r = resumoDoMes(c.dados);
+    linhas.push({ mes: m, tem: true, receita: r.receita, sobra: r.sobra, previsto: r.supondo });
+
+    maior = Math.max(maior, Math.abs(r.sobra));
+    if (!r.previsto && !r.supondo) { somaFechada += r.sobra; fechados++; }
+  }
+
+  // ---- o ano ----
+  document.getElementById("sel-ano-num").textContent = anoDoSeletor;
+
+  const total = document.getElementById("sel-ano-total");
+  if (fechados > 0) {
+    const cor = somaFechada >= 0 ? "var(--verde)" : "var(--vermelho)";
+    // "em N meses fechados", e não "de janeiro a X": os meses guardados podem
+    // ter buracos, e aí "de janeiro a" seria mentira sobre o que foi somado.
+    total.innerHTML = (somaFechada >= 0 ? "sobrou " : "faltou ") +
+      '<b style="color:' + cor + '">R$ ' + escaparHtml(semCentavos(Math.abs(somaFechada))) + '</b>' +
+      " em " + fechados + (fechados === 1 ? " mês fechado" : " meses fechados");
+  } else {
+    total.textContent = "nenhum mês fechado neste ano";
+  }
+
+  // ---- os doze ----
+  alvo.innerHTML = linhas.map(function (l) {
+    const nome = MESES_NOMES[l.mes].slice(0, 3).toLowerCase();
+    const aberto = (l.mes === mesExibido && anoDoSeletor === anoExibido);
+    const eHoje = (l.mes === hoje.getMonth() && anoDoSeletor === hoje.getFullYear());
+    const ir = 'onclick="escolherMesDoSeletor(' + l.mes + ',' + anoDoSeletor + ')"';
+
+    // Fora dos 25 meses guardados o mês CONTINUA na lista, apagado e dizendo
+    // que vai precisar de rede -- sumir daria a impressão de que o app só
+    // tem dois anos de história.
+    if (!l.tem) {
+      return '<button type="button" class="sel-mes vazio" ' + ir + '>' +
+        '<span class="sel-nome">' + nome + '</span>' +
+        '<span class="sel-barra"></span>' +
+        '<span class="sel-vl" style="font-size:10.5px; font-weight:600; color:var(--fraco-2)">' +
+          'buscar<small>precisa de rede</small></span>' +
+      '</button>';
+    }
+
+    // A barra compara com o MELHOR mês do ano, não com a receita: o que sobra
+    // é uma fatia pequena do que entra, e contra a receita as doze barras
+    // ficariam quase vazias e indistinguíveis entre si.
+    const pct = maior > 0 ? Math.min(100, (Math.abs(l.sobra) / maior) * 100) : 0;
+    const cor = l.sobra >= 0 ? "var(--verde)" : "var(--vermelho)";
+
+    // Listrado para o que ainda não aconteceu: a mesma marca que a Projeção
+    // Futura já usa. Cor chapada diria que o mês fechou assim.
+    const tinta = l.previsto
+      ? "background: repeating-linear-gradient(45deg, " + cor + " 0 3px, transparent 3px 6px);"
+      : "background: " + cor + ";";
+
+    const legenda = aberto
+      ? ("aberto" + (eHoje ? " · hoje" : ""))
+      : (l.previsto ? "previsto" : semCentavos(l.receita) + " entrou");
+
+    return '<button type="button" class="sel-mes' + (aberto ? " aberto" : "") + '" ' + ir + '>' +
+      '<span class="sel-nome">' + nome + '</span>' +
+      '<span class="sel-barra"><span style="width:' + pct.toFixed(1) + '%; ' + tinta + '"></span></span>' +
+      '<span class="sel-vl" style="color:' + (l.previsto ? "var(--cinza-texto)" : cor) + '">' +
+        (l.previsto ? "≈ " : (l.sobra >= 0 ? "+ " : "− ")) + escaparHtml(semCentavos(Math.abs(l.sobra))) +
+        '<small>' + escaparHtml(legenda) + '</small>' +
+      '</span>' +
+    '</button>';
+  }).join("");
+}
+
+// ============================================================================
 // NAVEGAÇÃO ENTRE MESES
 // ============================================================================
 async function mudarMes(delta) {
@@ -5792,38 +6059,58 @@ function escaparHtml(txt) {
 // ============================================================================
 // PREENCHER DASHBOARD
 // ============================================================================
-function preencherDashboard(d) {
-  document.getElementById("mes-referencia").textContent = d.mesReferencia || "";
+/**
+ * O resultado de um mês, a partir do dashboard dele.
+ *
+ * Mês futuro: a receita do mês base ainda não foi lançada, e o saldo do
+ * servidor sai de uma receita ZERO -- o que faz um mês tranquilo aparecer
+ * como "FALTA R$ 349". A última receita conhecida entra no lugar, e quem
+ * mostra DIZ que está supondo: número supondo é útil, número errado não.
+ *
+ * Nesse caso prevê OS DOIS LADOS: a receita já entrava estimada, mas as
+ * fixas ainda não lançadas ficavam de fora, e o número saía otimista por
+ * exatamente o valor das contas que todo mundo sabe que vão chegar.
+ *
+ * No mês CORRENTE nada disso vale: lá o número é "o que sobra agora", e as
+ * fixas que faltam moram no bloco de baixo do balanço.
+ */
+function resumoDoMes(d) {
+  const s = (d && d.saldo) || {};
+  const supondo = !(s.receitaBase > 0) && s.receitaPrevista > 0;
+  const receita = s.receitaBase > 0 ? s.receitaBase : (s.receitaPrevista || 0);
+  const fixasNaConta = supondo ? (s.fixasPrevistas || 0) : 0;
 
-  // Botão "hoje" só aparece se não estiver no mês corrente
+  return {
+    s: s,
+    supondo: supondo,
+    receita: receita,
+    despesas: s.despesas || 0,
+    fixasNaConta: fixasNaConta,
+    sobra: supondo ? (receita - (s.despesas || 0) - fixasNaConta) : (s.saldo || 0)
+  };
+}
+
+function preencherDashboard(d) {
+  // "Setembro/2026" vira "Setembro 2026": a barra é o rótulo do mês, não um
+  // caminho. A barra continua em d.mesReferencia, que outras partes partem.
+  document.getElementById("mes-referencia").textContent =
+    (d.mesReferencia || "").replace("/", " ");
+
+  // O "Hoje" fica INVISÍVEL no mês corrente, não removido: com display:none
+  // ele encolhia a linha e os três ícones de cima andavam de lugar conforme
+  // o mês aberto -- o alvo de Configurações mudava de posição.
   const hojeM = new Date().getMonth();
   const hojeA = new Date().getFullYear();
   const btnHoje = document.getElementById("btn-hoje");
-  btnHoje.style.display = (d.mes === hojeM && d.ano === hojeA) ? "none" : "inline-block";
+  btnHoje.style.visibility = (d.mes === hojeM && d.ano === hojeA) ? "hidden" : "visible";
 
   // ---- SALDO (base = receita do mês anterior) ----
-  const s = d.saldo || {};
-
-  // Mês futuro: a receita do mês base ainda não foi lançada, e o saldo do
-  // servidor sai de uma receita ZERO -- o que faz um mês tranquilo aparecer
-  // como "FALTA R$ 349". A última receita conhecida entra no lugar, e a tela
-  // DIZ que está supondo: número supondo é útil, número errado não.
-  const supondo = !(s.receitaBase > 0) && s.receitaPrevista > 0;
-  const receitaDaConta = s.receitaBase > 0 ? s.receitaBase : (s.receitaPrevista || 0);
-
-  // Num mês de previsão, prever OS DOIS LADOS.
-  //
-  // A receita já entrava estimada; as fixas ainda não lançadas ficavam de
-  // fora. O número saía otimista por exatamente o valor das contas que todo
-  // mundo sabe que vão chegar -- e ele já vinha com "≈" e "PREVISTA", ou
-  // seja, o app prometia previsão e entregava meia.
-  //
-  // No mês CORRENTE nada muda: lá o número é "o que sobra agora", e as fixas
-  // que faltam moram no bloco de baixo. Aqui não existe "agora".
-  const fixasNaConta = supondo ? (s.fixasPrevistas || 0) : 0;
-  const sobraReal = supondo
-    ? (receitaDaConta - (s.despesas || 0) - fixasNaConta)
-    : (s.saldo || 0);
+  const r = resumoDoMes(d);
+  const s = r.s;
+  const supondo = r.supondo;
+  const receitaDaConta = r.receita;
+  const fixasNaConta = r.fixasNaConta;
+  const sobraReal = r.sobra;
 
   const elSaldo = document.getElementById("saldo-valor");
   elSaldo.textContent = (supondo ? "≈ " : "") + formatarMoeda(sobraReal);
@@ -6383,23 +6670,80 @@ async function entrarComCodigo() {
   }
 }
 
-// Mostra o código da sessão atual em Configurações, para levar ao aplicativo
+// ============================================================================
+// CÓDIGO DE ACESSO
+// ----------------------------------------------------------------------------
+// Este código é a chave da conta: é o que se cola na tela de entrada do
+// aplicativo para entrar. Ele ficava impresso por extenso em Configurações,
+// sempre, na mesma rolagem em que se troca o tema -- bastava alguém olhar o
+// celular na sua mão para levar a conta.
+//
+// Agora a linha fica fechada, dizendo o que aquilo é, e o código só aparece
+// depois de um toque. Some sozinho: quem revela para copiar não volta para
+// esconder, e um código revelado esquecido na tela é o mesmo problema de antes.
+// ============================================================================
+const CODIGO_SEGUNDOS = 30;
+let cfgCodigoRelogio = null;
+
 function montarCodigoAcesso() {
   const alvo = document.getElementById("cfg-codigo");
   if (!alvo) return;
 
+  if (cfgCodigoRelogio) { clearInterval(cfgCodigoRelogio); cfgCodigoRelogio = null; }
+
   if (!sessaoAtual) {
-    alvo.innerHTML = '<p class="vazio">Sem sessão ativa.</p>';
+    alvo.innerHTML =
+      '<div class="cfg-lin cfg-lin-estatica"><span class="cfg-lin-txt">' +
+        '<span class="cfg-lin-tit">Código de acesso</span>' +
+        '<span class="cfg-lin-sub">sem sessão ativa</span>' +
+      '</span></div>';
     return;
   }
 
   alvo.innerHTML =
-    '<div class="cfg-aviso">Cole este código na tela de entrada do aplicativo. ' +
-    'Ele dá acesso à sua conta — não compartilhe.</div>' +
-    '<div class="cfg-codigo-caixa" id="cfg-codigo-txt">' + escaparHtml(sessaoAtual) + '</div>' +
-    '<button class="btn-modal confirmar" style="width:100%;" onclick="copiarCodigoAcesso()">' +
-      '📋 Copiar código' +
+    '<button type="button" class="cfg-lin" onclick="mostrarCodigoAcesso()">' +
+      '<span class="cfg-lin-txt">' +
+        '<span class="cfg-lin-tit">Código de acesso</span>' +
+        '<span class="cfg-lin-sub alerta">quem tiver este código entra na sua conta</span>' +
+      '</span>' +
+      '<span class="cfg-lin-acao">Mostrar</span>' +
     '</button>';
+}
+
+function mostrarCodigoAcesso() {
+  const alvo = document.getElementById("cfg-codigo");
+  if (!alvo || !sessaoAtual) return;
+
+  alvo.innerHTML =
+    '<div class="cfg-codigo-bloco">' +
+      '<div class="cfg-codigo-topo">' +
+        '<span class="cfg-lin-tit">Código de acesso</span>' +
+        '<span class="cfg-codigo-conta" id="cfg-codigo-conta"></span>' +
+      '</div>' +
+      '<div class="cfg-codigo-caixa" id="cfg-codigo-txt">' + escaparHtml(sessaoAtual) + '</div>' +
+      '<div class="cfg-codigo-acoes">' +
+        '<button type="button" class="btn-modal confirmar" onclick="copiarCodigoAcesso()">Copiar</button>' +
+        '<button type="button" class="btn-modal cancelar" onclick="montarCodigoAcesso()">Esconder</button>' +
+      '</div>' +
+    '</div>';
+
+  let resta = CODIGO_SEGUNDOS;
+  const conta = document.getElementById("cfg-codigo-conta");
+  conta.textContent = "esconde em 0:" + CODIGO_SEGUNDOS;
+
+  if (cfgCodigoRelogio) clearInterval(cfgCodigoRelogio);
+  cfgCodigoRelogio = setInterval(function () {
+    // O bloco pode ter saído da tela por outro caminho (Esconder, fechar o
+    // modal, sair da conta). Sem esta checagem o relógio continuaria correndo
+    // e redesenharia um pedaço de tela que não está mais lá.
+    if (!document.getElementById("cfg-codigo-txt")) {
+      clearInterval(cfgCodigoRelogio); cfgCodigoRelogio = null; return;
+    }
+    resta--;
+    if (resta <= 0) { montarCodigoAcesso(); return; }
+    const el = document.getElementById("cfg-codigo-conta");
+    if (el) el.textContent = "esconde em 0:" + (resta < 10 ? "0" : "") + resta;
+  }, 1000);
 }
 
 async function copiarCodigoAcesso() {
