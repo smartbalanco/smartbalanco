@@ -705,6 +705,83 @@ function lancamentosGuardados() {
   }
 }
 
+// ============================================================================
+// TEMAS
+// ----------------------------------------------------------------------------
+// Cada tema e um conjunto dos MESMOS tokens, redefinidos num bloco
+// :root[data-tema="..."] do CSS. Aqui so se escreve o atributo -- nenhuma cor
+// mora no JavaScript, senao trocar de tema exigiria mexer nos dois lugares.
+// ============================================================================
+const TEMA_CHAVE = "sb_tema";
+
+const TEMAS = [
+  { v: "",          nome: "Padrao",   fundo: "#e8ecf3", texto: "#1e293b",
+    pontos: ["#2e9e6b", "#f97316", "#b91c1c"] },
+  { v: "papel",     nome: "Papel",    fundo: "#ece6dd", texto: "#332e28",
+    pontos: ["#3f7d55", "#b06f22", "#ab3b2b"] },
+  { v: "salvia",    nome: "Salvia",   fundo: "#e3e9e1", texto: "#26302a",
+    pontos: ["#2f6b4f", "#a96826", "#a13429"] },
+  { v: "petroleo",  nome: "Petroleo", fundo: "#e2ecea", texto: "#1c2b2a",
+    pontos: ["#0f766e", "#b1661a", "#a93a34"] },
+  { v: "indigo",    nome: "Indigo",   fundo: "#e8e7f2", texto: "#23213a",
+    pontos: ["#2f7d5e", "#b0620f", "#a83055"] },
+  { v: "ardosia",   nome: "Ardosia",  fundo: "#2a2f37", texto: "#e6ebf2",
+    pontos: ["#4ade80", "#fbbf24", "#f87171"] },
+  { v: "cafe",      nome: "Cafe",     fundo: "#2b2622", texto: "#f0e9e1",
+    pontos: ["#7cc79a", "#e0a34a", "#ef8272"] }
+];
+
+function temaGuardado() {
+  try { return localStorage.getItem(TEMA_CHAVE) || ""; } catch (e) { return ""; }
+}
+
+/**
+ * Escreve o tema no <html>.
+ *
+ * Roda ANTES da primeira pintura (a chamada esta no fim deste arquivo, que
+ * carrega no <head>): aplicar depois faria a tela piscar no tema errado a
+ * cada abertura.
+ */
+function aplicarTema(v) {
+  const raiz = document.documentElement;
+  if (v) raiz.setAttribute("data-tema", v);
+  else raiz.removeAttribute("data-tema");
+
+  // A barra de status do celular acompanha o fundo. Sem isso ela fica preta
+  // sobre um app bege, que e o tipo de detalhe que denuncia remendo.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) {
+    const achado = TEMAS.filter(function (x) { return x.v === v; })[0];
+    if (achado) meta.setAttribute("content", achado.fundo);
+  }
+}
+
+function escolherTema(v) {
+  try { localStorage.setItem(TEMA_CHAVE, v); } catch (e) {}
+  aplicarTema(v);
+  pintarEscolhaDeTema();
+}
+
+function pintarEscolhaDeTema() {
+  const alvo = document.getElementById("cfg-tema-grade");
+  if (!alvo) return;
+
+  const atual = temaGuardado();
+
+  alvo.innerHTML = TEMAS.map(function (x) {
+    const pontos = x.pontos.map(function (c) {
+      return '<span class="cfg-tema-ponto" style="background:' + c + '"></span>';
+    }).join("");
+
+    return '<button type="button" class="cfg-tema-op' + (x.v === atual ? " ativo" : "") +
+        '" onclick="escolherTema(' + JSON.stringify(x.v).replace(/"/g, "&quot;") + ')">' +
+        '<span class="cfg-tema-amostra" style="background:' + x.fundo +
+          '; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08)">' + pontos + '</span>' +
+        '<span class="cfg-tema-nome">' + escaparHtml(x.nome) + '</span>' +
+      '</button>';
+  }).join("");
+}
+
 function tempoRelativo(timestamp) {
   const seg = Math.floor((Date.now() - timestamp) / 1000);
   if (seg < 60) return "agora há pouco";
@@ -2746,7 +2823,7 @@ function pintarLinks() {
         '<div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px;">' +
           '<span class="link-loja">' + escaparHtml(k.loja || "loja") +
             (ehMenor ? ' <span style="color:var(--verde)">· menor</span>' : '') + '</span>' +
-          '<span class="link-preco" style="color:' + (ehMenor ? "var(--verde)" : "#1e293b") + '">' +
+          '<span class="link-preco" style="color:' + (ehMenor ? "var(--verde)" : "var(--texto)") + '">' +
             (preco ? formatarMoeda(preco) : "—") + '</span>' +
         '</div>' +
         (k.produto ? '<div style="font-size:10.5px; color:var(--cinza-texto); margin-top:3px; line-height:1.4;">' +
@@ -4717,6 +4794,7 @@ async function atualizarWidget(dashboard) {
 // nenhuma.
 // ============================================================================
 async function abrirConfig() {
+  pintarEscolhaDeTema();
   document.getElementById("modal-config").style.display = "flex";
   document.getElementById("cfg-nova").classList.remove("aberto");
 
@@ -5699,10 +5777,10 @@ function formatarMoeda(valor) {
 
 function corDoScore(classificacao) {
   const c = (classificacao || "").toLowerCase();
-  if (c.indexOf("excelente") !== -1) return "#2e9e6b";
-  if (c.indexOf("bom") !== -1) return "#eab308";
-  if (c.indexOf("aten") !== -1) return "#f97316";
-  return "#dc2626";
+  if (c.indexOf("excelente") !== -1) return "var(--verde)";
+  if (c.indexOf("bom") !== -1) return "var(--laranja)";
+  if (c.indexOf("aten") !== -1) return "var(--laranja)";
+  return "var(--vermelho)";
 }
 
 function escaparHtml(txt) {
@@ -5732,15 +5810,28 @@ function preencherDashboard(d) {
   // DIZ que está supondo: número supondo é útil, número errado não.
   const supondo = !(s.receitaBase > 0) && s.receitaPrevista > 0;
   const receitaDaConta = s.receitaBase > 0 ? s.receitaBase : (s.receitaPrevista || 0);
-  const sobraReal = supondo ? (receitaDaConta - (s.despesas || 0)) : (s.saldo || 0);
+
+  // Num mês de previsão, prever OS DOIS LADOS.
+  //
+  // A receita já entrava estimada; as fixas ainda não lançadas ficavam de
+  // fora. O número saía otimista por exatamente o valor das contas que todo
+  // mundo sabe que vão chegar -- e ele já vinha com "≈" e "PREVISTA", ou
+  // seja, o app prometia previsão e entregava meia.
+  //
+  // No mês CORRENTE nada muda: lá o número é "o que sobra agora", e as fixas
+  // que faltam moram no bloco de baixo. Aqui não existe "agora".
+  const fixasNaConta = supondo ? (s.fixasPrevistas || 0) : 0;
+  const sobraReal = supondo
+    ? (receitaDaConta - (s.despesas || 0) - fixasNaConta)
+    : (s.saldo || 0);
 
   const elSaldo = document.getElementById("saldo-valor");
   elSaldo.textContent = (supondo ? "≈ " : "") + formatarMoeda(sobraReal);
-  elSaldo.style.color = (sobraReal >= 0) ? "#2e9e6b" : "#dc2626";
+  elSaldo.style.color = (sobraReal >= 0) ? "var(--verde)" : "var(--vermelho)";
 
   const ds = d.despesasStatus || {};
-  pintarBarraDoSaldo(d, s, ds, supondo, receitaDaConta, sobraReal);
-  pintarPrevisto(d, s, receitaDaConta);
+  pintarBarraDoSaldo(d, s, ds, supondo, receitaDaConta, sobraReal, fixasNaConta);
+  pintarPrevisto(d, s, receitaDaConta, fixasNaConta > 0);
 
   document.getElementById("saldo-rotulo").textContent =
     (sobraReal >= 0 ? (supondo ? "SOBRA PREVISTA EM " : "SOBRA EM ") : "FALTA EM ") +
@@ -6057,7 +6148,7 @@ function devolverSessaoAoAplicativo(codigo) {
   document.body.innerHTML =
     '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;' +
     'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
-    'height:100vh;text-align:center;padding:24px;background:#e8ecf3;color:#1e293b;">' +
+    'height:100vh;text-align:center;padding:24px;background:#e8ecf3;color:var(--texto);">' +
       '<div style="font-size:44px;margin-bottom:14px;">✅</div>' +
       '<h2 style="margin-bottom:8px;font-size:19px;">Pronto!</h2>' +
       '<p style="font-size:14px;color:#5b6878;line-height:1.5;">Voltando para o aplicativo...</p>' +
@@ -8429,8 +8520,8 @@ function renderizarAprovacoes() {
     lista.innerHTML =
       '<div class="card" style="text-align:center; padding:36px 20px;">' +
         '<div style="font-size:40px; margin-bottom:10px;">✅</div>' +
-        '<p style="font-size:15px; color:#334155; font-weight:600;">Nada pendente!</p>' +
-        '<p style="font-size:13px; color:#94a3b8; margin-top:4px;">Não há lançamentos aguardando aprovação.</p>' +
+        '<p style="font-size:15px; color:var(--texto-2); font-weight:600;">Nada pendente!</p>' +
+        '<p style="font-size:13px; color:var(--fraco-2); margin-top:4px;">Não há lançamentos aguardando aprovação.</p>' +
       '</div>';
     return;
   }
@@ -8780,7 +8871,7 @@ async function abrirEdicaoAprovacao(idx) {
     infoParc.innerHTML =
       '📦 <b>' + g.totalParcelas + ' parcelas.</b> O valor total será dividido igualmente. ' +
       'As demais parcelas seguem mês a mês a partir do 1º vencimento.<br>' +
-      '<span style="color:#94a3b8;">Para mudar o número de parcelas, rejeite e lance manualmente.</span>';
+      '<span style="color:var(--fraco-2);">Para mudar o número de parcelas, rejeite e lance manualmente.</span>';
     infoParc.style.display = "block";
   } else {
     infoParc.style.display = "none";
@@ -9396,9 +9487,10 @@ async function alternarPlanosNoRelatorio() {
  * A base é a receita, não a despesa: a pergunta é quanto do que entrou já
  * está comprometido.
  */
-function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra) {
+function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
   const pagas = Math.max(0, ds.pagas || 0);
   const pendentes = Math.max(0, ds.pendentes || 0);
+  const previstas = Math.max(0, fixas || 0);
 
   // A suposição e a sobra vêm DE FORA, já decididas por quem pintou o herói.
   // Recalcular aqui foi o que deixou o número de cima dizer "falta" enquanto
@@ -9421,12 +9513,21 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra) {
   // Estourou a receita: a barra fica cheia de despesa e não há verde. Fingir
   // uma fatia de sobra num mês negativo seria mentir na única coisa que a
   // barra existe para mostrar.
-  const teto = Math.max(receita, pagas + pendentes, 1);
+  const teto = Math.max(receita, pagas + pendentes + previstas, 1);
   const pct = function (v) { return Math.max(0, (v / teto) * 100); };
 
   const faixas = [];
   if (pagas > 0) faixas.push('<span style="width:' + pct(pagas) + '%; background:var(--azul)"></span>');
   if (pendentes > 0) faixas.push('<span style="width:' + pct(pendentes) + '%; background:var(--laranja)"></span>');
+
+  // Listrada, não chapada: é a mesma marca que a Projeção Futura usa para o
+  // que ainda não virou lançamento. Cor sozinha diria que já aconteceu.
+  if (previstas > 0) {
+    faixas.push('<span style="width:' + pct(previstas) + '%; ' +
+      'background: repeating-linear-gradient(45deg, var(--laranja) 0 3px, transparent 3px 6px); ' +
+      'background-color: rgba(249, 115, 22, .18)"></span>');
+  }
+
   if (sobra > 0) faixas.push('<span style="flex-grow:1; background:var(--verde)"></span>');
   document.getElementById("sd-barra").innerHTML = faixas.join("");
 
@@ -9439,9 +9540,12 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra) {
       '</div>';
   };
 
+  const listrado = "repeating-linear-gradient(45deg, var(--laranja) 0 2px, transparent 2px 4px)";
+
   document.getElementById("sd-legenda").innerHTML =
     linha("var(--azul)", "já pago", pagas) +
     linha("var(--laranja)", "a pagar ainda", pendentes) +
+    (previstas > 0 ? linha(listrado, "fixas ainda não lançadas", previstas) : "") +
     (sobra >= 0
       ? linha("var(--verde)", supondo ? "sobraria" : "sobra", sobra, "var(--verde)")
       : linha("var(--vermelho)", "falta", Math.abs(sobra), "var(--vermelho)"));
@@ -9455,7 +9559,12 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra) {
  * uma pilha de números. Aqui o real fica em cima e a suposição embaixo, que é
  * a mesma regra que o resto do app já segue.
  */
-function pintarPrevisto(d, s, receitaDaConta) {
+/**
+ * @param fixasJaContadas  As fixas já entraram no número de cima (mês de
+ *   previsão). Sem avisar, quem lê "sobra ≈ X" e logo abaixo "+ R$ 2.748"
+ *   subtrai de novo, de cabeça -- e erra por um mês inteiro de contas.
+ */
+function pintarPrevisto(d, s, receitaDaConta, fixasJaContadas) {
   const bloco = document.getElementById("bloco-previsto");
   const fixas = s.fixasPrevistas || 0;
   const planos = s.planos || 0;
@@ -9468,8 +9577,15 @@ function pintarPrevisto(d, s, receitaDaConta) {
   if (fixas > 0) partes.push("contas fixas");
   if (planos > 0) partes.push("planos de compra");
 
-  document.getElementById("pv-sub").textContent = partes.join(" e ");
-  document.getElementById("pv-val").textContent = "+ " + formatarMoeda(total);
+  // Quando as fixas já estão no número de cima, o "+" some delas: só o que
+  // ainda não foi contado é que acrescenta.
+  const acrescenta = fixasJaContadas ? planos : total;
+
+  document.getElementById("pv-sub").textContent =
+    partes.join(" e ") + (fixasJaContadas ? " · fixas já na conta acima" : "");
+  document.getElementById("pv-val").textContent = acrescenta > 0
+    ? "+ " + formatarMoeda(acrescenta)
+    : formatarMoeda(total);
 
   const itens = s.fixasPrevistasItens || [];
   const esperadas = (s.despesas || 0) + total;
@@ -9478,8 +9594,9 @@ function pintarPrevisto(d, s, receitaDaConta) {
   let html = "";
 
   if (fixas > 0) {
-    html += '<div class="pvd-item"><span>fixas ainda não lançadas</span><b>' +
-            formatarMoeda(fixas) + '</b></div>';
+    html += '<div class="pvd-item"><span>fixas ainda não lançadas' +
+            (fixasJaContadas ? ' <i style="font-style:normal; color:var(--verde)">(já contadas)</i>' : '') +
+            '</span><b>' + formatarMoeda(fixas) + '</b></div>';
     if (itens.length) {
       html += '<div class="pvd-lista">' + itens.map(function (f) {
         return '<div class="pvd-sub-item"><span>' + escaparHtml(f.descricao) +
@@ -9506,11 +9623,13 @@ function pintarPrevisto(d, s, receitaDaConta) {
   }
 
   html += '<div class="pvd-nota">' +
-    (planos > 0 && fixas > 0
-      ? "As fixas vão chegar; os planos são vontade. Nenhum dos dois foi lançado."
-      : (planos > 0
-        ? "Nada disso foi comprado. Os números de cima seguem valendo."
-        : "Contas cadastradas que ainda não viraram lançamento neste mês.")) +
+    (fixasJaContadas
+      ? "Mês de previsão: as fixas já estão descontadas no valor de cima. Os planos, não — eles ainda são vontade."
+      : (planos > 0 && fixas > 0
+        ? "As fixas vão chegar; os planos são vontade. Nenhum dos dois foi lançado."
+        : (planos > 0
+          ? "Nada disso foi comprado. Os números de cima seguem valendo."
+          : "Contas cadastradas que ainda não viraram lançamento neste mês."))) +
     '</div>';
 
   document.getElementById("pv-corpo").innerHTML = html;
@@ -10940,7 +11059,7 @@ function htmlParcelamentos(r) {
   if (!r.parcelamentos || r.parcelamentos.length === 0) {
     return '<div class="card" style="text-align:center; padding:40px 20px;">' +
              '<div style="font-size:40px; margin-bottom:10px;">🎉</div>' +
-             '<p style="font-size:15px; color:#334155; font-weight:600;">Nenhum parcelamento em aberto!</p>' +
+             '<p style="font-size:15px; color:var(--texto-2); font-weight:600;">Nenhum parcelamento em aberto!</p>' +
            '</div>';
   }
 
@@ -11366,21 +11485,21 @@ function esconderAvisoVencimento() {
 const PERFIS_INFO = {
   contratado: { icone: "🔒", cor: "#2563eb", nome: "Já contratado",
                 desc: "Valor já lançado na planilha. É certeza." },
-  fixo:       { icone: "📌", cor: "#2e9e6b", nome: "Fixo / recorrente",
+  fixo:       { icone: "📌", cor: "var(--verde)", nome: "Fixo / recorrente",
                 desc: "Estável. Previsto pelo último valor (não pela média)." },
-  variavel:   { icone: "📊", cor: "#f97316", nome: "Recorrente variável",
+  variavel:   { icone: "📊", cor: "var(--laranja)", nome: "Recorrente variável",
                 desc: "Oscila. Previsto pela média ponderada, com faixa." },
   sazonal:    { icone: "🗓️", cor: "#8e44ad", nome: "Sazonal",
                 desc: "Só cai em meses específicos." },
-  eventual:   { icone: "🎲", cor: "#94a3b8", nome: "Eventual",
+  eventual:   { icone: "🎲", cor: "var(--fraco-2)", nome: "Eventual",
                 desc: "Esporádico. Não é previsível — não entra no total." }
 };
 
 const CONFIANCA_INFO = {
   maxima: { txt: "certeza", cor: "#2563eb" },
-  alta:   { txt: "alta",    cor: "#2e9e6b" },
-  media:  { txt: "média",   cor: "#f97316" },
-  baixa:  { txt: "baixa",   cor: "#94a3b8" }
+  alta:   { txt: "alta",    cor: "var(--verde)" },
+  media:  { txt: "média",   cor: "var(--laranja)" },
+  baixa:  { txt: "baixa",   cor: "var(--fraco-2)" }
 };
 
 function htmlPrevisao(r) {
@@ -13559,3 +13678,6 @@ function alternarGrupoGC(idx) {
   el.classList.toggle("aberto", !aberto);
   if (seta) seta.textContent = aberto ? "▾" : "▴";
 }
+
+// O tema antes da primeira pintura: aplicar depois faria a tela piscar.
+try { aplicarTema(temaGuardado()); } catch (e) {}
