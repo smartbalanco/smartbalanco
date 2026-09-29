@@ -1134,6 +1134,23 @@
     }
     .linha-item.vencida .li-chip b { color: var(--vermelho); }
 
+    /* ---- grupo de saldo nos formulários ---- */
+    .gsf-opcional {
+      font-size: 9.5px; font-weight: 600; color: var(--cinza-texto);
+      text-transform: none; letter-spacing: 0; margin-left: 5px;
+    }
+    .gsf-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+    .gsf-chips button {
+      height: 34px; padding: 0 14px; border: none; cursor: pointer;
+      border-radius: 999px; font-family: inherit; font-size: 11.5px; font-weight: 600;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+      color: var(--cinza-texto);
+    }
+    .gsf-chips button.ativo {
+      box-shadow: var(--afundado-leve); color: var(--verde); font-weight: 700;
+    }
+    .gsf-dica { font-size: 10px; color: var(--cinza-texto); line-height: 1.5; margin-top: 7px; }
+
     /* ---- gerenciar grupos ---- */
     .gg-item {
       display: flex; align-items: center; gap: 11px; padding: 12px 13px;
@@ -4856,6 +4873,16 @@
           </button>
         </div>
 
+        <!-- O grupo é OPCIONAL: a maioria das despesas não pertence a
+             combinado nenhum. Quando a categoria tem regra, o grupo dela já
+             vem marcado -- e dá para trocar. -->
+        <div class="campo-bloco" id="nd-bloco-grupo" style="display:none;">
+          <label>Grupo de saldo <span class="gsf-opcional">opcional</span></label>
+          <input type="hidden" id="nd-grupo" />
+          <div class="gsf-chips" id="nd-grupo-chips"></div>
+          <div class="gsf-dica" id="nd-grupo-dica"></div>
+        </div>
+
         <div class="campo-bloco">
           <label for="nd-datacompra">Data da compra</label>
           <input type="date" id="nd-datacompra" onchange="preencherVencimentoCartao('nd')" />
@@ -5590,6 +5617,13 @@
             </button>
           </div>
 
+          <div class="campo-bloco" id="dr-bloco-grupo" style="display:none;">
+            <label>Grupo de saldo <span class="gsf-opcional">opcional</span></label>
+            <input type="hidden" id="dr-grupo" />
+            <div class="gsf-chips" id="dr-grupo-chips"></div>
+            <div class="gsf-dica" id="dr-grupo-dica"></div>
+          </div>
+
           <div class="toggle-editar" id="dr-toggle-pago" onclick="document.getElementById('dr-chk-pago').click()">
             <input type="checkbox" id="dr-chk-pago"
                    onclick="event.stopPropagation(); alternarPagoDoc();" />
@@ -5741,7 +5775,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=98"></script>
+  <script src="app.js?v=99"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

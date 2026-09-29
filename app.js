@@ -7101,6 +7101,13 @@ async function abrirNovaDespesa() {
   montarSelect("nd-metodo", listasValidas ? listasValidas.metodos : [], "");
   definirCategoriaCampo("nd-categoria", "");
 
+  // Grupo zerado a cada abertura: herdar a escolha do lancamento anterior
+  // poria uma compra qualquer numa mesada sem ninguem pedir.
+  document.getElementById("nd-grupo").value = "";
+  document.getElementById("nd-grupo").removeAttribute("data-manual");
+  document.getElementById("nd-grupo-dica").textContent = "";
+  pintarChipsDeGrupo("nd");
+
   // Limpa/reseta os campos
   const hoje = dataHojeISO();
   document.getElementById("nd-descricao").value = "";
@@ -8167,6 +8174,7 @@ function enviarNovaDespesa() {
 
   const params = {
     descricao: desc,
+    grupo: (document.getElementById("nd-grupo") || {}).value || "",
     valorTotal: document.getElementById("nd-valor").value,
     dataCompra: document.getElementById("nd-datacompra").value,
     totalParcelas: document.getElementById("nd-parcelas").value,
@@ -8909,6 +8917,12 @@ function escolherCategoria(categoria) {
   }
 
   fecharSeletorCategoria();
+
+  // A categoria tem regra? O grupo dela já vem marcado -- e dá para trocar.
+  // Mostrar isto aqui é o que transforma a regra em algo visível: senão o
+  // lançamento cairia num grupo que ninguém viu escolher.
+  const prefixo = seletorCatDestino.split("-")[0];
+  if (prefixo === "nd" || prefixo === "dr") sugerirGrupoPelaCategoria(prefixo);
 }
 
 // Preenche o campo de categoria (usado ao abrir os modais)
@@ -9622,6 +9636,82 @@ async function escolherGrupoDoLancamento(botao, nome) {
 // formulário limpar o filtro da tela de trás.
 let catsGrupo = [];
 let grupoDeSaldoEditando = null;
+
+/**
+ * Desenha os botões de grupo num formulário de lançamento.
+ *
+ * O bloco só aparece quando existe grupo cadastrado: num app sem nenhum, um
+ * campo com um botão "nenhum" seria uma pergunta sem resposta possível.
+ */
+function pintarChipsDeGrupo(prefixo) {
+  const bloco = document.getElementById(prefixo + "-bloco-grupo");
+  const caixa = document.getElementById(prefixo + "-grupo-chips");
+  if (!bloco || !caixa) return;
+
+  if (!gruposConhecidos.length) { bloco.style.display = "none"; return; }
+  bloco.style.display = "block";
+
+  const atual = (document.getElementById(prefixo + "-grupo") || {}).value || "";
+
+  caixa.innerHTML = [{ v: "", r: "nenhum" }]
+    .concat(gruposConhecidos.map(function (n) { return { v: n, r: n }; }))
+    .map(function (o) {
+      return '<button type="button" class="' + (o.v === atual ? "ativo" : "") +
+        '" onclick="escolherGrupoNoForm(' +
+        JSON.stringify(prefixo).replace(/"/g, "&quot;") + ', ' +
+        JSON.stringify(o.v).replace(/"/g, "&quot;") + ')">' +
+        escaparHtml(o.r) + '</button>';
+    }).join("");
+}
+
+function escolherGrupoNoForm(prefixo, nome) {
+  const campo = document.getElementById(prefixo + "-grupo");
+  if (campo) {
+    campo.value = nome;
+    // Marca que a decisao foi SUA. Sem isto, escolher "nenhum" e depois
+    // trocar a categoria faria a regra marcar o grupo de novo -- "nenhum" e
+    // "ainda nao escolhi" sao o mesmo campo vazio, e so este sinal separa os
+    // dois.
+    campo.setAttribute("data-manual", "1");
+  }
+
+  // Escolher à mão apaga o aviso da regra: a partir daqui a decisão é sua.
+  const dica = document.getElementById(prefixo + "-grupo-dica");
+  if (dica) dica.textContent = "";
+
+  pintarChipsDeGrupo(prefixo);
+}
+
+/**
+ * Marca o grupo que a categoria escolhida manda, se houver regra.
+ *
+ * Não sobrescreve uma escolha já feita à mão: quem marcou "Mesada Paulo" numa
+ * compra de viagem quis dizer isso, e a regra não pode desfazer.
+ */
+function sugerirGrupoPelaCategoria(prefixo) {
+  const cat = ((document.getElementById(prefixo + "-categoria") || {}).value || "").trim();
+  const campo = document.getElementById(prefixo + "-grupo");
+  const dica = document.getElementById(prefixo + "-grupo-dica");
+  if (!campo) return;
+
+  if (campo.value || campo.getAttribute("data-manual") === "1") {
+    pintarChipsDeGrupo(prefixo);
+    return;
+  }
+
+  const achado = gruposCompletos.filter(function (g) {
+    return (g.categorias || []).indexOf(cat) >= 0;
+  })[0];
+
+  if (achado) {
+    campo.value = achado.nome;
+    if (dica) dica.textContent = "Marcado por causa da categoria. Dá para trocar.";
+  } else if (dica) {
+    dica.textContent = "";
+  }
+
+  pintarChipsDeGrupo(prefixo);
+}
 
 function abrirGerenciarGrupos() {
   document.getElementById("modal-grupos").style.display = "flex";
@@ -12018,6 +12108,14 @@ async function mostrarRevisao(d, avisoCodigo) {
   montarSelect("dr-metodo", listasValidas.metodos, d.metodo || "");
   definirCategoriaCampo("dr-categoria", d.categoria || "");
 
+  // A IA leu a categoria; se ela tem regra, o grupo ja vem marcado -- e a
+  // dica diz por que, para nao parecer que o app escolheu sozinho no escuro.
+  document.getElementById("dr-grupo").value = "";
+  document.getElementById("dr-grupo").removeAttribute("data-manual");
+  document.getElementById("dr-grupo-dica").textContent = "";
+  pintarChipsDeGrupo("dr");
+  sugerirGrupoPelaCategoria("dr");
+
   // Se a IA identificou um cartão, a fatura decide o vencimento — não o
   // que estava escrito no comprovante.
   preencherVencimentoCartao("dr");
@@ -12383,6 +12481,7 @@ async function confirmarDocumento() {
 
     dados.metodo = document.getElementById("dr-metodo").value;
     dados.totalParcelas = document.getElementById("dr-parcelas").value;
+    dados.grupo = (document.getElementById("dr-grupo") || {}).value || "";
 
     const jaPago = document.getElementById("dr-chk-pago").checked;
     dados.jaPago = jaPago ? "true" : "false";
