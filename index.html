@@ -1134,6 +1134,34 @@
     }
     .linha-item.vencida .li-chip b { color: var(--vermelho); }
 
+    /* ---- gerenciar grupos ---- */
+    .gg-item {
+      display: flex; align-items: center; gap: 11px; padding: 12px 13px;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 13px; margin-bottom: 9px; width: 100%; border: none;
+      cursor: pointer; font-family: inherit; text-align: left;
+    }
+    .gg-item:active { box-shadow: var(--afundado-leve); }
+    .gg-txt { flex-grow: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+    .gg-nome { font-size: 13px; font-weight: 700; color: var(--azul); }
+    .gg-sub { font-size: 10.5px; color: var(--cinza-texto); line-height: 1.4; }
+    .gg-valor {
+      font-size: 13px; font-weight: 800; color: #1e293b;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
+    }
+    .gg-item.inativo .gg-nome { opacity: .5; text-decoration: line-through; }
+
+    .gf-dica { font-size: 10px; color: var(--cinza-texto); line-height: 1.5; margin-top: 6px; }
+    .gf-opcoes { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+    .gf-check { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+    .gf-check input { width: 18px; height: 18px; accent-color: var(--verde); flex-shrink: 0; }
+    .gf-check span { font-size: 12px; color: var(--azul); }
+    .gf-aviso {
+      font-size: 11px; color: var(--vermelho); line-height: 1.5;
+      margin-top: 10px; display: none;
+    }
+    .gf-aviso.aparece { display: block; }
+
     /* ---- grupos de saldo ---- */
     .gs-item { padding: 11px 0; border-bottom: 1px solid var(--borda); }
     .gs-item:first-child { padding-top: 0; }
@@ -3619,7 +3647,10 @@
            A máscara: quanto ainda cabe em cada combinado. Fica fora do card
            de saldo de propósito -- saldo é dinheiro, grupo é combinado. -->
       <div class="card" id="card-grupos" style="display:none;">
-        <h2>Grupos de saldo</h2>
+        <div class="card-topo">
+          <h2>Grupos de saldo</h2>
+          <button class="btn-ver-tudo" onclick="abrirGerenciarGrupos()">Gerenciar →</button>
+        </div>
         <div id="grupos-lista"></div>
         <div class="gs-aviso">Este saldo não está reservado em lugar nenhum. Ele sai do dinheiro do mês em que você gastar.</div>
       </div>
@@ -5618,6 +5649,65 @@
   </div>
 
 
+  <!-- ============ MODAL: GRUPOS DE SALDO ============ -->
+  <div class="modal-fundo" id="modal-grupos">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Grupos de saldo</div>
+          <div style="font-size:11px; color:#a9c4dd; margin-top:3px;">Quanto cada combinado vale por mês</div>
+        </div>
+        <button class="fechar" onclick="fecharGerenciarGrupos()">&times;</button>
+      </div>
+
+      <div id="gg-lista"></div>
+
+      <button class="btn-modal confirmar" style="width:100%; margin-top:12px;"
+              onclick="abrirFormGrupo(null)">+ Novo grupo</button>
+    </div>
+  </div>
+
+  <!-- ============ MODAL: UM GRUPO ============ -->
+  <div class="modal-fundo" id="modal-grupo-form">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div class="mt-titulo" id="gf-titulo">Novo grupo</div>
+        <button class="fechar" onclick="fecharFormGrupo()">&times;</button>
+      </div>
+
+      <div class="campo-bloco">
+        <label for="gf-nome">Nome</label>
+        <input type="text" id="gf-nome" placeholder="Ex: Mesada Davi" autocomplete="off" />
+      </div>
+
+      <div class="campo-bloco" id="gf-bloco-aporte">
+        <label for="gf-aporte">Valor mensal (R$)</label>
+        <input type="number" id="gf-aporte" step="0.01" inputmode="decimal" placeholder="150,00" />
+        <div class="gf-dica" id="gf-dica-aporte">Depois de criado, o valor só muda pelo lápis no card — e só no mês corrente.</div>
+      </div>
+
+      <div class="campo-bloco">
+        <label>Categorias que caem aqui sozinhas</label>
+        <button type="button" class="btn-categoria" onclick="abrirMultiCategorias('grupo')">
+          <span class="cat-txt vazio-cat" id="gf-categorias-txt">Nenhuma</span>
+          <span class="cat-lupa">🔍</span>
+        </button>
+        <div class="gf-dica">Ao lançar uma despesa com uma destas categorias, ela entra neste grupo sozinha. Escolher o grupo à mão no lançamento sempre vence a regra.</div>
+      </div>
+
+      <div class="gf-opcoes">
+        <label class="gf-check"><input type="checkbox" id="gf-acumula" checked /> <span>O que sobra passa para o mês seguinte</span></label>
+        <label class="gf-check"><input type="checkbox" id="gf-corrige" checked /> <span>Corrigir pela inflação (IPCA)</span></label>
+        <label class="gf-check"><input type="checkbox" id="gf-ativo" checked /> <span>Ativo</span></label>
+      </div>
+
+      <div class="gf-aviso" id="gf-aviso"></div>
+
+      <button class="btn-modal confirmar" style="width:100%; margin-top:12px;"
+              onclick="salvarGrupoNaTela()">Salvar</button>
+    </div>
+  </div>
+
   <!-- ============ MODAL: MÚLTIPLAS CATEGORIAS ============ -->
   <div class="modal-fundo" id="modal-multicat">
     <div class="modal-caixa">
@@ -5651,7 +5741,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=97"></script>
+  <script src="app.js?v=98"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

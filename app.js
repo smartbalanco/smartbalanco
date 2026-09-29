@@ -9617,6 +9617,158 @@ async function escolherGrupoDoLancamento(botao, nome) {
   }
 }
 
+// As categorias escolhidas no formulário de um grupo. Lista própria: o
+// seletor é o mesmo da busca, e compartilhar a variável faria abrir o
+// formulário limpar o filtro da tela de trás.
+let catsGrupo = [];
+let grupoDeSaldoEditando = null;
+
+function abrirGerenciarGrupos() {
+  document.getElementById("modal-grupos").style.display = "flex";
+  pintarGerenciarGrupos();
+}
+
+function fecharGerenciarGrupos() {
+  document.getElementById("modal-grupos").style.display = "none";
+}
+
+function pintarGerenciarGrupos() {
+  const alvo = document.getElementById("gg-lista");
+  const grupos = gruposCompletos;
+
+  if (!grupos.length) {
+    alvo.innerHTML = '<p class="vazio">Nenhum grupo ainda.</p>';
+    return;
+  }
+
+  alvo.innerHTML = grupos.map(function (g, i) {
+    const cats = (g.categorias || []);
+    const sub = cats.length
+      ? cats.length + (cats.length === 1 ? " categoria entra sozinha" : " categorias entram sozinhas")
+      : "sem regra de categoria";
+
+    return '<button type="button" class="gg-item' + (g.ativo === false ? " inativo" : "") +
+        '" onclick="abrirFormGrupo(' + i + ')">' +
+        '<span class="gg-txt">' +
+          '<span class="gg-nome">' + escaparHtml(g.nome) + '</span>' +
+          '<span class="gg-sub">' + escaparHtml(sub) +
+            (g.acumula ? " · acumula" : " · não acumula") +
+            (g.corrige ? " · corrige pelo IPCA" : "") +
+          '</span>' +
+        '</span>' +
+        '<span class="gg-valor">' + formatarMoeda(g.aporte) + '</span>' +
+      '</button>';
+  }).join("");
+}
+
+/**
+ * O formulário de um grupo.
+ *
+ * O VALOR só é editável na criação. Depois dela, mudar por aqui reescreveria
+ * o passado -- o valor de um grupo tem data de início, e é o lápis do card
+ * (só no mês corrente) que registra desde quando o novo vale.
+ */
+function abrirFormGrupo(i) {
+  const g = (i === null || i === undefined) ? null : gruposCompletos[i];
+  grupoDeSaldoEditando = g;
+
+  document.getElementById("gf-titulo").textContent = g ? "Editar grupo" : "Novo grupo";
+  document.getElementById("gf-nome").value = g ? g.nome : "";
+  document.getElementById("gf-aporte").value = g ? g.aporte : "";
+  document.getElementById("gf-acumula").checked = g ? !!g.acumula : true;
+  document.getElementById("gf-corrige").checked = g ? !!g.corrige : true;
+  document.getElementById("gf-ativo").checked = g ? (g.ativo !== false) : true;
+
+  const campoAporte = document.getElementById("gf-aporte");
+  campoAporte.disabled = !!g;
+  document.getElementById("gf-dica-aporte").textContent = g
+    ? "Para mudar o valor, use o lápis no card do dashboard — ele registra desde quando o novo vale."
+    : "Depois de criado, o valor só muda pelo lápis no card, e só no mês corrente.";
+
+  catsGrupo = g ? (g.categorias || []).slice() : [];
+  pintarCategoriasDoGrupo();
+
+  const aviso = document.getElementById("gf-aviso");
+  aviso.textContent = "";
+  aviso.classList.remove("aparece");
+
+  document.getElementById("modal-grupo-form").style.display = "flex";
+}
+
+function fecharFormGrupo() {
+  document.getElementById("modal-grupo-form").style.display = "none";
+  grupoDeSaldoEditando = null;
+}
+
+function pintarCategoriasDoGrupo() {
+  const el = document.getElementById("gf-categorias-txt");
+  if (!el) return;
+
+  if (!catsGrupo.length) {
+    el.textContent = "Nenhuma";
+    el.classList.add("vazio-cat");
+  } else {
+    el.textContent = catsGrupo.length === 1
+      ? nomeDaCategoria(catsGrupo[0])
+      : catsGrupo.length + " categorias";
+    el.classList.remove("vazio-cat");
+  }
+}
+
+async function salvarGrupoNaTela() {
+  const nome = document.getElementById("gf-nome").value.trim();
+  const aviso = document.getElementById("gf-aviso");
+
+  function erro(msg) {
+    aviso.textContent = msg;
+    aviso.classList.add("aparece");
+  }
+
+  if (!nome) return erro("Dê um nome ao grupo.");
+
+  const novo = !grupoDeSaldoEditando;
+  const aporte = document.getElementById("gf-aporte").value;
+  if (novo && !(parseFloat(aporte) >= 0)) return erro("Informe o valor mensal.");
+
+  // Uma categoria em dois grupos é ambígua: o primeiro da lista ganharia, e
+  // ninguém adivinha qual é o primeiro. Avisa antes de gravar.
+  const conflito = catsGrupo.filter(function (c) {
+    return gruposCompletos.some(function (g) {
+      return g.nome !== (grupoDeSaldoEditando ? grupoDeSaldoEditando.nome : "") &&
+             (g.categorias || []).indexOf(c) >= 0;
+    });
+  });
+  if (conflito.length) {
+    return erro("Já está em outro grupo: " + conflito.map(nomeDaCategoria).join(", ") +
+                ". Tire de lá primeiro.");
+  }
+
+  try {
+    const r = await chamarServidor("salvarGrupoDeSaldo", {
+      nome: nome,
+      original: grupoDeSaldoEditando ? grupoDeSaldoEditando.nome : "",
+      aporte: aporte,
+      categorias: catsGrupo.join("|"),
+      acumula: document.getElementById("gf-acumula").checked ? "sim" : "não",
+      corrige: document.getElementById("gf-corrige").checked ? "sim" : "não",
+      ativo: document.getElementById("gf-ativo").checked ? "sim" : "não"
+    });
+
+    if (!r.ok) return erro(r.mensagem || "Não deu para salvar.");
+
+    fecharFormGrupo();
+    mostrarToast("✅ " + r.mensagem);
+    await recarregarDados();
+    pintarGerenciarGrupos();
+
+  } catch (e) {
+    erro("Sem conexão.");
+  }
+}
+
+/** Os grupos com a configuração inteira, para a tela de gerenciar. */
+let gruposCompletos = [];
+
 /** Os nomes dos grupos, para a ficha do lançamento poder oferecer a escolha. */
 let gruposConhecidos = [];
 
@@ -9634,6 +9786,13 @@ function pintarGruposDeSaldo(d) {
 
   const grupos = (d.gruposDeSaldo || []).filter(function (g) { return !g.antesDaOrigem; });
   gruposConhecidos = (d.gruposDeSaldo || []).map(function (g) { return g.nome; });
+  gruposCompletos = (d.gruposDeSaldo || []).map(function (g) {
+    return {
+      nome: g.nome, aporte: g.aporteBase || g.aporte,
+      categorias: g.categorias || [], acumula: g.acumula,
+      corrige: g.corrige !== false, ativo: true
+    };
+  });
 
   if (!grupos.length) { card.style.display = "none"; return; }
   card.style.display = "block";
@@ -13052,7 +13211,8 @@ function renderizarMultiCategorias(termo) {
   const filtradas = t === "" ? todas
     : todas.filter(function (c) { return normalizarBusca(c).indexOf(t) !== -1; });
 
-  const selecionadas = (destinoMultiCat === "relatorio") ? catsRelatorio : categoriasSelecionadas;
+  const selecionadas = (destinoMultiCat === "relatorio") ? catsRelatorio
+                     : (destinoMultiCat === "grupo") ? catsGrupo : categoriasSelecionadas;
 
   if (filtradas.length === 0) {
     lista.innerHTML = '<div class="sc-vazio">Nenhuma categoria encontrada.</div>';
@@ -13082,7 +13242,8 @@ function renderizarMultiCategorias(termo) {
 }
 
 function alternarCategoria(cat) {
-  const lista = (destinoMultiCat === "relatorio") ? catsRelatorio : categoriasSelecionadas;
+  const lista = (destinoMultiCat === "relatorio") ? catsRelatorio
+               : (destinoMultiCat === "grupo") ? catsGrupo : categoriasSelecionadas;
   const idx = lista.indexOf(cat);
   if (idx === -1) lista.push(cat);
   else lista.splice(idx, 1);
@@ -13091,7 +13252,8 @@ function alternarCategoria(cat) {
 }
 
 function atualizarContadorMultiCat() {
-  const lista = (destinoMultiCat === "relatorio") ? catsRelatorio : categoriasSelecionadas;
+  const lista = (destinoMultiCat === "relatorio") ? catsRelatorio
+               : (destinoMultiCat === "grupo") ? catsGrupo : categoriasSelecionadas;
   const el = document.getElementById("mc-contador");
   if (!el) return;
   el.textContent = lista.length === 0 ? "Nenhuma selecionada (= todas)"
@@ -13100,6 +13262,7 @@ function atualizarContadorMultiCat() {
 
 function limparMultiCategorias() {
   if (destinoMultiCat === "relatorio") catsRelatorio = [];
+  else if (destinoMultiCat === "grupo") catsGrupo = [];
   else categoriasSelecionadas = [];
   renderizarMultiCategorias(document.getElementById("mc-busca").value);
 }
@@ -13109,6 +13272,8 @@ function confirmarMultiCategorias() {
 
   if (destinoMultiCat === "relatorio") {
     atualizarBotaoCategoriasRelatorio();
+  } else if (destinoMultiCat === "grupo") {
+    pintarCategoriasDoGrupo();
   } else {
     atualizarBotaoCategorias();
     buscarComAtraso();
