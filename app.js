@@ -12287,6 +12287,8 @@ async function executarBusca(novaBusca) {
         pagina: paginaBusca
       };
 
+      pintarFiltrosRapidos();
+
       const r = await lerCacheado("buscarLancamentos", params);
       if (minhaBusca !== buscaSequencia) return;   // chegou atrasada
 
@@ -12331,36 +12333,70 @@ function renderizarResultadosLancamentos(total) {
     return;
   }
 
-  // Somador
-  let somaHtml = '';
-  if (somaBusca.despesas > 0 || somaBusca.receitas > 0) {
-    somaHtml = '<div class="busca-soma">';
-    if (somaBusca.despesas > 0) {
-      somaHtml += '<div><span>Despesas</span><b class="vermelho">' + formatarMoeda(somaBusca.despesas) + '</b></div>';
-    }
-    if (somaBusca.receitas > 0) {
-      somaHtml += '<div><span>Receitas</span><b class="verde">' + formatarMoeda(somaBusca.receitas) + '</b></div>';
-    }
-    if (somaBusca.despesas > 0 && somaBusca.receitas > 0) {
-      somaHtml += '<div><span>Saldo</span><b class="' + (somaBusca.saldo >= 0 ? "verde" : "vermelho") + '">' +
-                  formatarMoeda(somaBusca.saldo) + '</b></div>';
-    }
-    somaHtml += '</div>';
-  }
+  // O RESUMO DIZ DE QUE PERÍODO ELE É.
+  //
+  // Eram três caixas grandes com os totais de TODO o histórico -- saldo de
+  // -108 mil como manchete de uma tela de busca, que assusta e não responde
+  // nada. O número não mudou; o que mudou é ele dizer o que está somando.
+  let html = '<div class="busca-resumo">' +
+      '<div class="bs-topo">' +
+        '<span>' + total + (total === 1 ? " RESULTADO" : " RESULTADOS") +
+          ' · ' + escaparHtml(escopoDaBuscaEmTexto()) + '</span>' +
+      '</div>' +
+      '<div class="bs-nums">' +
+        (somaBusca.despesas > 0
+          ? '<span>despesas <b class="vermelho">' +
+            formatarMoeda(somaBusca.despesas).replace("R$ ", "") + '</b></span>' : '') +
+        (somaBusca.receitas > 0
+          ? '<span>receitas <b class="verde">' +
+            formatarMoeda(somaBusca.receitas).replace("R$ ", "") + '</b></span>' : '') +
+        ((somaBusca.despesas > 0 && somaBusca.receitas > 0)
+          ? '<span>saldo <b class="' + (somaBusca.saldo >= 0 ? "verde" : "vermelho") + '">' +
+            formatarMoeda(somaBusca.saldo).replace("R$ ", "") + '</b></span>' : '') +
+      '</div>' +
+    '</div>';
 
-  let html = somaHtml +
-    '<div class="busca-total">' + total + (total === 1 ? ' resultado' : ' resultados') + '</div>';
+  // Agrupado por mês de vencimento, com subtotal.
+  //
+  // Numa lista de 957 itens, saber onde um mês acaba é o que torna possível
+  // LER: sem isso é uma fita contínua em que nada separa setembro de março.
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  let mesAtual = null;
 
   resultadosBusca.forEach(function (it, idx) {
+    const chave = mesDoVencimento(it.vencimento);
+    if (chave && chave.rotulo !== mesAtual) {
+      mesAtual = chave.rotulo;
+      const soma = somaDoMes(chave.rotulo);
+      html += '<div class="bg-mes"><span>' + escaparHtml(chave.rotulo) + '</span>' +
+        '<b class="' + (soma >= 0 ? "verde" : "vermelho") + '">' +
+          (soma >= 0 ? "+" : "−") + formatarMoeda(Math.abs(soma)).replace("R$ ", "") +
+        '</b></div>';
+    }
+
     const cartaoHtml = it.ehCartao
-      ? '<span class="ex-cartao">💳 ' + escaparHtml(it.cartao) + '</span>' : '';
+      ? '<span class="ex-cartao">' + escaparHtml(it.cartao) + '</span>' : '';
     const parcHtml = it.parcela
       ? '<span class="ex-parc">' + escaparHtml(it.parcela) + '</span>' : '';
-    const codHtml = it.codigoPagamento
-      ? '<span class="br-cod">📋</span>' : '';
-    const statusHtml = it.tipo === "despesa"
-      ? (it.pago ? '<span class="br-pago">✅</span>' : '<span class="br-pend">⏳</span>')
-      : '';
+    const codHtml = it.codigoPagamento ? '<span class="br-cod">código</span>' : '';
+
+    // Status em palavra. O emoji sozinho não tem legenda em lugar nenhum da
+    // tela, e "vencida" nem existia: era o mesmo ampulheta de uma conta que
+    // vence daqui a um mês.
+    let statusHtml = "";
+    if (it.tipo === "despesa") {
+      if (it.pago) statusHtml = '<span class="br-status pago">pago</span>';
+      else {
+        const v = dataBrParaData(it.vencimento);
+        statusHtml = (v && v < hoje)
+          ? '<span class="br-status venc">vencida</span>'
+          : '<span class="br-status pend">a pagar</span>';
+      }
+    }
+
+    // Só o DIA: o mês já está no cabeçalho do grupo logo acima.
+    const dia = (it.vencimento || "").split("/")[0] || it.vencimento;
 
     html +=
       '<div class="br-item" onclick="abrirDetalheBusca(' + idx + ')">' +
@@ -12371,9 +12407,10 @@ function renderizarResultadosLancamentos(total) {
           '</span>' +
         '</div>' +
         '<div class="br-meio">' +
-          '<span class="br-data">' + escaparHtml(it.vencimento) + '</span>' +
+          '<span class="br-data">' + escaparHtml(dia) + '</span>' +
+          cartaoHtml + parcHtml + codHtml +
           '<span class="br-mov">MOV-' + it.numMov + '</span>' +
-          statusHtml + codHtml + cartaoHtml + parcHtml +
+          statusHtml +
         '</div>' +
       '</div>';
   });
@@ -12383,6 +12420,130 @@ function renderizarResultadosLancamentos(total) {
   }
 
   wrap.innerHTML = html;
+}
+
+/** "28/09/2026" -> Date. Formato diferente devolve nulo, sem chutar. */
+function dataBrParaData(txt) {
+  const p = (txt || "").toString().split("/");
+  if (p.length !== 3) return null;
+  const d = new Date(+p[2], +p[1] - 1, +p[0]);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/** O mês de um vencimento, como rótulo do grupo. */
+function mesDoVencimento(txt) {
+  const d = dataBrParaData(txt);
+  if (!d) return null;
+
+  const nomes = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+                 "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+  return { rotulo: nomes[d.getMonth()] + " " + d.getFullYear() };
+}
+
+/**
+ * O subtotal de um mês, somado do que está NA TELA.
+ *
+ * Receita entra positiva e despesa negativa, então o número do cabeçalho é o
+ * saldo daquele mês. Com paginação ele cobre só o que já foi carregado -- e é
+ * isso mesmo: prometer o total do mês inteiro enquanto faltam páginas seria
+ * um número que muda sozinho ao rolar.
+ */
+function somaDoMes(rotulo) {
+  let soma = 0;
+  resultadosBusca.forEach(function (it) {
+    const m = mesDoVencimento(it.vencimento);
+    if (!m || m.rotulo !== rotulo) return;
+    soma += (it.tipo === "receita") ? it.valor : -it.valor;
+  });
+  return arredondarCentavos(soma);
+}
+
+/** O que os filtros de hoje cobrem, em português, para o resumo. */
+function escopoDaBuscaEmTexto() {
+  const mes = (document.getElementById("bl-mes") || {}).value || "";
+  const ano = (document.getElementById("bl-ano") || {}).value || "";
+  const status = (document.getElementById("bl-status") || {}).value || "";
+  const texto = ((document.getElementById("bl-texto") || {}).value || "").trim();
+
+  const nomes = ["janeiro", "fevereiro", "março", "abril", "maio", "junho",
+                 "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  const partes = [];
+
+  if (mes !== "" && ano !== "") partes.push(nomes[parseInt(mes)] + "/" + ano);
+  else if (mes !== "") partes.push(nomes[parseInt(mes)]);
+  else if (ano !== "") partes.push(ano);
+
+  if (status === "pago") partes.push("pagos");
+  else if (status === "pendente") partes.push("a pagar");
+  else if (status === "vencida") partes.push("vencidas");
+
+  if (categoriasSelecionadas.length === 1) partes.push(nomeDaCategoria(categoriasSelecionadas[0]));
+  else if (categoriasSelecionadas.length > 1) partes.push(categoriasSelecionadas.length + " categorias");
+
+  if (texto) partes.push('"' + texto + '"');
+
+  return partes.length ? partes.join(" · ") : "todo o período";
+}
+
+/**
+ * Os filtros de um toque.
+ *
+ * Eles mexem nos MESMOS campos do painel, que continuam sendo a fonte da
+ * verdade da busca. Guardar o estado deles à parte daria dois lugares para a
+ * mesma pergunta -- e um dia eles discordariam.
+ */
+function filtroRapido(qual) {
+  const mes = document.getElementById("bl-mes");
+  const ano = document.getElementById("bl-ano");
+  const status = document.getElementById("bl-status");
+  if (!mes || !ano || !status) return;
+
+  const hoje = new Date();
+
+  if (qual === "mes" || qual === "anterior") {
+    const alvo = new Date(hoje.getFullYear(), hoje.getMonth() - (qual === "anterior" ? 1 : 0), 1);
+    const jaEstava = (mes.value === String(alvo.getMonth()) && ano.value === String(alvo.getFullYear()));
+
+    // Tocar de novo desliga. Sem isso, o único jeito de voltar a "todos" seria
+    // abrir o painel -- justamente o que estes botões existem para evitar.
+    mes.value = jaEstava ? "" : String(alvo.getMonth());
+    ano.value = jaEstava ? "" : String(alvo.getFullYear());
+  } else {
+    status.value = (status.value === qual) ? "" : qual;
+  }
+
+  pintarFiltrosRapidos();
+  buscarComAtraso();
+}
+
+/** Quais botões estão acesos, lido dos campos -- nunca de um estado próprio. */
+function pintarFiltrosRapidos() {
+  const mes = (document.getElementById("bl-mes") || {}).value || "";
+  const ano = (document.getElementById("bl-ano") || {}).value || "";
+  const status = (document.getElementById("bl-status") || {}).value || "";
+  const hoje = new Date();
+
+  const anterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+  const ligados = {
+    mes: (mes === String(hoje.getMonth()) && ano === String(hoje.getFullYear())),
+    anterior: (mes === String(anterior.getMonth()) && ano === String(anterior.getFullYear())),
+    pendente: status === "pendente",
+    vencida: status === "vencida"
+  };
+
+  document.querySelectorAll("#busca-rapidos button[data-rapido]").forEach(function (b) {
+    b.classList.toggle("ligado", !!ligados[b.getAttribute("data-rapido")]);
+  });
+
+  // A engrenagem acende quando há filtro que os atalhos não mostram.
+  const fino = ((document.getElementById("bl-nummov") || {}).value || "") ||
+               ((document.getElementById("bl-valor") || {}).value || "") ||
+               ((document.getElementById("bl-metodo") || {}).value || "") ||
+               (status === "pago") ||
+               categoriasSelecionadas.length > 0;
+
+  const eng = document.getElementById("busca-btn-filtros");
+  if (eng) eng.classList.toggle("tem-filtro", !!fino);
 }
 
 async function carregarMaisBusca() {
@@ -12438,56 +12599,101 @@ function abrirDetalheBusca(idx) {
 
   const cartaoHtml = it.ehCartao ? ' <span class="ex-cartao">💳 ' + escaparHtml(it.cartao) + '</span>' : '';
 
+  // O selo do estado vem logo abaixo do valor, em vez de ser uma das cinco
+  // linhas rotuladas. Vencida ganha cor própria: ela era "pendente" igual a
+  // uma conta que vence daqui a um mês.
+  const hj = new Date();
+  hj.setHours(0, 0, 0, 0);
+  const vencDate = dataBrParaData(it.vencimento);
+  const venceu = !it.pago && vencDate && vencDate < hj;
+
+  const selo = it.tipo !== "despesa" ? ""
+    : (it.pago
+        ? '<div class="det-selo" style="color:var(--verde)">pago' +
+          (it.dataPagamento ? " em " + escaparHtml(it.dataPagamento) : "") + '</div>'
+        : (venceu
+            ? '<div class="det-selo" style="color:var(--vermelho)">venceu em ' +
+              escaparHtml(it.vencimento) + '</div>'
+            : '<div class="det-selo" style="color:var(--laranja)">a pagar</div>'));
+
   document.getElementById("det-corpo").innerHTML =
     '<div class="det-valor ' + (it.tipo === "receita" ? "verde" : "vermelho") + '">' +
       formatarMoeda(it.valor) +
     '</div>' +
     '<div class="det-desc">' + escaparHtml(it.descricao) + cartaoHtml + '</div>' +
+    selo +
 
-    '<div class="det-linhas">' +
-      '<div class="det-linha"><span>Vencimento</span><b>' + escaparHtml(it.vencimento) + '</b></div>' +
-      '<div class="det-linha"><span>Data da compra</span><b>' + escaparHtml(it.dataCompra) + '</b></div>' +
-      (it.parcela ? '<div class="det-linha"><span>Parcela</span><b>' + escaparHtml(it.parcela) + '</b></div>' : '') +
-      '<div class="det-linha"><span>Método</span><b>' + escaparHtml(it.metodo) + '</b></div>' +
-      '<div class="det-linha"><span>Categoria</span><b>' + escaparHtml(it.categoria) + '</b></div>' +
-      '<div class="det-linha"><span>Status</span><b class="' + (it.pago ? "verde" : "laranja") + '">' +
-        (it.pago ? "✅ Pago" + (it.dataPagamento ? " em " + escaparHtml(it.dataPagamento) : "") : "⏳ Pendente") +
-      '</b></div>' +
+    // Quatro caixas numa grade, no lugar de cinco linhas rotuladas que
+    // empurravam as ações para fora da tela.
+    '<div class="det-grade">' +
+      '<div class="det-caixa"><span>Vencimento</span><b>' + escaparHtml(it.vencimento) + '</b></div>' +
+      '<div class="det-caixa"><span>Compra</span><b>' + escaparHtml(it.dataCompra) + '</b></div>' +
+      '<div class="det-caixa"><span>Método</span><b>' + escaparHtml(it.metodo || "-") + '</b></div>' +
+      '<div class="det-caixa"><span>Categoria</span><b>' +
+        escaparHtml(nomeDaCategoria(it.categoria) || "sem categoria") + '</b></div>' +
+      (it.parcela
+        ? '<div class="det-caixa"><span>Parcela</span><b>' + escaparHtml(it.parcela) + '</b></div>'
+        : '') +
     '</div>' +
 
     (it.codigoPagamento
       ? '<div class="det-codigo">' +
-          '<div class="dc-titulo">🧾 Código de pagamento</div>' +
+          '<div class="dc-titulo">Código de pagamento</div>' +
           '<div class="dc-valor">' + escaparHtml(it.codigoPagamento) + '</div>' +
           '<button class="dc-copiar" data-codigo="' + escaparHtml(it.codigoPagamento) + '" ' +
-                  'onclick="copiarCodigo(this)">📋 Copiar código</button>' +
+                  'onclick="copiarCodigo(this)">Copiar código</button>' +
         '</div>'
       : '') +
 
-    '<div class="det-acoes">' +
-      '<button class="det-btn doc" onclick="buscarDocsDoMov(' + it.numMov + ', true)">' +
-        '📎 Buscar documentos' +
-      '</button>' +
-      '<button class="det-btn email" onclick="buscarDocsDoMov(' + it.numMov + ', false)">' +
-        '✉️ Ver e-mails' +
-      '</button>' +
-    '</div>' +
-
-    '<button class="det-btn editar" onclick="fecharDetalhe(); abrirEdicao(' + it.numMov + ');">' +
-      '✏️ Editar lançamento' +
-    '</button>' +
-
-    '<button class="det-btn editar" onclick="fecharDetalhe(); duplicarLancamento(' + it.numMov + ');">' +
-      '⧉ Duplicar este lançamento' +
-    '</button>' +
-
     (!it.pago && it.tipo === "despesa"
       ? '<button class="det-btn liquidar" onclick="fecharDetalhe(); abrirLiquidacao(' + it.numMov + ');">' +
-          '✅ Liquidar esta despesa' +
+          'Liquidar esta despesa' +
         '</button>'
       : '') +
 
+    // As quatro ações em 2x2. Eram quatro botões de largura inteira,
+    // empilhados: 200px de altura para quatro palavras.
+    '<div class="det-acoes-grade">' +
+      '<button class="det-btn editar" onclick="fecharDetalhe(); abrirEdicao(' + it.numMov + ');">Editar</button>' +
+      '<button class="det-btn editar" onclick="fecharDetalhe(); duplicarLancamento(' + it.numMov + ');">Duplicar</button>' +
+      '<button class="det-btn doc" onclick="buscarDocsDoMov(' + it.numMov + ', true)">Documentos</button>' +
+      '<button class="det-btn email" onclick="buscarDocsDoMov(' + it.numMov + ', false)">E-mails</button>' +
+    '</div>' +
+
+    '<div class="det-rodape">' +
+      '<span>' + (it.parcela
+        ? "Compra parcelada: a exclusão pergunta se é só esta parcela ou todas."
+        : "A exclusão não tem desfazer.") + '</span>' +
+      '<button class="det-excluir" onclick="excluirPelaFicha()">Excluir</button>' +
+    '</div>' +
+
     '<div id="det-documentos"></div>';
+}
+
+/**
+ * Excluir a partir da ficha de detalhe.
+ *
+ * A exclusão sempre morou na tela de edição, porque é lá que se escolhe o
+ * ESCOPO de uma compra parcelada -- só esta parcela ou todas. Uma compra
+ * parcelada é mandada para lá em vez de adivinhar o escopo: apagar dez
+ * parcelas quando a pessoa queria uma não tem desfazer.
+ *
+ * Sem parcelas não há escopo para escolher, e aí a ficha resolve sozinha.
+ */
+function excluirPelaFicha() {
+  if (!itemDetalhe) return;
+
+  if (itemDetalhe.parcela) {
+    const numMov = itemDetalhe.numMov;
+    fecharDetalhe();
+    abrirEdicao(numMov);
+    mostrarToast("Escolha o alcance e toque em Excluir.");
+    return;
+  }
+
+  edicaoAtual = itemDetalhe;
+  escopoEdicao = "adiante";
+  excluirLancamentoApp();
 }
 
 function fecharDetalhe() {

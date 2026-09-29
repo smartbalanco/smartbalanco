@@ -1134,6 +1134,97 @@
     }
     .linha-item.vencida .li-chip b { color: var(--vermelho); }
 
+    /* ---- busca: filtros rápidos ---- */
+    .busca-rapidos {
+      display: flex; gap: 7px; margin-bottom: 14px;
+      overflow-x: auto; -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .busca-rapidos::-webkit-scrollbar { display: none; }
+    .busca-rapidos button {
+      flex-shrink: 0; height: 34px; padding: 0 14px; border: none;
+      border-radius: 999px; font-family: inherit; font-size: 11.5px;
+      font-weight: 600; cursor: pointer; white-space: nowrap;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+      color: var(--cinza-texto);
+    }
+    /* Ligado = AFUNDADO, como todo estado selecionado neste app. */
+    .busca-rapidos button.ligado {
+      box-shadow: var(--afundado-leve); color: var(--verde); font-weight: 700;
+    }
+    .busca-rapidos button[data-rapido="vencida"] { color: var(--vermelho); }
+    .busca-rapidos button[data-rapido="vencida"].ligado { color: var(--vermelho); }
+    #busca-btn-filtros { width: 34px; padding: 0; font-size: 14px; }
+    #busca-btn-filtros.tem-filtro { box-shadow: var(--afundado-leve); color: var(--verde); }
+
+    /* ---- busca: resumo do que está na tela ---- */
+    /* Os três números eram de TODO o histórico, em caixas grandes, como
+       manchete de uma tela de busca. Viraram uma linha que DIZ de que
+       período ela é. */
+    .busca-resumo {
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 14px; padding: 11px 14px; margin-bottom: 14px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .bs-topo {
+      display: flex; align-items: baseline; gap: 8px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: .6px;
+      color: var(--cinza-texto);
+    }
+    .bs-topo span { flex-grow: 1; }
+    .bs-nums { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 11px; color: var(--cinza-texto); }
+    .bs-nums b { font-variant-numeric: tabular-nums; }
+
+    /* ---- busca: cabeçalho de mês ---- */
+    .bg-mes {
+      display: flex; align-items: baseline; gap: 8px; padding: 14px 2px 6px;
+    }
+    .bg-mes span {
+      flex-grow: 1; font-size: 10.5px; font-weight: 800;
+      letter-spacing: 1px; color: var(--cinza-texto); text-transform: uppercase;
+    }
+    .bg-mes b { font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    .br-status { margin-left: auto; font-weight: 700; }
+    .br-status.pago { color: var(--verde); }
+    .br-status.pend { color: var(--laranja); }
+    .br-status.venc { color: var(--vermelho); }
+
+    /* ---- detalhe: dados e ações em grade ---- */
+    .det-grade {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px; margin: 14px 0;
+    }
+    .det-caixa {
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      border-radius: 13px; padding: 11px 13px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .det-caixa span {
+      font-size: 9.5px; font-weight: 700; letter-spacing: .5px;
+      color: var(--cinza-texto); text-transform: uppercase;
+    }
+    .det-caixa b { font-size: 13px; color: #1e293b; }
+    .det-selo {
+      display: inline-block; margin-top: 8px; padding: 4px 11px;
+      border-radius: 999px; font-size: 11px; font-weight: 700;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+    }
+    .det-acoes-grade {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px;
+    }
+    .det-acoes-grade .det-btn { width: 100%; margin: 0; }
+    .det-rodape {
+      display: flex; align-items: center; gap: 10px;
+      border-top: 1px solid var(--borda); margin-top: 14px; padding-top: 13px;
+    }
+    .det-rodape span { flex-grow: 1; font-size: 10.5px; color: var(--cinza-texto); line-height: 1.5; }
+    .det-excluir {
+      flex-shrink: 0; height: 38px; padding: 0 15px; border: none; cursor: pointer;
+      border-radius: 12px; font-family: inherit; font-size: 12px; font-weight: 700;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+      color: var(--vermelho);
+    }
+
     /* ---- aprovações: uma linha por lançamento ---- */
     /* Eram cards de ~350px cada. Sete pendentes davam três telas de rolagem
        para aprovar R$ 531 -- e vencimento e método se repetiam IGUAIS em
@@ -2825,9 +2916,12 @@
       padding: 10px 14px; font-size: 12px; font-weight: 600; color: var(--azul);
       cursor: pointer; font-family: inherit; margin-bottom: 10px;
     }
+    /* Era o único card BRANCO do app, destoando do relevo que todas as
+       outras superfícies usam. */
     #busca-filtros-avancados {
-      display: none; background: #fff; border: 1px solid var(--borda);
-      border-radius: 12px; padding: 14px; margin-bottom: 14px;
+      display: none; background: var(--cinza-fundo); border: none;
+      box-shadow: var(--relevo-baixo);
+      border-radius: 16px; padding: 15px; margin-bottom: 14px;
     }
     .bf-linha { display: flex; gap: 10px; }
     .bf-linha .campo-bloco { flex: 1; }
@@ -3725,12 +3819,24 @@
       <!-- Filtros: lançamentos -->
       <div id="busca-filtros-lanc">
         <div class="busca-campo">
-          <input type="text" id="bl-texto" placeholder="Buscar por descrição..."
+          <!-- A dica do ";" era uma caixa fixa de 90px explicando algo que se
+               entende uma vez. Virou o texto de exemplo do próprio campo. -->
+          <input type="text" id="bl-texto" placeholder="Buscar…  use ; para vários"
                  oninput="buscarComAtraso()" />
         </div>
-        <div class="busca-dica">💡 Busque vários de uma vez separando por <b>;</b> — ex: <i>aluguel;netflix;hunter</i></div>
 
-        <button id="busca-btn-filtros" onclick="alternarFiltrosBusca()">⚙️ Filtros</button>
+        <!-- Filtros rápidos: um toque no lugar de abrir o painel inteiro.
+             Eles mexem nos MESMOS campos de baixo, que continuam sendo a
+             fonte da verdade da busca -- dois estados separados para a mesma
+             coisa seria onde eles se desencontrariam. -->
+        <div class="busca-rapidos" id="busca-rapidos">
+          <button type="button" data-rapido="mes" onclick="filtroRapido('mes')">Este mês</button>
+          <button type="button" data-rapido="anterior" onclick="filtroRapido('anterior')">Mês passado</button>
+          <button type="button" data-rapido="pendente" onclick="filtroRapido('pendente')">A pagar</button>
+          <button type="button" data-rapido="vencida" onclick="filtroRapido('vencida')">Vencidas</button>
+          <button type="button" id="busca-btn-filtros" aria-label="Mais filtros"
+                  onclick="alternarFiltrosBusca()">&#9881;</button>
+        </div>
 
         <div id="busca-filtros-avancados">
           <div class="bf-linha">
@@ -3789,8 +3895,9 @@
             <label for="bl-status">Status</label>
             <select id="bl-status" onchange="buscarComAtraso()">
               <option value="">Todos</option>
-              <option value="pendente">⏳ Pendentes</option>
-              <option value="pago">✅ Pagos</option>
+              <option value="pendente">A pagar</option>
+              <option value="vencida">Vencidas</option>
+              <option value="pago">Pagos</option>
             </select>
           </div>
 
@@ -5492,7 +5599,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=95"></script>
+  <script src="app.js?v=96"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
