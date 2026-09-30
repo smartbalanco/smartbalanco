@@ -5007,7 +5007,7 @@ async function carregarCartoesConfig() {
     alvo.innerHTML = cartoesConfig.map(function (c, i) {
       // Mostra os dias que APARECEM nas compras em aberto: é assim que se
       // enxerga a parcela cadastrada fora do dia certo, sem procurar uma a uma.
-      const fora = (c.diasEncontrados || []).filter(function (d) { return d.dia !== c.diaVencimento; });
+      const fora = (c.diasEncontrados || []).filter(function (d) { return d.ok === false; });
       const aviso = fora.length
         ? '<div class="cart-fora">⚠ ' +
             fora.map(function (d) { return d.quantas + " no dia " + d.dia; }).join(" · ") +
@@ -5141,7 +5141,7 @@ async function salvarVencimentoCartao(indice) {
     if (!atualizado || !atualizado.emAberto) return;
 
     const fora = (atualizado.diasEncontrados || [])
-      .filter(function (d) { return d.dia !== dia; })
+      .filter(function (d) { return d.ok === false; })
       .reduce(function (s, d) { return s + d.quantas; }, 0);
 
     if (!fora) return;
