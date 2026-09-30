@@ -126,7 +126,23 @@ function lerCache(mes, ano) {
 
     if (!bruto) return null;
     const pacote = JSON.parse(bruto);
-    return pacote && pacote.dados ? pacote : null;
+    if (!pacote || !pacote.dados) return null;
+
+    // O mês guardado tem de ser o mês pedido. Parece redundante -- a chave já
+    // leva mês e ano --, mas uma corrida entre a troca de mês e a resposta que
+    // ainda estava no ar gravou setembro na chave de outubro, e a cópia errada
+    // conta como FRESCA: sem esta conferência ela nunca mais seria buscada e
+    // outubro mostraria setembro para sempre. Jogar fora aqui cura sozinho o
+    // que já está gravado no aparelho, sem ninguém precisar limpar nada.
+    const esperado = MESES_NOMES[mes] + "/" + ano;
+    const veio = (pacote.dados || {}).mesReferencia;
+    if (veio && veio !== esperado) {
+      try { localStorage.removeItem(chaveDashboard(mes, ano)); } catch (e) {}
+      try { localStorage.removeItem(chaveCache(mes, ano)); } catch (e) {}
+      return null;
+    }
+
+    return pacote;
   } catch (e) {
     return null;
   }
@@ -6208,27 +6224,43 @@ async function recarregarDados(conferirOutrosAparelhos) {
   try {
     // O mês pedido, guardado: se estiver suspeito, vem o guardado AGORA e o
     // certo chega alguns instantes depois, por aqui.
+    // TUDO daqui para baixo se refere ao PEDIDO, nunca ao mês que está na tela
+    // agora. Os dois são a mesma coisa só enquanto ninguém troca de mês -- e
+    // trocar de mês com uma resposta no ar era exatamente o caso que
+    // envenenava o cache: a resposta de setembro chegava depois do toque em
+    // outubro e era gravada NA CHAVE DE OUTUBRO. A partir daí outubro
+    // mostrava setembro para sempre, porque a cópia errada conta como fresca
+    // e nunca mais era buscada.
     const pedido = { mes: mesExibido, ano: anoExibido };
+    const aindaNoPedido = function () {
+      return mesExibido === pedido.mes && anoExibido === pedido.ano;
+    };
+
     const lido = await lerDoServidor("dashboard", pedido, function (novo) {
-      if (mesExibido !== pedido.mes || anoExibido !== pedido.ano) return;
+      // Guarda sempre no lugar certo; só PINTAR é que depende de a tela ainda
+      // estar nesse mês.
       salvarCache(pedido.mes, pedido.ano, novo);
+      if (!aindaNoPedido()) return;
       preencherDashboard(novo);
       mostrarAvisoAtualizando(null);
     });
 
     const r = lido.dados;
     if (lido.ok) {
-      salvarCache(mesExibido, anoExibido, r);
-      preencherDashboard(r);
-      mostrarAvisoAtualizando(lido.suspeito ? "conferindo..." : null);
+      salvarCache(pedido.mes, pedido.ano, r);
 
-      const hj = new Date();
-      if (mesExibido === hj.getMonth() && anoExibido === hj.getFullYear()) {
-        verificarContasEVNotificar(r).catch(function () {});
-      } else {
-        esconderAvisoVencimento();
+      if (aindaNoPedido()) {
+        preencherDashboard(r);
+        mostrarAvisoAtualizando(lido.suspeito ? "conferindo..." : null);
+
+        const hj = new Date();
+        if (pedido.mes === hj.getMonth() && pedido.ano === hj.getFullYear()) {
+          verificarContasEVNotificar(r).catch(function () {});
+        } else {
+          esconderAvisoVencimento();
+        }
       }
-    } else {
+    } else if (aindaNoPedido()) {
       mostrarAvisoAtualizando("⚠️ Não foi possível atualizar.");
     }
   } catch (e) {
