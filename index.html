@@ -5938,6 +5938,20 @@
               contra ele. As mesadas e as viagens entram dentro do teto — são gasto
               como qualquer outro. Em branco, desliga.
             </div>
+
+            <label for="cfg-cartao-vale" style="display:block; font-size:12.5px; font-weight:600; color:var(--texto); margin:16px 0 7px;">Cartão de benefício</label>
+            <div style="display:flex; gap:9px;">
+              <select id="cfg-cartao-vale"
+                      style="flex:1; min-width:0; height:40px; border:none; border-radius:11px; padding:0 12px; font-family:inherit; font-size:13px; color:var(--texto); background:var(--cinza-fundo); box-shadow:var(--afundado-leve);">
+                <option value="">nenhum</option>
+              </select>
+              <button class="pc-btn" style="flex:0 0 auto; padding:0 16px;" onclick="salvarCartaoValeApp()">Salvar</button>
+            </div>
+            <div class="cfg-aviso" style="margin-top:9px;" id="cfg-vale-nota">
+              Vale-alimentação chega carimbado para uma coisa só e não disputa espaço
+              com o resto. O que entrar neste cartão no mês é <b>somado ao teto</b> —
+              o gasto continua aparecendo inteiro, nada é escondido.
+            </div>
           </div>
 
           <div class="cfg-rot">Aplicativo</div>
@@ -6649,7 +6663,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=122"></script>
+  <script src="app.js?v=123"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

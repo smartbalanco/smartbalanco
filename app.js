@@ -242,6 +242,7 @@ async function sincronizarCarimbos() {
     const r = await chamarServidor("carimbos");
     if (!r || !r.ok || !r.carimbos) return false;
 
+    const codigoAntes = carimbosConhecidos.codigo;
     const sujos = [];
     Object.keys(r.carimbos).forEach(function (d) {
       if (carimbosConhecidos[d] === r.carimbos[d]) return;
@@ -256,6 +257,21 @@ async function sincronizarCarimbos() {
     // tinha mudado e jogava o cache fora outra vez. Um defeito assim não dá
     // erro na tela: o app só volta a parecer lento, para sempre.
     if (sujos.length) guardarCarimbos();
+
+    // O CÓDIGO do servidor mudou: a conta é outra, e tudo que está guardado
+    // foi calculado pela conta antiga. Carimbo de domínio não pega este caso
+    // -- uma correção de cálculo não mexe em nenhuma linha da planilha --, e
+    // sem isto uma correção publicada e verificada no ar continua invisível
+    // no aparelho, que segue respondendo do próprio bolso.
+    //
+    // Só quando JÁ HAVIA um valor: na primeira execução não há nada velho
+    // para jogar fora, e limpar ali seria uma varrida a mais em toda
+    // instalação nova.
+    if (codigoAntes !== undefined && r.carimbos.codigo !== undefined &&
+        codigoAntes !== r.carimbos.codigo) {
+      esquecerTudo();
+      guardarCarimbos();
+    }
 
     // Não apaga: o carimbo novo já torna as entradas daquele domínio
     // SUSPEITAS, e suspeito se resolve mostrando e conferindo atrás.
@@ -5614,6 +5630,21 @@ async function salvarLimiteApp() {
   }
 }
 
+async function salvarCartaoValeApp() {
+  const campo = document.getElementById("cfg-cartao-vale");
+  try {
+    const r = await chamarServidor("salvarLimiteDeGastos", { cartaoVale: campo.value });
+    mostrarToast((r && r.mensagem) || "Pronto.");
+    if (r && r.ok) {
+      esquecerDominio("config");
+      esquecerDominio("transacoes");   // o teto do mês é calculado no dashboard
+      await recarregarDados();
+    }
+  } catch (e) {
+    mostrarToast("Falhou: " + (e.message || "sem conexão"));
+  }
+}
+
 function contarCategorias() {
   return (listasValidas && listasValidas.categorias) ? listasValidas.categorias.length : 0;
 }
@@ -5639,7 +5670,42 @@ function pintarDicasDeConfig() {
   const campoLim = document.getElementById("cfg-limite");
   if (campoLim && dashboardAtual) {
     const L = dashboardAtual.limite;
-    campoLim.value = L ? L.limite : "";
+    // O limiteBase, NUNCA o limite. O limite já vem com o crédito do vale
+    // somado; pôr isso no campo faria o próximo "Salvar" gravar o teto mais o
+    // vale como novo teto, e ele subiria de novo todo mês, sozinho.
+    campoLim.value = L ? L.limiteBase : "";
+  }
+
+  // O seletor do cartão de benefício sai dos MÉTODOS, não da Config Cartões:
+  // vale-alimentação não tem fechamento nem fatura, então ele não está lá --
+  // mas é por método que a despesa e o crédito são lançados, e é o método que
+  // precisa casar na hora de somar.
+  const campoVale = document.getElementById("cfg-cartao-vale");
+  if (campoVale) {
+    const atual = (dashboardAtual && dashboardAtual.limite)
+      ? (dashboardAtual.limite.cartaoVale || "") : "";
+    const metodos = (listasValidas && listasValidas.metodos) ? listasValidas.metodos : [];
+
+    // O guardado entra na lista mesmo que não esteja mais entre os métodos --
+    // senão o <select> cairia calado em "nenhum" e o teto encolheria sem nada
+    // dizendo que foi o app que trocou a escolha.
+    const opcoes = metodos.slice();
+    if (atual && opcoes.indexOf(atual) === -1) opcoes.push(atual);
+
+    campoVale.innerHTML = '<option value="">nenhum</option>' +
+      opcoes.map(function (m) {
+        return '<option value="' + escaparHtml(m) + '">' + escaparHtml(m) + '</option>';
+      }).join("");
+    campoVale.value = atual;
+
+    const nota = document.getElementById("cfg-vale-nota");
+    const L = dashboardAtual && dashboardAtual.limite;
+    if (nota && L && L.cartaoVale) {
+      nota.innerHTML = (L.vale > 0
+        ? "Entraram <b>" + formatarMoeda(L.vale) + "</b> neste mês, somados ao teto."
+        : "<b>Nada entrou neste mês</b> — o teto fica só no valor de cima. " +
+          "O crédito precisa estar lançado como receita neste método para ser contado.");
+    }
   }
 
   // gruposCompletos vem do dashboard, que já carregou antes daqui.
@@ -11108,8 +11174,16 @@ function pintarLinhaDoLimite(d) {
     }
   }
 
+  // De onde saiu o teto, por extenso. Um limite que muda de valor sozinho, mês
+  // a mês, sem dizer por quê, faz desconfiar do app inteiro -- e aqui ele muda
+  // mesmo, porque o crédito do vale entra nele.
+  const nota = (L.vale > 0)
+    ? formatarMoeda(L.limiteBase) + " + " + formatarMoeda(L.vale) + " de " +
+      escaparHtml(L.cartaoVale || "benefício") + " · contando o que ainda vai ser lançado"
+    : "contando o que ainda vai ser lançado";
+
   el.innerHTML = partes.join(" &middot; ") +
-    '<span class="sd-limite-nota">contando o que ainda vai ser lançado</span>';
+    '<span class="sd-limite-nota">' + nota + '</span>';
 }
 
 function pintarBarraDosGrupos(d) {
