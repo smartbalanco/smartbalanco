@@ -5018,10 +5018,19 @@ async function carregarCartoesConfig() {
         '<div class="cart-nome">' + escaparHtml(c.nome) + '</div>' +
         '<div class="cart-linha">' +
           '<label>Vence dia</label>' +
-          '<input type="number" min="1" max="31" id="cart-venc-' + i + '" value="' + c.diaVencimento + '" />' +
+          '<input type="number" min="0" max="31" id="cart-venc-' + i + '" value="' + c.diaVencimento + '" />' +
           '<button onclick="salvarVencimentoCartao(' + i + ')">Salvar</button>' +
         '</div>' +
-        '<div class="cart-sub">' + c.emAberto + ' compra(s) em aberto</div>' +
+        '<div class="cart-sub">' + c.emAberto + ' compra(s) em aberto' +
+          (c.diaVencimento === 0
+            ? ' · <b>vence no último dia do mês anterior</b>'
+            : '') +
+        '</div>' +
+        (c.diaVencimento === 1
+          ? '<button class="cart-alinhar" onclick="anteciparCartao(' + i + ')">' +
+              'Antecipar: passar a vencer no último dia do mês anterior' +
+            '</button>'
+          : '') +
         aviso +
         (c.emAberto > 0
           ? '<button class="cart-alinhar" onclick="alinharCartao(' + i + ')">' +
@@ -5036,12 +5045,71 @@ async function carregarCartoesConfig() {
   }
 }
 
+/**
+ * Passa o cartão a vencer no último dia do mês anterior, e leva junto o que
+ * já está lançado.
+ *
+ * A fatura que vence dia 1º é paga na véspera: pelo banco ela é do mês
+ * seguinte, pelo dinheiro é deste. Isto muda o rótulo, não o conteúdo -- o
+ * fechamento passa de 8 para 7 dias antes do vencimento, o que deixa a data
+ * de corte exatamente onde estava.
+ *
+ * SIMULA primeiro e mostra o número antes de escrever: são dezenas de linhas
+ * de histórico, e ver "137 parcelas" antes de confirmar é diferente de
+ * descobrir depois.
+ */
+async function anteciparCartao(indice) {
+  const c = cartoesConfig[indice];
+  if (!c) return;
+
+  mostrarToast("Conferindo o que mudaria…");
+
+  let sim;
+  try {
+    sim = await chamarServidor("anteciparFaturasDoCartao", { cartao: c.nome, simular: "true" });
+  } catch (e) {
+    mostrarToast("Falhou: " + (e.message || "sem conexão"));
+    return;
+  }
+  if (!sim || !sim.ok) { mostrarToast((sim && sim.mensagem) || "Não consegui conferir."); return; }
+
+  let aviso = "Antecipar o " + c.nome + "?\n\n" +
+    sim.mexidos + " parcela(s) que vencem no dia 1º passam para o último dia " +
+    "do mês anterior.\n\n" +
+    "As compras de cada fatura NÃO mudam: o fechamento passa a ser 7 dias " +
+    "antes em vez de 8, e a data de corte fica onde está. O que muda é o mês " +
+    "em que a fatura aparece no balanço.";
+
+  if (sim.foraDoPadrao && sim.foraDoPadrao.length) {
+    aviso += "\n\nFicam como estão " +
+      sim.foraDoPadrao.map(function (f) { return f.quantas + " do dia " + f.dia; }).join(", ") +
+      " — podem ser ajustes feitos à mão.";
+  }
+
+  if (!confirm(aviso)) return;
+
+  try {
+    const r1 = await chamarServidor("salvarCartaoConfig", { cartao: c.nome, diaVencimento: 0 });
+    if (!r1 || !r1.ok) { mostrarToast((r1 && r1.mensagem) || "Não consegui salvar o cartão."); return; }
+
+    const r2 = await chamarServidor("anteciparFaturasDoCartao", { cartao: c.nome, simular: "false" });
+    mostrarToast((r2 && r2.mensagem) || "Pronto.");
+
+    esquecerDominio("transacoes");
+    await carregarCartoesConfig();
+    await recarregarDados();
+  } catch (e) {
+    mostrarToast("Falhou: " + (e.message || "sem conexão"));
+  }
+}
+
 async function salvarVencimentoCartao(indice) {
   const c = cartoesConfig[indice];
   if (!c) return;
 
   const dia = parseInt(document.getElementById("cart-venc-" + indice).value);
-  if (!dia || dia < 1 || dia > 31) { mostrarToast("❌ Dia deve ser de 1 a 31."); return; }
+  // 0 não é "vazio": é "último dia do mês anterior".
+  if (isNaN(dia) || dia < 0 || dia > 31) { mostrarToast("Dia deve ser de 0 a 31."); return; }
 
   try {
     const r = await chamarServidor("salvarCartaoConfig", { cartao: c.nome, diaVencimento: dia });
