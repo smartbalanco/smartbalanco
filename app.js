@@ -9443,60 +9443,101 @@ const CACHE_REL_SALVOS = "sb_rel_salvos";  // relatórios fixados offline
 let relatorioAtual = null;                  // relatório exibido no momento
 
 // Definição dos relatórios disponíveis e seus períodos
+// ----------------------------------------------------------------------------
+// Os emoji saíram. Nove ícones coloridos em coluna competem entre si e nenhum
+// diz o que o relatório faz -- 🧠 para "Previsão Orçamentária" e 🔮 para
+// "Projeção Futura" eram dois enfeites para duas coisas que já custam a
+// distinguir pelo nome. Sem eles, o que diferencia volta a ser o texto.
+//
+// O campo "grupo" junta os quinze por PERGUNTA. Numa lista chapada é preciso
+// ler todos para achar um; em grupos de três ou quatro, o cabeçalho já
+// descarta os que não interessam.
+// ----------------------------------------------------------------------------
+const GRUPOS_RELATORIO = [
+  { id: "mes",        nome: "O mês fechado" },
+  { id: "combinados", nome: "Combinados, cartões e fixas" },
+  { id: "comparar",   nome: "Comparar e acompanhar" },
+  { id: "futuro",     nome: "O que vem pela frente" }
+];
+
 const RELATORIOS = {
-  evolucao: {
-    nome: "Evolução Mensal",
-    icone: "📈",
-    desc: "Receitas x despesas ao longo do ano",
-    periodo: "ano"
+  dre: {
+    nome: "DRE do mês",
+    desc: "receitas e despesas por grupo",
+    periodo: "mes", grupo: "mes", paginas: 1
   },
-  comparacao: {
-    nome: "Comparação entre Meses",
-    icone: "⚖️",
-    desc: "Compare dois meses lado a lado",
-    periodo: "doisMeses"
+  extrato: {
+    nome: "Extrato do mês",
+    desc: "todos os lançamentos",
+    periodo: "mes", grupo: "mes", paginas: 3
   },
   regra503020: {
     nome: "Regra 50/30/20",
-    icone: "🎯",
-    desc: "Sobrevivência, estilo de vida e riqueza",
-    periodo: "mes"
+    desc: "sobrevivência, estilo de vida e riqueza",
+    periodo: "mes", grupo: "mes", paginas: 1
   },
-  dre: {
-    nome: "DRE do Mês",
-    icone: "📋",
-    desc: "Receitas e despesas detalhadas por grupo",
-    periodo: "mes"
+
+  gruposSaldo: {
+    nome: "Grupos de saldo",
+    desc: "quanto coube em cada combinado, e o que passa adiante",
+    periodo: "mes", grupo: "combinados", paginas: 1
   },
-  parcelamentos: {
-    nome: "Parcelamentos Ativos",
-    icone: "💳",
-    desc: "O que ainda falta pagar e o progresso",
-    periodo: "nenhum"
+  cartoes: {
+    nome: "Fechamento dos cartões",
+    desc: "fatura, parcelas antigas e limite preso",
+    periodo: "mes", grupo: "combinados", paginas: 2
   },
-  projecao: {
-    nome: "Projeção Futura",
-    icone: "🔮",
-    desc: "Quanto já está comprometido nos próximos meses",
-    periodo: "meses"
+  fixasRealizado: {
+    nome: "Fixas: cadastrado x realizado",
+    desc: "o que subiu de preço e o que não foi lançado",
+    periodo: "mes", grupo: "combinados", paginas: 1
   },
-  extrato: {
-    nome: "Extrato do Mês",
-    icone: "🧾",
-    desc: "Todos os lançamentos do mês",
-    periodo: "mes"
+  miudos: {
+    nome: "Onde o dinheiro escorre",
+    desc: "a soma das compras pequenas do mês",
+    periodo: "mesTeto", grupo: "combinados", paginas: 2
   },
-  previsao: {
-    nome: "Previsão Orçamentária",
-    icone: "🧠",
-    desc: "Quanto você vai gastar no mês que vem",
-    periodo: "janela"
+
+  evolucao: {
+    nome: "Evolução mensal",
+    desc: "receitas x despesas ao longo do ano",
+    periodo: "ano", grupo: "comparar", paginas: 1
+  },
+  comparacao: {
+    nome: "Comparação entre meses",
+    desc: "dois meses lado a lado",
+    periodo: "doisMeses", grupo: "comparar", paginas: 1
   },
   gastosCategoria: {
-    nome: "Gastos por Categoria",
-    icone: "🗂️",
-    desc: "Todos os gastos de categorias num período",
-    periodo: "intervaloCategorias"
+    nome: "Gastos por categoria",
+    desc: "num período que você escolhe",
+    periodo: "intervaloCategorias", grupo: "comparar", paginas: 2
+  },
+  retratoAno: {
+    nome: "Retrato do ano",
+    desc: "o ano inteiro numa página",
+    periodo: "ano", grupo: "comparar", paginas: 1
+  },
+
+  projecao: {
+    nome: "Projeção futura",
+    desc: "o que já está comprometido",
+    periodo: "meses", grupo: "futuro", paginas: 1
+  },
+  previsao: {
+    nome: "Previsão orçamentária",
+    desc: "quanto você vai gastar no mês que vem",
+    periodo: "janela", grupo: "futuro", paginas: 1
+  },
+  parcelamentos: {
+    nome: "Parcelamentos ativos",
+    desc: "o que falta pagar e o progresso",
+    periodo: "nenhum", grupo: "futuro", paginas: 1
+  },
+  planos: {
+    nome: "Planos de compra",
+    desc: "o que saiu do papel, o que ficou esperando",
+    periodo: "ano", grupo: "futuro", paginas: 1
   }
 };
 
@@ -9504,51 +9545,556 @@ const MESES_NOMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
                      "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 
 // ---------- Tela inicial de relatórios ----------
+// ============================================================================
+// PRESTAÇÃO DE CONTAS
+// ----------------------------------------------------------------------------
+// Vários relatórios num documento só, com capa, índice e assinaturas.
+//
+// Os MODELOS ficam no localStorage: é decisão de formato, muda pouco, e não
+// precisa sincronizar entre aparelhos para funcionar -- mesmo critério do
+// rascunho de roteiro. Guardar na planilha custaria uma leitura por abertura
+// da tela para uma lista de dois itens.
+//
+// A montagem faz UMA chamada por relatório, em série. É o mesmo caminho que
+// gerar um relatório avulso já usa: uma ação nova no servidor que devolvesse
+// todos de uma vez seria mais rápida, mas duplicaria o roteador de relatórios
+// e estouraria o tempo do Apps Script justamente nos documentos grandes.
+// Em série, um relatório que falha não derruba os outros.
+// ============================================================================
+const MODELOS_CHAVE = "sb_modelos_pc";
+
+function lerModelos() {
+  try {
+    const bruto = localStorage.getItem(MODELOS_CHAVE);
+    if (!bruto) return [modeloPadrao()];
+    const lista = JSON.parse(bruto);
+    return Array.isArray(lista) && lista.length ? lista : [modeloPadrao()];
+  } catch (e) {
+    return [modeloPadrao()];
+  }
+}
+
+function salvarModelos(lista) {
+  try { localStorage.setItem(MODELOS_CHAVE, JSON.stringify(lista)); } catch (e) {}
+}
+
+/** O primeiro modelo já vem montado: tela vazia não ensina o que ela faz. */
+function modeloPadrao() {
+  return {
+    nome: "Fechamento do mês",
+    relatorios: ["dre", "gruposSaldo", "cartoes", "extrato"],
+    assinaturas: ["", ""]
+  };
+}
+
+function paginasDoModelo(m) {
+  let n = 1;   // a capa
+  m.relatorios.forEach(function (k) {
+    n += (RELATORIOS[k] && RELATORIOS[k].paginas) || 1;
+  });
+  return n;
+}
+
+function htmlModelosDeFechamento() {
+  const modelos = lerModelos();
+  const hoje = new Date();
+  const mes = MESES_NOMES[mesExibido] || MESES_NOMES[hoje.getMonth()];
+  const ano = anoExibido || hoje.getFullYear();
+
+  let cartoes = "";
+  modelos.forEach(function (m, i) {
+    const n = m.relatorios.length;
+    cartoes +=
+      '<div class="pc-cartao">' +
+        '<div class="pc-topo">' +
+          '<div style="flex:1;">' +
+            '<div class="pc-nome">' + escaparHtml(m.nome) + '</div>' +
+            '<div class="pc-sub">' + n + (n === 1 ? " relatório" : " relatórios") +
+              ' &middot; ' + paginasDoModelo(m) + ' páginas</div>' +
+          '</div>' +
+          '<button class="pc-icone" onclick="abrirMontadorPC(' + i + ')" aria-label="Editar modelo">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z"></path></svg>' +
+          '</button>' +
+        '</div>' +
+        '<button class="pc-btn" style="width:100%;" onclick="montarPrestacao(' + i + ')">' +
+          'Montar de ' + escaparHtml(mes.toLowerCase()) + ' ' + ano +
+        '</button>' +
+      '</div>';
+  });
+
+  return '<div class="rel-secao">' +
+      '<div class="rel-secao-rot">Prestação de contas</div>' +
+      cartoes +
+      '<div class="pc-linha">' +
+        '<button class="pc-btn neutro" onclick="abrirMontadorPC(-1)">Novo modelo</button>' +
+      '</div>' +
+    '</div>';
+}
+
+// ---------------------------------------------------------------------------
+// O MONTADOR
+// ---------------------------------------------------------------------------
+let modeloEditando = null;
+let modeloIndice = -1;
+
+function abrirMontadorPC(indice) {
+  const modelos = lerModelos();
+  modeloIndice = indice;
+  modeloEditando = indice >= 0
+    ? JSON.parse(JSON.stringify(modelos[indice]))
+    : { nome: "Novo modelo", relatorios: ["dre"], assinaturas: ["", ""] };
+
+  document.getElementById("modal-pc").style.display = "flex";
+  pintarMontadorPC();
+}
+
+function fecharMontadorPC() {
+  document.getElementById("modal-pc").style.display = "none";
+  modeloEditando = null;
+}
+
+function pintarMontadorPC() {
+  const m = modeloEditando;
+  if (!m) return;
+
+  document.getElementById("pc-nome-campo").value = m.nome;
+  document.getElementById("pc-ass1").value = (m.assinaturas || ["", ""])[0] || "";
+  document.getElementById("pc-ass2").value = (m.assinaturas || ["", ""])[1] || "";
+
+  // ---- os escolhidos, na ordem do documento ----
+  let escolhidos =
+    '<div class="pc-item">' +
+      '<span class="pc-marca on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+        'stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>' +
+      '<span class="pc-item-txt"><span class="pc-item-nome">Capa</span>' +
+        '<span class="pc-item-sub">título, resumo do mês e assinaturas</span></span>' +
+      '<span class="pc-item-sub">fixa</span>' +
+    '</div>';
+
+  m.relatorios.forEach(function (k, i) {
+    const r = RELATORIOS[k];
+    if (!r) return;
+    escolhidos +=
+      '<div class="pc-item">' +
+        '<button class="pc-marca on" onclick="tirarDoModelo(' + i + ')" aria-label="Tirar">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" ' +
+          'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<path d="M5 12.5l4.5 4.5L19 7"></path></svg>' +
+        '</button>' +
+        '<span class="pc-item-txt">' +
+          '<span class="pc-item-nome">' + escaparHtml(r.nome) + '</span>' +
+          '<span class="pc-item-sub">' + (r.paginas || 1) +
+            ((r.paginas || 1) === 1 ? " página" : " páginas") + '</span>' +
+        '</span>' +
+        '<span class="pc-ord">' +
+          '<button onclick="moverNoModelo(' + i + ',-1)"' + (i === 0 ? " disabled" : "") +
+            ' aria-label="Subir">&#9650;</button>' +
+          '<button onclick="moverNoModelo(' + i + ',1)"' +
+            (i === m.relatorios.length - 1 ? " disabled" : "") + ' aria-label="Descer">&#9660;</button>' +
+        '</span>' +
+      '</div>';
+  });
+  document.getElementById("pc-escolhidos").innerHTML = escolhidos;
+
+  // ---- o que dá para acrescentar ----
+  let resto = "";
+  GRUPOS_RELATORIO.forEach(function (g) {
+    const livres = Object.keys(RELATORIOS).filter(function (k) {
+      return RELATORIOS[k].grupo === g.id && m.relatorios.indexOf(k) < 0;
+    });
+    if (!livres.length) return;
+
+    resto += '<div class="pc-item-sub" style="margin:12px 0 2px 2px;">' +
+             escaparHtml(g.nome) + '</div>';
+    livres.forEach(function (k) {
+      const r = RELATORIOS[k];
+      resto +=
+        '<button class="pc-item" onclick="porNoModelo(\'' + k + '\')">' +
+          '<span class="pc-marca"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+            'stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M5 12.5l4.5 4.5L19 7"></path></svg></span>' +
+          '<span class="pc-item-txt">' +
+            '<span class="pc-item-nome">' + escaparHtml(r.nome) + '</span>' +
+            '<span class="pc-item-sub">' + escaparHtml(r.desc) + '</span>' +
+          '</span>' +
+        '</button>';
+    });
+  });
+  document.getElementById("pc-resto").innerHTML = resto ||
+    '<p class="vazio">Todos os relatórios já estão no documento.</p>';
+
+  document.getElementById("pc-contador").textContent =
+    m.relatorios.length + " de " + Object.keys(RELATORIOS).length + " relatórios escolhidos";
+  document.getElementById("pc-btn-montar").textContent =
+    "Montar · " + paginasDoModelo(m) + " páginas";
+  document.getElementById("pc-btn-excluir").style.display =
+    modeloIndice >= 0 && lerModelos().length > 1 ? "block" : "none";
+}
+
+/** Leva para o modelo o que esta escrito nos campos AGORA. */
+function capturarCamposPC() {
+  if (!modeloEditando) return;
+  const n = document.getElementById("pc-nome-campo");
+  const a1 = document.getElementById("pc-ass1");
+  const a2 = document.getElementById("pc-ass2");
+  if (n) modeloEditando.nome = n.value;
+  if (a1 && a2) modeloEditando.assinaturas = [a1.value, a2.value];
+}
+
+function porNoModelo(tipo) {
+  if (!modeloEditando) return;
+  capturarCamposPC();
+  if (modeloEditando.relatorios.indexOf(tipo) < 0) modeloEditando.relatorios.push(tipo);
+  pintarMontadorPC();
+}
+
+function tirarDoModelo(i) {
+  if (!modeloEditando) return;
+  capturarCamposPC();
+  modeloEditando.relatorios.splice(i, 1);
+  pintarMontadorPC();
+}
+
+function moverNoModelo(i, dir) {
+  if (!modeloEditando) return;
+  capturarCamposPC();
+  const j = i + dir;
+  const lista = modeloEditando.relatorios;
+  if (j < 0 || j >= lista.length) return;
+  const tmp = lista[i]; lista[i] = lista[j]; lista[j] = tmp;
+  pintarMontadorPC();
+}
+
+function guardarModeloAtual() {
+  if (!modeloEditando) return null;
+  modeloEditando.nome = document.getElementById("pc-nome-campo").value.trim() || "Sem nome";
+  modeloEditando.assinaturas = [
+    document.getElementById("pc-ass1").value.trim(),
+    document.getElementById("pc-ass2").value.trim()
+  ];
+
+  const modelos = lerModelos();
+  if (modeloIndice >= 0) modelos[modeloIndice] = modeloEditando;
+  else { modelos.push(modeloEditando); modeloIndice = modelos.length - 1; }
+  salvarModelos(modelos);
+  return modeloEditando;
+}
+
+function salvarModeloPC() {
+  if (!guardarModeloAtual()) return;
+  fecharMontadorPC();
+  renderizarTelaRelatorios();
+  mostrarToast("Modelo salvo.");
+}
+
+function excluirModeloPC() {
+  if (modeloIndice < 0) return;
+  const modelos = lerModelos();
+  if (modelos.length <= 1) return;
+  if (!confirm("Apagar o modelo \"" + modelos[modeloIndice].nome + "\"?")) return;
+  modelos.splice(modeloIndice, 1);
+  salvarModelos(modelos);
+  fecharMontadorPC();
+  renderizarTelaRelatorios();
+}
+
+/** Do montador direto para o documento, salvando o que foi mexido. */
+async function montarDoMontador() {
+  const m = guardarModeloAtual();
+  if (!m) return;
+  fecharMontadorPC();
+  await montarPrestacao(modeloIndice);
+}
+
+// ---------------------------------------------------------------------------
+// A MONTAGEM
+// ---------------------------------------------------------------------------
+
+/**
+ * Os parâmetros de um relatório a partir do MÊS do documento.
+ *
+ * O mês vale para o documento inteiro: perguntar o período cinco vezes
+ * transformaria "montar o fechamento" num formulário. Relatório que pede
+ * outro recorte usa este mês como referência.
+ */
+function paramsDoRelatorio(tipo, mes, ano) {
+  const r = RELATORIOS[tipo];
+  const p = { tipoRel: tipo };
+
+  if (r.periodo === "mes") { p.mes = mes; p.ano = ano; }
+  else if (r.periodo === "mesTeto") { p.mes = mes; p.ano = ano; p.teto = 50; }
+  else if (r.periodo === "ano") { p.ano = ano; }
+  else if (r.periodo === "meses" || r.periodo === "janela") { p.meses = 6; }
+  else if (r.periodo === "doisMeses") {
+    // Contra o mês anterior: num fechamento é a comparação que interessa.
+    const antes = mes === 0 ? 11 : mes - 1;
+    const anoAntes = mes === 0 ? ano - 1 : ano;
+    p.mesA = antes; p.anoA = anoAntes; p.mesB = mes; p.anoB = ano;
+  } else if (r.periodo === "intervaloCategorias") {
+    const dois = function (n) { return (n < 10 ? "0" : "") + n; };
+    const ultimo = new Date(ano, mes + 1, 0).getDate();
+    p.dataInicio = ano + "-" + dois(mes + 1) + "-01";
+    p.dataFim = ano + "-" + dois(mes + 1) + "-" + dois(ultimo);
+    p.categorias = "";
+  }
+  return p;
+}
+
+async function montarPrestacao(indice) {
+  const modelos = lerModelos();
+  const m = modelos[indice];
+  if (!m || !m.relatorios.length) {
+    mostrarToast("Este modelo não tem relatório nenhum.");
+    return;
+  }
+
+  const mes = mesExibido;
+  const ano = anoExibido;
+  const wrap = document.getElementById("conteudo-rel");
+
+  const prontos = [];
+  const falharam = [];
+
+  for (let i = 0; i < m.relatorios.length; i++) {
+    const tipo = m.relatorios[i];
+    const r = RELATORIOS[tipo];
+
+    wrap.innerHTML =
+      '<div class="card" style="text-align:center; padding:46px 20px;">' +
+        '<div class="spinner" style="margin:0 auto 16px;"></div>' +
+        '<div style="font-size:14px; font-weight:700; color:var(--texto);">Montando ' +
+          (i + 1) + ' de ' + m.relatorios.length + '</div>' +
+        '<div style="font-size:12px; color:var(--cinza-texto); margin-top:6px;">' +
+          escaparHtml(r ? r.nome : tipo) + '</div>' +
+      '</div>';
+
+    try {
+      const res = await chamarServidor("gerarRelatorio", paramsDoRelatorio(tipo, mes, ano));
+      // Um relatório que falha não derruba o documento: ele entra como uma
+      // página dizendo o que faltou, e o resto segue.
+      if (res && res.ok) prontos.push({ tipo: tipo, res: res });
+      else falharam.push({ tipo: tipo, motivo: (res && res.mensagem) || "não veio" });
+    } catch (e) {
+      falharam.push({ tipo: tipo, motivo: "sem conexão" });
+    }
+  }
+
+  renderizarPrestacao(m, mes, ano, prontos, falharam);
+}
+
+function renderizarPrestacao(modelo, mes, ano, prontos, falharam) {
+  const wrap = document.getElementById("conteudo-rel");
+
+  let corpo = "";
+  prontos.forEach(function (p) {
+    let html = "";
+    const res = p.res;
+    if (res.tipo === "evolucao")            html = htmlEvolucao(res);
+    else if (res.tipo === "comparacao")     html = htmlComparacao(res);
+    else if (res.tipo === "regra503020")    html = htmlRegra(res);
+    else if (res.tipo === "dre")            html = htmlDRE(res);
+    else if (res.tipo === "parcelamentos")  html = htmlParcelamentos(res);
+    else if (res.tipo === "projecao")       html = htmlProjecao(res);
+    else if (res.tipo === "extrato")        html = htmlExtrato(res);
+    else if (res.tipo === "previsao")       html = htmlPrevisao(res);
+    else if (res.tipo === "gastosCategoria") html = htmlGastosCategoria(res);
+    else if (res.tipo === "gruposSaldo")    html = htmlGruposSaldo(res);
+    else if (res.tipo === "cartoes")        html = htmlCartoes(res);
+    else if (res.tipo === "miudos")         html = htmlMiudos(res);
+    else if (res.tipo === "fixasRealizado") html = htmlFixasRealizado(res);
+    else if (res.tipo === "retratoAno")     html = htmlRetratoAno(res);
+    else if (res.tipo === "planos")         html = htmlPlanos(res);
+
+    corpo +=
+      '<div class="pc-bloco">' +
+        '<div class="rel-cabecalho" style="margin-bottom:14px;">' +
+          '<h1>' + escaparHtml(res.meta.titulo) + '</h1>' +
+          '<p class="rc-sub">' + escaparHtml(res.meta.subtitulo) + '</p>' +
+        '</div>' +
+        html +
+      '</div>';
+  });
+
+  falharam.forEach(function (f) {
+    const r = RELATORIOS[f.tipo];
+    corpo +=
+      '<div class="pc-bloco"><div class="card">' +
+        '<h2>' + escaparHtml(r ? r.nome : f.tipo) + '</h2>' +
+        '<p class="vazio">Não entrou no documento: ' + escaparHtml(f.motivo) + '.</p>' +
+      '</div></div>';
+  });
+
+  wrap.innerHTML =
+    '<div class="rel-barra">' +
+      '<button class="rb-btn" onclick="renderizarTelaRelatorios()">&#8249; Voltar</button>' +
+      '<div class="rb-acoes">' +
+        '<button class="rb-btn" onclick="compartilharPrestacao()">Compartilhar</button>' +
+        '<button class="rb-btn" onclick="imprimirRelatorio()">Imprimir</button>' +
+      '</div>' +
+    '</div>' +
+    '<div id="rel-imprimivel">' +
+      '<div class="pc-corrido">' + escaparHtml(modelo.nome.toUpperCase()) + ' &middot; ' +
+        escaparHtml((MESES_NOMES[mes] || "").toUpperCase()) + ' DE ' + ano + '</div>' +
+      htmlCapaPrestacao(modelo, mes, ano, prontos, falharam) +
+      corpo +
+    '</div>';
+
+  window.scrollTo(0, 0);
+}
+
+/**
+ * A capa.
+ *
+ * Os três números saem do CACHE do mês, pelo mesmo resumoDoMes que o balanço
+ * usa -- nenhuma chamada a mais, e o número da capa não diverge do da tela.
+ * Sem o mês guardado, a capa sai sem eles em vez de mostrar zero: zero numa
+ * prestação de contas é uma afirmação, não uma ausência.
+ */
+function htmlCapaPrestacao(modelo, mes, ano, prontos, falharam) {
+  const cache = lerCache(mes, ano);
+  const r = cache ? resumoDoMes(cache.dados) : null;
+
+  const ultimo = new Date(ano, mes + 1, 0).getDate();
+  const dois = function (n) { return (n < 10 ? "0" : "") + n; };
+
+  let indice = "";
+  let pagina = 2;
+  prontos.forEach(function (p) {
+    const def = RELATORIOS[p.tipo];
+    const n = (def && def.paginas) || 1;
+    const faixa = n > 1 ? (pagina + "–" + (pagina + n - 1)) : String(pagina);
+    indice +=
+      '<div class="pcc-idx"><span>' + escaparHtml(p.res.meta.titulo) + '</span>' +
+      '<span class="pcc-pont"></span><span>' + faixa + '</span></div>';
+    pagina += n;
+  });
+  falharam.forEach(function (f) {
+    const def = RELATORIOS[f.tipo];
+    indice += '<div class="pcc-idx"><span>' + escaparHtml(def ? def.nome : f.tipo) +
+      '</span><span class="pcc-pont"></span><span>—</span></div>';
+  });
+
+  const ass = modelo.assinaturas || ["", ""];
+
+  return (
+    '<div class="pc-capa">' +
+      '<div class="pcc-rot">PRESTAÇÃO DE CONTAS</div>' +
+      '<div class="pcc-titulo">' + escaparHtml(MESES_NOMES[mes] || "") + '<br>de ' + ano + '</div>' +
+      '<div class="pcc-risco"></div>' +
+      '<div class="pcc-periodo">' +
+        (modelo.nome ? escaparHtml(modelo.nome) + '<br>' : '') +
+        'Período de 01/' + dois(mes + 1) + '/' + ano +
+        ' a ' + dois(ultimo) + '/' + dois(mes + 1) + '/' + ano +
+      '</div>' +
+
+      (r
+        ? '<div class="pcc-numeros">' +
+            '<div><span>ENTROU</span><b>' + formatarMoeda(r.receita) + '</b></div>' +
+            '<div><span>SAIU</span><b>' + formatarMoeda(r.despesas + r.fixasNaConta) + '</b></div>' +
+            '<div><span>' + (r.sobra >= 0 ? "SOBROU" : "FALTOU") + '</span>' +
+              '<b class="' + (r.sobra >= 0 ? "verde" : "vermelho") + '">' +
+              (r.supondo ? "≈ " : "") + formatarMoeda(Math.abs(r.sobra)) + '</b></div>' +
+          '</div>' +
+          (r.supondo
+            ? '<div class="pcc-aviso">Mês de previsão: a receita é a última conhecida ' +
+              'e as fixas ainda não lançadas já estão descontadas.</div>'
+            : '')
+        : '<div class="pcc-aviso">Os totais do mês não estavam guardados no aparelho ' +
+          'quando este documento foi montado.</div>') +
+
+      '<div class="pcc-indice"><div class="pcc-idx-rot">NESTE DOCUMENTO</div>' + indice + '</div>' +
+
+      '<div class="pcc-assinaturas">' +
+        '<div><span>' + escaparHtml(ass[0] || " ") + '</span></div>' +
+        '<div><span>' + escaparHtml(ass[1] || " ") + '</span></div>' +
+      '</div>' +
+
+      '<div class="pcc-rodape">Gerado pelo Smartbalanço em ' +
+        escaparHtml(new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })) +
+      '</div>' +
+    '</div>'
+  );
+}
+
+async function compartilharPrestacao() {
+  const texto = document.getElementById("rel-imprimivel");
+  if (!texto) return;
+  try {
+    await navigator.share({ title: "Prestação de contas", text: texto.innerText.slice(0, 4000) });
+  } catch (e) {
+    mostrarToast("Use Imprimir → Salvar como PDF para enviar o documento.");
+  }
+}
+
+/** Um ícone de documento, o mesmo para todo relatório salvo. */
+const ICONE_DOC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path>' +
+  '<path d="M14 3v5h5"></path></svg>';
+
 function renderizarTelaRelatorios() {
   const wrap = document.getElementById("conteudo-rel");
 
-  const salvos = lerRelatoriosSalvos();
-  let htmlSalvos = "";
+  // ---- A prestação de contas vem primeiro: é o que se faz todo mês.
+  // Relatório avulso é consulta, e consulta não disputa espaço com rotina.
+  let html = htmlModelosDeFechamento();
 
+  // ---- Salvos: era um card inteiro, com título próprio, para uma lista que
+  // costuma ter uma linha.
+  const salvos = lerRelatoriosSalvos();
   if (salvos.length > 0) {
     let itens = "";
-    salvos.forEach(function (s, i) {
+    salvos.forEach(function (x, i) {
       itens +=
         '<div class="rel-salvo">' +
           '<button class="rs-abrir" onclick="abrirRelatorioSalvo(' + i + ')">' +
-            '<span class="rs-icone">' + (RELATORIOS[s.tipo] ? RELATORIOS[s.tipo].icone : "📄") + '</span>' +
+            '<span class="rs-icone">' + ICONE_DOC + '</span>' +
             '<span class="rs-info">' +
-              '<b>' + escaparHtml(s.meta.titulo) + '</b>' +
-              '<span>' + escaparHtml(s.meta.subtitulo) + ' &middot; ' + escaparHtml(s.meta.geradoEm) + '</span>' +
+              '<b>' + escaparHtml(x.meta.titulo) + '</b>' +
+              '<span>' + escaparHtml(x.meta.subtitulo) + ' &middot; ' + escaparHtml(x.meta.geradoEm) + '</span>' +
             '</span>' +
           '</button>' +
-          '<button class="rs-excluir" onclick="excluirRelatorioSalvo(' + i + ')" title="Excluir">🗑️</button>' +
+          '<button class="rs-excluir" onclick="excluirRelatorioSalvo(' + i + ')" aria-label="Apagar">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+            'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M4 7h16"></path><path d="M9 7V5h6v2"></path>' +
+            '<path d="M6 7l1 13h10l1-13"></path></svg>' +
+          '</button>' +
         '</div>';
     });
 
-    htmlSalvos =
-      '<div class="card">' +
-        '<h2>📌 Salvos offline</h2>' +
-        itens +
-      '</div>';
+    html += '<div class="rel-secao"><div class="rel-secao-rot">Salvos no aparelho</div>' +
+            '<div class="rel-lista">' + itens + '</div></div>';
   }
 
-  let htmlDisponiveis = '<div class="card"><h2>Gerar relatório</h2>';
-  Object.keys(RELATORIOS).forEach(function (k) {
-    const r = RELATORIOS[k];
-    htmlDisponiveis +=
-      '<button class="rel-opcao" onclick="abrirPeriodo(\'' + k + '\')">' +
-        '<span class="ro-icone">' + r.icone + '</span>' +
-        '<span class="ro-info">' +
-          '<b>' + r.nome + '</b>' +
-          '<span>' + r.desc + '</span>' +
-        '</span>' +
-        '<span class="ro-seta">›</span>' +
-      '</button>';
-  });
-  htmlDisponiveis += '</div>';
+  // ---- Os relatórios, em grupos.
+  GRUPOS_RELATORIO.forEach(function (g) {
+    const doGrupo = Object.keys(RELATORIOS).filter(function (k) {
+      return RELATORIOS[k].grupo === g.id;
+    });
+    if (!doGrupo.length) return;
 
-  wrap.innerHTML = htmlSalvos + htmlDisponiveis;
+    let itens = "";
+    doGrupo.forEach(function (k) {
+      const r = RELATORIOS[k];
+      itens +=
+        '<button class="rel-opcao" onclick="abrirPeriodo(\'' + k + '\')">' +
+          '<span class="ro-info">' +
+            '<b>' + escaparHtml(r.nome) + '</b>' +
+            '<span>' + escaparHtml(r.desc) + '</span>' +
+          '</span>' +
+          '<span class="ro-seta">&#8250;</span>' +
+        '</button>';
+    });
+
+    html += '<div class="rel-secao"><div class="rel-secao-rot">' + escaparHtml(g.nome) + '</div>' +
+            '<div class="rel-lista">' + itens + '</div></div>';
+  });
+
+  wrap.innerHTML = html;
 }
 
 // ---------- Seletor de período ----------
@@ -9567,7 +10113,7 @@ async function abrirPeriodo(tipo) {
   }
 
   document.getElementById("modal-periodo").style.display = "flex";
-  document.getElementById("mp-titulo").textContent = r.icone + " " + r.nome;
+  document.getElementById("mp-titulo").textContent = r.nome;
 
   const corpo = document.getElementById("mp-corpo");
   const hoje = new Date();
@@ -9596,6 +10142,30 @@ async function abrirPeriodo(tipo) {
           '<label for="mp-ano">Ano</label>' +
           '<select id="mp-ano">' + opcoesAnos(anoAtual) + '</select>' +
         '</div>' +
+      '</div>';
+
+  } else if (r.periodo === "mesTeto") {
+    // O teto é a pergunta do relatório, não um detalhe: "pequeno" é R$ 20
+    // para uns e R$ 100 para outros, e o número muda o que ele revela.
+    corpo.innerHTML =
+      '<div class="linha-dupla">' +
+        '<div class="campo-bloco">' +
+          '<label for="mp-mes">Mês</label>' +
+          '<select id="mp-mes">' + opcoesMeses(mesAtual) + '</select>' +
+        '</div>' +
+        '<div class="campo-bloco">' +
+          '<label for="mp-ano">Ano</label>' +
+          '<select id="mp-ano">' + opcoesAnos(anoAtual) + '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div class="campo-bloco">' +
+        '<label for="mp-teto">Considerar compras de até</label>' +
+        '<select id="mp-teto">' +
+          '<option value="20">R$ 20,00</option>' +
+          '<option value="50" selected>R$ 50,00</option>' +
+          '<option value="100">R$ 100,00</option>' +
+          '<option value="200">R$ 200,00</option>' +
+        '</select>' +
       '</div>';
 
   } else if (r.periodo === "nenhum") {
@@ -9728,6 +10298,10 @@ async function gerarRelatorioAgora() {
     params.dataInicio = document.getElementById("mp-inicio").value;
     params.dataFim = document.getElementById("mp-fim").value;
     params.categorias = catsRelatorio.join("|");
+  } else if (r.periodo === "mesTeto") {
+    params.mes = document.getElementById("mp-mes").value;
+    params.ano = document.getElementById("mp-ano").value;
+    params.teto = document.getElementById("mp-teto").value;
   } else if (r.periodo === "nenhum") {
     // sem parâmetros
   } else if (r.periodo === "doisMeses") {
@@ -10671,6 +11245,12 @@ function renderizarRelatorio(res, ehSalvo) {
   else if (res.tipo === "extrato")        corpo = htmlExtrato(res);
   else if (res.tipo === "previsao")       corpo = htmlPrevisao(res);
   else if (res.tipo === "gastosCategoria") corpo = htmlGastosCategoria(res);
+  else if (res.tipo === "gruposSaldo")    corpo = htmlGruposSaldo(res);
+  else if (res.tipo === "cartoes")        corpo = htmlCartoes(res);
+  else if (res.tipo === "miudos")         corpo = htmlMiudos(res);
+  else if (res.tipo === "fixasRealizado") corpo = htmlFixasRealizado(res);
+  else if (res.tipo === "retratoAno")     corpo = htmlRetratoAno(res);
+  else if (res.tipo === "planos")         corpo = htmlPlanos(res);
 
   corpo = interruptorPlanos(res) + corpo;
 
@@ -10874,6 +11454,408 @@ function htmlRegra(r) {
         '<div><span>Sobra</span><b class="' + (r.sobra >= 0 ? 'verde' : 'vermelho') + '">' + formatarMoeda(r.sobra) + '</b></div>' +
       '</div>' +
     '</div>'
+  );
+}
+
+// ============================================================================
+// OS SEIS RELATÓRIOS NOVOS
+// ============================================================================
+
+/** Uma linha de rótulo + valor, o par que mais se repete nestes relatórios. */
+function nvLinha(rot, valor, classe) {
+  return '<div class="nv-linha"><span>' + escaparHtml(rot) + '</span>' +
+         '<b class="' + (classe || "") + '">' + valor + '</b></div>';
+}
+
+/** Barra de proporção. O canal afundado é o mesmo das outras barras do app. */
+function nvBarra(pct, cor) {
+  const p = Math.max(0, Math.min(100, pct));
+  return '<div class="nv-barra"><span style="width:' + p.toFixed(1) + '%; background:' + cor + '"></span></div>';
+}
+
+// ---------------------------------------------------------------------------
+function htmlGruposSaldo(r) {
+  if (!r.grupos.length) {
+    return '<div class="card"><p class="vazio">Nenhum grupo de saldo vale neste mês.</p>' +
+      '<div class="rel-nota">Os grupos passam a valer a partir do mês de origem de cada um.</div></div>';
+  }
+
+  const proximo = (r.proximoMesNome || "").toLowerCase() || "o mês que vem";
+
+  let blocos = "";
+  r.grupos.forEach(function (g) {
+    const estourou = g.saldo < 0;
+    const pct = g.disponivel > 0 ? (g.gasto / g.disponivel) * 100 : (g.gasto > 0 ? 100 : 0);
+
+    let itens = "";
+    if (g.itens.length) {
+      itens = '<table class="rel-tabela compacta" style="margin-top:10px;"><tbody>';
+      g.itens.forEach(function (it) {
+        itens += '<tr><td>' + escaparHtml(it.data) + '</td>' +
+          '<td>' + escaparHtml(it.descricao) +
+            (it.parcela ? ' <span class="cinza">' + escaparHtml(it.parcela) + '</span>' : '') + '</td>' +
+          '<td class="num">' + formatarMoeda(it.valor) + '</td></tr>';
+      });
+      itens += '</tbody></table>';
+    } else {
+      itens = '<p class="vazio" style="margin-top:8px;">Nada gasto neste grupo.</p>';
+    }
+
+    blocos +=
+      '<div class="card">' +
+        '<h2>' + escaparHtml(g.nome) + '</h2>' +
+        nvLinha("Aporte do mês", formatarMoeda(g.aporte)) +
+        (g.acumulado !== 0
+          ? nvLinha("Veio do mês anterior", formatarMoeda(g.acumulado),
+                    g.acumulado < 0 ? "vermelho" : "verde")
+          : "") +
+        nvLinha("Disponível", formatarMoeda(g.disponivel)) +
+        nvLinha("Gasto", formatarMoeda(g.gasto)) +
+        nvBarra(pct, estourou ? "var(--vermelho)" : "var(--verde)") +
+        '<div class="nv-destaque ' + (estourou ? "vermelho" : "verde") + '">' +
+          (estourou ? "Passou " + formatarMoeda(-g.saldo) : "Sobrou " + formatarMoeda(g.saldo)) +
+        '</div>' +
+        (g.acumula
+          ? '<div class="rel-nota">' +
+              (estourou
+                ? "Estes " + formatarMoeda(-g.saldo) + " saem do aporte de " + proximo + "."
+                : "Estes " + formatarMoeda(g.saldo) + " entram no aporte de " + proximo + ".") +
+            '</div>'
+          : '<div class="rel-nota">Este grupo não acumula: o que sobra não passa adiante.</div>') +
+        itens +
+      '</div>';
+  });
+
+  return blocos +
+    '<div class="card">' +
+      '<h2>Somados</h2>' +
+      nvLinha("Aportes", formatarMoeda(r.totais.aporte)) +
+      nvLinha("Gastos", formatarMoeda(r.totais.gasto)) +
+      nvLinha("Saldo", formatarMoeda(r.totais.saldo), r.totais.saldo < 0 ? "vermelho" : "verde") +
+      '<div class="rel-nota">Este dinheiro não está reservado em conta nenhuma. ' +
+      'Os grupos são uma máscara sobre o mesmo saldo.</div>' +
+    '</div>';
+}
+
+// ---------------------------------------------------------------------------
+function htmlCartoes(r) {
+  if (r.semCartoes) {
+    return '<div class="card"><p class="vazio">Nenhum cartão configurado.</p>' +
+      '<div class="rel-nota">Cadastre em Configurações → Cartões.</div></div>';
+  }
+
+  let blocos = "";
+  r.cartoes.forEach(function (c) {
+    let itens = "";
+    if (c.itens.length) {
+      itens = '<table class="rel-tabela compacta" style="margin-top:10px;"><tbody>';
+      c.itens.forEach(function (it) {
+        itens += '<tr><td>' + escaparHtml(it.descricao) +
+            (it.parcela ? ' <span class="cinza">' + escaparHtml(it.parcela) + '</span>' : '') + '</td>' +
+          '<td class="num">' + formatarMoeda(it.valor) + '</td></tr>';
+      });
+      itens += '</tbody></table>';
+      if (c.itensOcultos > 0) {
+        itens += '<div class="rel-nota">E mais ' + c.itensOcultos + ' lançamento(s) menores.</div>';
+      }
+    }
+
+    blocos +=
+      '<div class="card">' +
+        '<h2>' + escaparHtml(c.nome) + '</h2>' +
+        '<div class="nv-heroi">' + formatarMoeda(c.fatura) + '</div>' +
+        '<div class="nv-heroi-rot">fatura que vence dia ' + c.diaVencimento + '</div>' +
+        nvLinha("De parcela de compra antiga", formatarMoeda(c.deParcelaAntiga)) +
+        nvLinha("De compra deste mês", formatarMoeda(c.deCompraNova)) +
+        (c.temLimite
+          ? nvLinha("Limite preso em parcela não paga", formatarMoeda(c.comprometido)) +
+            nvBarra(c.usoPct, c.usoPct >= 80 ? "var(--vermelho)" : (c.usoPct >= 50 ? "var(--laranja)" : "var(--verde)")) +
+            '<div class="nv-destaque ' + (c.disponivel < 0 ? "vermelho" : "verde") + '">' +
+              formatarMoeda(c.disponivel) + ' de limite livre &middot; ' + c.usoPct + '% usado' +
+            '</div>' +
+            (c.parcelasFuturas > 0
+              ? '<div class="rel-nota">' + formatarMoeda(c.parcelasFuturas) +
+                ' disso vence depois deste mês — é parcela que ainda vai chegar.</div>'
+              : '')
+          : '<div class="rel-nota">Limite não cadastrado para este cartão, ' +
+            'então não dá para dizer quanto sobrou. O valor vai em Configurações → Cartões.</div>') +
+        itens +
+      '</div>';
+  });
+
+  return blocos;
+}
+
+// ---------------------------------------------------------------------------
+function htmlMiudos(r) {
+  if (!r.quantos) {
+    return '<div class="card"><p class="vazio">Nenhuma compra de até ' +
+      formatarMoeda(r.teto) + ' neste mês.</p></div>';
+  }
+
+  let cats = '<table class="rel-tabela"><thead><tr>' +
+    '<th>Categoria</th><th class="num">Quantas</th><th class="num">Total</th>' +
+    '</tr></thead><tbody>';
+  r.categorias.forEach(function (c) {
+    cats += '<tr><td class="cat">' + escaparHtml(nomeDaCategoria(c.categoria)) + '</td>' +
+      '<td class="num">' + c.quantos + '</td>' +
+      '<td class="num">' + formatarMoeda(c.total) + '</td></tr>';
+  });
+  cats += '</tbody></table>';
+
+  let itens = '<table class="rel-tabela compacta"><tbody>';
+  r.itens.forEach(function (it) {
+    itens += '<tr><td>' + escaparHtml(it.data) + '</td>' +
+      '<td>' + escaparHtml(it.descricao) + '</td>' +
+      '<td class="num">' + formatarMoeda(it.valor) + '</td></tr>';
+  });
+  itens += '</tbody></table>';
+
+  return (
+    '<div class="card">' +
+      '<div class="nv-heroi">' + formatarMoeda(r.soma) + '</div>' +
+      '<div class="nv-heroi-rot">em ' + r.quantos + ' compras de até ' + formatarMoeda(r.teto) + '</div>' +
+      nvBarra(r.fatiaPct, "var(--laranja)") +
+      '<div class="nv-destaque laranja">' + r.fatiaPct + '% de tudo que saiu no mês</div>' +
+      nvLinha("Média por compra", formatarMoeda(r.mediaPorItem)) +
+      nvLinha("Despesa total do mês", formatarMoeda(r.totalDoMes)) +
+      '<div class="rel-nota">Cada uma é pequena demais para chamar atenção ' +
+      'sozinha. Somadas, são ' + r.fatiaPct + '% de tudo que saiu no mês.</div>' +
+    '</div>' +
+    '<div class="card"><h2>Em que caem</h2>' + cats + '</div>' +
+    '<div class="card"><h2>As compras</h2>' + itens +
+      (r.itensOcultos > 0
+        ? '<div class="rel-nota">E mais ' + r.itensOcultos + ' abaixo destas.</div>'
+        : '') +
+    '</div>'
+  );
+}
+
+// ---------------------------------------------------------------------------
+function htmlFixasRealizado(r) {
+  if (!r.fixas.length) {
+    return '<div class="card"><p class="vazio">Nenhuma despesa fixa cadastrada.</p></div>';
+  }
+
+  let linhas = "";
+  r.fixas.forEach(function (f) {
+    const marca = f.destaque === "faltou"
+      ? '<span class="nv-tag vermelho">não lançou</span>'
+      : (f.destaque === "mudou"
+        ? '<span class="nv-tag laranja">' + (f.diferenca > 0 ? "+" : "") + f.variacaoPct + '%</span>'
+        : '');
+
+    linhas +=
+      '<tr>' +
+        '<td>' + escaparHtml(f.descricao) + ' ' + marca +
+          (f.temCorrecao ? '<span class="cinza" style="display:block;font-size:10px;">com correção</span>' : '') +
+        '</td>' +
+        '<td class="num">' + formatarMoeda(f.previsto) + '</td>' +
+        '<td class="num">' + (f.lancou ? formatarMoeda(f.realizado) : '<span class="cinza">—</span>') + '</td>' +
+        '<td class="num ' + (f.diferenca > 0 ? "vermelho" : (f.diferenca < 0 ? "verde" : "")) + '">' +
+          (f.lancou ? (f.diferenca > 0 ? "+" : "") + formatarMoeda(f.diferenca) : "") +
+        '</td>' +
+      '</tr>';
+  });
+
+  const t = r.totais;
+
+  return (
+    '<div class="card">' +
+      (t.faltando > 0
+        ? '<div class="nv-destaque vermelho">' + t.faltando +
+          (t.faltando === 1 ? ' fixa não foi lançada' : ' fixas não foram lançadas') + ' neste mês</div>'
+        : '<div class="nv-destaque verde">Todas as fixas foram lançadas</div>') +
+      (t.mudaram > 0
+        ? nvLinha("Mudaram mais de 10%", t.mudaram + (t.mudaram === 1 ? " conta" : " contas"), "laranja")
+        : "") +
+      nvLinha("Cadastrado", formatarMoeda(t.previsto)) +
+      nvLinha("Realizado", formatarMoeda(t.realizado)) +
+      nvLinha("Diferença", (t.diferenca > 0 ? "+" : "") + formatarMoeda(t.diferenca),
+              t.diferenca > 0 ? "vermelho" : "verde") +
+    '</div>' +
+    '<div class="card">' +
+      '<table class="rel-tabela"><thead><tr>' +
+        '<th>Conta</th><th class="num">Cadastrado</th><th class="num">Lançado</th><th class="num">Dif.</th>' +
+      '</tr></thead><tbody>' + linhas + '</tbody></table>' +
+      '<div class="rel-nota">A conta é reconhecida pela CATEGORIA, não pelo nome: ' +
+      '"Enel" e "Conta de luz" são a mesma fixa. Se duas fixas dividem a mesma ' +
+      'categoria, o lançado aparece somado nas duas.</div>' +
+    '</div>'
+  );
+}
+
+// ---------------------------------------------------------------------------
+function htmlRetratoAno(r) {
+  const t = r.totais;
+  if (!t.mesesComDados) {
+    return '<div class="card"><p class="vazio">Nenhum lançamento em ' + r.ano + '.</p></div>';
+  }
+
+  // A régua é o maior valor do ano, dos dois lados: comparar receita com
+  // despesa na mesma escala é o que deixa ler o ano de relance.
+  let teto = 0;
+  r.meses.forEach(function (m) {
+    teto = Math.max(teto, m.receitas, m.despesas);
+  });
+
+  let barras = "";
+  r.meses.forEach(function (m) {
+    if (!m.temDados) {
+      barras += '<div class="nv-mes"><span class="nv-mes-nome cinza">' + m.abrev + '</span>' +
+        '<span class="nv-mes-barras"></span>' +
+        '<span class="nv-mes-val cinza">—</span></div>';
+      return;
+    }
+    const pr = teto > 0 ? (m.receitas / teto) * 100 : 0;
+    const pd = teto > 0 ? (m.despesas / teto) * 100 : 0;
+    barras +=
+      '<div class="nv-mes">' +
+        '<span class="nv-mes-nome">' + m.abrev + '</span>' +
+        '<span class="nv-mes-barras">' +
+          '<span class="nv-mes-b" style="width:' + pr.toFixed(1) + '%; background:var(--verde)"></span>' +
+          '<span class="nv-mes-b" style="width:' + pd.toFixed(1) + '%; background:var(--vermelho)"></span>' +
+        '</span>' +
+        '<span class="nv-mes-val ' + (m.saldo >= 0 ? "verde" : "vermelho") + '">' +
+          (m.saldo >= 0 ? "+" : "−") + Math.abs(Math.round(m.saldo)).toLocaleString("pt-BR") +
+        '</span>' +
+      '</div>';
+  });
+
+  function tabelaMudanca(titulo, lista, cor) {
+    if (!lista.length) return "";
+    let l = "";
+    lista.forEach(function (x) {
+      l += '<tr><td class="cat">' + escaparHtml(nomeDaCategoria(x.categoria)) + '</td>' +
+        '<td class="num">' + formatarMoeda(x.antes) + '</td>' +
+        '<td class="num">' + formatarMoeda(x.agora) + '</td>' +
+        '<td class="num ' + cor + '">' + (x.pct > 0 ? "+" : "") + x.pct + '%</td></tr>';
+    });
+    return '<div class="card"><h2>' + titulo + '</h2>' +
+      '<table class="rel-tabela"><thead><tr><th>Categoria</th>' +
+      '<th class="num">' + (r.ano - 1) + '</th><th class="num">' + r.ano + '</th>' +
+      '<th class="num">Var.</th></tr></thead><tbody>' + l + '</tbody></table></div>';
+  }
+
+  let maiores = "";
+  r.maioresCategorias.forEach(function (c) {
+    maiores += '<tr><td class="cat">' + escaparHtml(nomeDaCategoria(c.categoria)) + '</td>' +
+      '<td class="num">' + formatarMoeda(c.total) + '</td></tr>';
+  });
+
+  return (
+    '<div class="card">' +
+      '<div class="nv-heroi ' + (t.saldo >= 0 ? "verde" : "vermelho") + '">' + formatarMoeda(t.saldo) + '</div>' +
+      '<div class="nv-heroi-rot">' + (t.saldo >= 0 ? "sobrou" : "faltou") +
+        ' em ' + t.mesesComDados + (t.mesesComDados === 1 ? " mês" : " meses") + ' de ' + r.ano + '</div>' +
+      nvLinha("Entrou", formatarMoeda(t.receitas)) +
+      nvLinha("Saiu", formatarMoeda(t.despesas)) +
+      nvLinha("Sobra média por mês", formatarMoeda(t.mediaSobra)) +
+      '<div class="nv-destaque ' + (t.taxaGuardadaPct >= 0 ? "verde" : "vermelho") + '">' +
+        'De cada R$ 100 que entraram, ficaram R$ ' + t.taxaGuardadaPct + '</div>' +
+    '</div>' +
+
+    '<div class="card"><h2>Mês a mês</h2>' + barras +
+      '<div class="nv-legenda">' +
+        '<span><i style="background:var(--verde)"></i>entrou</span>' +
+        '<span><i style="background:var(--vermelho)"></i>saiu</span>' +
+      '</div>' +
+    '</div>' +
+
+    '<div class="card"><h2>O melhor e o pior</h2>' +
+      (r.melhorMes ? nvLinha(r.melhorMes.nome, formatarMoeda(r.melhorMes.saldo), "verde") : "") +
+      (r.piorMes ? nvLinha(r.piorMes.nome, formatarMoeda(r.piorMes.saldo),
+                           r.piorMes.saldo < 0 ? "vermelho" : "") : "") +
+    '</div>' +
+
+    '<div class="card"><h2>Para onde foi</h2>' +
+      '<table class="rel-tabela"><tbody>' + maiores + '</tbody></table></div>' +
+
+    (r.temAnoAnterior
+      ? tabelaMudanca("O que mais subiu", r.subiram, "vermelho") +
+        tabelaMudanca("O que mais caiu", r.cairam, "verde")
+      : '<div class="card"><div class="rel-nota">Sem dados de ' + (r.ano - 1) +
+        ' para comparar, então não dá para dizer o que subiu ou caiu.</div></div>')
+  );
+}
+
+// ---------------------------------------------------------------------------
+function htmlPlanos(r) {
+  if (r.semPlanos) {
+    return '<div class="card"><p class="vazio">Nenhum plano de compra cadastrado.</p></div>';
+  }
+
+  const t = r.totais;
+
+  let comprados = "";
+  r.comprados.forEach(function (c) {
+    comprados +=
+      '<tr>' +
+        '<td>' + escaparHtml(c.titulo) +
+          (c.paraQuem ? '<span class="cinza" style="display:block;font-size:10px;">' +
+            escaparHtml(c.paraQuem) + '</span>' : '') +
+        '</td>' +
+        '<td class="num">' + formatarMoeda(c.previsto) + '</td>' +
+        '<td class="num">' + (c.encontrou
+          ? formatarMoeda(c.realizado)
+          : '<span class="cinza">não achei</span>') + '</td>' +
+        '<td class="num ' + (c.diferenca > 0 ? "vermelho" : (c.diferenca < 0 ? "verde" : "")) + '">' +
+          (c.encontrou ? (c.diferenca > 0 ? "+" : "") + formatarMoeda(c.diferenca) : "") +
+        '</td>' +
+      '</tr>';
+  });
+
+  let esperando = "";
+  r.esperando.forEach(function (e) {
+    esperando += '<tr><td>' + escaparHtml(e.titulo) + '</td>' +
+      '<td class="num">' + formatarMoeda(e.valor) + '</td>' +
+      '<td class="num">' + (e.diasEsperando !== null ? e.diasEsperando + " dias" : "—") + '</td></tr>';
+  });
+
+  let reprovados = "";
+  r.reprovados.forEach(function (x) {
+    reprovados += '<tr><td>' + escaparHtml(x.titulo) +
+      (x.motivo ? '<span class="cinza" style="display:block;font-size:10px;">' +
+        escaparHtml(x.motivo) + '</span>' : '') + '</td>' +
+      '<td class="num">' + formatarMoeda(x.valor) + '</td></tr>';
+  });
+
+  return (
+    '<div class="card">' +
+      nvLinha("Comprou", formatarMoeda(t.gastou)) +
+      nvLinha("Tinha estimado", formatarMoeda(t.estimou)) +
+      nvLinha("Diferença", (t.diferenca > 0 ? "+" : "") + formatarMoeda(t.diferenca),
+              t.diferenca > 0 ? "vermelho" : "verde") +
+      (t.economizou > 0
+        ? '<div class="nv-destaque verde">' + formatarMoeda(t.economizou) +
+          ' em planos reprovados — dinheiro que não saiu</div>'
+        : "") +
+    '</div>' +
+
+    (comprados
+      ? '<div class="card"><h2>Comprados</h2>' +
+        '<table class="rel-tabela"><thead><tr><th>O quê</th>' +
+        '<th class="num">Estimado</th><th class="num">Pago</th><th class="num">Dif.</th>' +
+        '</tr></thead><tbody>' + comprados + '</tbody></table>' +
+        (t.naoEncontrados > 0
+          ? '<div class="rel-nota">' + t.naoEncontrados + ' compra(s) sem lançamento ' +
+            'correspondente. O casamento é feito pelo NOME do plano — se o lançamento ' +
+            'foi renomeado depois, ele não é encontrado.</div>'
+          : '')
+      + '</div>'
+      : "") +
+
+    (esperando
+      ? '<div class="card"><h2>Ainda esperando</h2>' +
+        '<table class="rel-tabela"><thead><tr><th>O quê</th>' +
+        '<th class="num">Valor</th><th class="num">Há</th></tr></thead><tbody>' +
+        esperando + '</tbody></table></div>'
+      : "") +
+
+    (reprovados
+      ? '<div class="card"><h2>Reprovados</h2>' +
+        '<table class="rel-tabela"><tbody>' + reprovados + '</tbody></table></div>'
+      : "")
   );
 }
 

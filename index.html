@@ -2447,6 +2447,7 @@
     /* ===================== RELATÓRIOS ===================== */
     #conteudo-rel { display: none; padding: 16px; max-width: 680px; margin: 0 auto; }
 
+    .rs-icone svg, .rs-excluir svg { width: 17px; height: 17px; }
     .rel-opcao {
       display: flex; align-items: center; gap: 12px; width: 100%;
       padding: 14px 4px; background: none; border: none; border-bottom: 1px solid var(--separador);
@@ -2510,6 +2511,196 @@
     }
 
     /* Tabelas dos relatórios */
+    /* ---------- Tela de relatórios em seções ----------
+       Quinze relatórios numa lista chapada obrigam a ler os quinze para achar
+       um. Agrupados por pergunta, o cabeçalho já descarta o que não serve. */
+    .rel-secao { margin-bottom: 20px; }
+    .rel-secao-rot {
+      font-size: 10px; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--cinza-texto); margin: 0 0 9px 2px;
+    }
+    .rel-lista {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 16px; padding: 2px 14px;
+    }
+
+    /* ---------- Prestação de contas ---------- */
+    .pc-cartao {
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 16px; padding: 14px; margin-bottom: 9px;
+    }
+    .pc-topo { display: flex; align-items: flex-start; gap: 11px; margin-bottom: 13px; }
+    .pc-nome { flex: 1; font-size: 14px; font-weight: 700; color: var(--texto); }
+    .pc-sub { font-size: 10.5px; color: var(--cinza-texto); line-height: 1.4; margin-top: 3px; }
+    .pc-linha { display: flex; gap: 9px; }
+    .pc-linha .pc-btn { flex: 1; }
+    .pc-btn {
+      height: 42px; border: none; cursor: pointer; border-radius: 12px;
+      font-family: inherit; font-size: 12.5px; font-weight: 700;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+      color: var(--verde) !important;
+    }
+    .pc-btn:active { box-shadow: var(--afundado-leve) !important; }
+    .pc-btn.neutro { color: var(--cinza-texto) !important; }
+    .pc-icone {
+      width: 30px; height: 30px; flex-shrink: 0; border: none; cursor: pointer;
+      border-radius: 9px; display: flex; align-items: center; justify-content: center;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+      color: var(--cinza-texto);
+    }
+    .pc-icone svg { width: 14px; height: 14px; }
+    .pc-icone:active { box-shadow: var(--afundado-leve); }
+
+    /* O montador */
+    .pc-item {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      background: none; border: none; cursor: pointer; font-family: inherit;
+      padding: 11px 0; text-align: left; border-bottom: 1px solid var(--borda);
+    }
+    .pc-item:last-child { border-bottom: none; }
+    .pc-item-txt { flex: 1; min-width: 0; }
+    .pc-item-nome {
+      display: block; font-size: 12.5px; font-weight: 600; color: var(--texto);
+    }
+    .pc-item-sub {
+      display: block; font-size: 10px; color: var(--cinza-texto);
+      margin-top: 1px; line-height: 1.4;
+    }
+    .pc-marca {
+      width: 22px; height: 22px; flex-shrink: 0; border-radius: 7px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      display: flex; align-items: center; justify-content: center; color: var(--verde);
+    }
+    .pc-marca svg { width: 12px; height: 12px; opacity: 0; }
+    .pc-marca.on { box-shadow: var(--relevo-baixo); }
+    .pc-marca.on svg { opacity: 1; }
+    .pc-ord { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+    .pc-ord button {
+      width: 24px; height: 16px; border: none; cursor: pointer; border-radius: 5px;
+      background: var(--cinza-fundo) !important; box-shadow: var(--relevo-baixo);
+      color: var(--cinza-texto); font-size: 8px; line-height: 1; padding: 0;
+    }
+    .pc-ord button:disabled { opacity: .35; }
+    .pc-rodape {
+      position: sticky; bottom: 0; background: var(--cinza-fundo);
+      padding: 12px 0 4px; margin-top: 8px;
+      border-top: 1px solid var(--borda); display: flex; gap: 9px;
+    }
+
+    /* ---------- A capa da prestação de contas ---------- */
+    .pc-capa {
+      font-family: Georgia, "Times New Roman", serif;
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
+      border-radius: 14px; padding: 30px 24px; margin-bottom: 14px;
+    }
+    .pcc-rot {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 9px; font-weight: 700; letter-spacing: 2.6px; color: var(--fraco-2);
+    }
+    .pcc-titulo {
+      font-size: 30px; color: var(--texto); line-height: 1.1; margin-top: 6px;
+    }
+    .pcc-risco { width: 54px; height: 2px; background: var(--verde); margin-top: 10px; }
+    .pcc-periodo {
+      font-size: 11.5px; color: var(--texto-2); line-height: 1.6; margin-top: 22px;
+    }
+    .pcc-numeros {
+      display: flex; margin-top: 26px;
+      border-top: 1px solid var(--borda); border-bottom: 1px solid var(--borda);
+    }
+    .pcc-numeros > div { flex: 1; padding: 14px 0 14px 9px; min-width: 0; }
+    .pcc-numeros > div:first-child { padding-left: 0; }
+    .pcc-numeros > div + div { border-left: 1px solid var(--borda); }
+    .pcc-numeros span {
+      display: block; font-size: 8.5px; letter-spacing: 1.4px; color: var(--fraco-2);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-weight: 700;
+    }
+    /* Em tres colunas de ~110px, "R$ 5.400,00" a 15px quebrava em duas linhas
+       e a coluna ENTROU ficava mais alta que as outras duas. */
+    .pcc-numeros b {
+      display: block; font-size: 13.5px; color: var(--texto); margin-top: 4px;
+      font-variant-numeric: tabular-nums; white-space: nowrap;
+      letter-spacing: -0.2px;
+    }
+    .pcc-aviso {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 10px; color: var(--cinza-texto); line-height: 1.5; margin-top: 10px;
+    }
+    .pcc-indice { margin-top: 24px; }
+    .pcc-idx-rot {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 8.5px; font-weight: 700; letter-spacing: 1.6px;
+      color: var(--fraco-2); margin-bottom: 8px;
+    }
+    .pcc-idx {
+      display: flex; align-items: baseline; gap: 7px;
+      font-size: 11px; color: var(--texto-2);
+      padding: 5px 0; border-bottom: 1px solid var(--separador);
+    }
+    .pcc-idx:last-child { border-bottom: none; }
+    .pcc-pont { flex: 1; border-bottom: 1px dotted var(--borda); transform: translateY(-3px); }
+    .pcc-assinaturas { display: flex; gap: 26px; margin-top: 34px; }
+    .pcc-assinaturas > div { flex: 1; text-align: center; }
+    .pcc-assinaturas span {
+      display: block; border-top: 1px solid var(--texto);
+      padding-top: 5px; font-size: 10px; color: var(--texto-2); min-height: 16px;
+    }
+    .pcc-rodape {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 8.5px; color: var(--fraco-2); margin-top: 18px;
+    }
+
+    /* ---------- Blocos dos relatórios novos ---------- */
+    .nv-linha {
+      display: flex; align-items: baseline; justify-content: space-between;
+      gap: 12px; padding: 7px 0; font-size: 12.5px; color: var(--texto-2);
+    }
+    .nv-linha b { font-variant-numeric: tabular-nums; color: var(--texto); }
+    .nv-heroi {
+      font-size: 30px; font-weight: 800; color: var(--texto);
+      font-variant-numeric: tabular-nums; letter-spacing: -0.5px;
+    }
+    .nv-heroi-rot {
+      font-size: 11px; color: var(--cinza-texto); margin: 2px 0 12px;
+    }
+    .nv-barra {
+      height: 8px; border-radius: 5px; margin: 10px 0;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      overflow: hidden;
+    }
+    .nv-barra span { display: block; height: 100%; border-radius: 5px; }
+    .nv-destaque {
+      font-size: 12.5px; font-weight: 700; padding: 9px 0 2px;
+    }
+    .nv-tag {
+      display: inline-block; font-size: 9.5px; font-weight: 800;
+      padding: 1px 6px; border-radius: 6px; margin-left: 5px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+    }
+
+    /* Retrato do ano: doze meses um embaixo do outro */
+    .nv-mes { display: flex; align-items: center; gap: 9px; padding: 4px 0; }
+    .nv-mes-nome {
+      width: 28px; flex-shrink: 0; font-size: 11px; font-weight: 700;
+      color: var(--texto-2); text-transform: uppercase;
+    }
+    .nv-mes-barras {
+      flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px;
+    }
+    .nv-mes-b { display: block; height: 5px; border-radius: 3px; min-width: 1px; }
+    .nv-mes-val {
+      width: 68px; flex-shrink: 0; text-align: right;
+      font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+    }
+    .nv-legenda {
+      display: flex; gap: 14px; margin-top: 10px;
+      font-size: 10.5px; color: var(--cinza-texto);
+    }
+    .nv-legenda i {
+      display: inline-block; width: 9px; height: 9px; border-radius: 3px;
+      margin-right: 4px;
+    }
+
     .rel-tabela { width: 100%; border-collapse: collapse; font-size: 13px; }
     .rel-tabela th {
       text-align: left; font-size: 10px; color: var(--cinza-texto);
@@ -2652,14 +2843,38 @@
     /* ---------- IMPRESSÃO ---------- */
     @media print {
       body { background: #fff; }
-      .topo, .rel-barra, #btn-nova-despesa, #toast,
-      #conteudo-dash, #conteudo-aprov, .modal-fundo { display: none !important; }
+      .topo, .rel-barra, #btn-nova-despesa, #btn-chat-ia, #toast, #barra-fundo,
+      #conteudo-dash, #conteudo-aprov, #conteudo-planos, .modal-fundo,
+      .pc-rodape, .abas { display: none !important; }
+
+      /* Sem relevo: no papel ele vira sujeira em volta de cada bloco. */
+      .card, .rel-lista, .pc-cartao, .nv-barra, .nv-tag, .sel-barra {
+        box-shadow: none !important;
+        background: #fff !important;
+      }
+      .nv-barra, .nv-tag { border: 1px solid #ccc !important; }
+
+      /* A capa ocupa a folha inteira; cada relatório começa numa nova. */
+      .pc-capa { page-break-after: always; }
+      .pc-bloco { page-break-before: always; }
+      .pc-bloco:first-of-type { page-break-before: avoid; }
+      .pc-corrido { display: block !important; }
       #conteudo-rel { display: block !important; padding: 0; max-width: 100%; }
       .card {
         border: 1px solid #ddd !important; box-shadow: none !important;
         page-break-inside: avoid; margin-bottom: 12px;
       }
       .rel-cabecalho { border: 2px solid #1a3a5c !important; }
+
+      /* O cabeçalho corrido volta em toda página: folha que cai da
+         grampeadora precisa dizer de onde veio. */
+      .pc-corrido {
+        position: running(topo);
+        font-size: 8.5pt; color: #666;
+        border-bottom: 1px solid #ddd; padding-bottom: 4pt; margin-bottom: 10pt;
+      }
+      .pc-capa, .pc-capa * { font-family: Georgia, "Times New Roman", serif; }
+      .pc-capa { padding: 0; }
       .ev-bar.rec { background: #2e9e6b !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .ev-bar.des { background: #dc2626 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .rg-preench, .dg-topo, .dre-resultado {
@@ -5726,6 +5941,55 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: MONTAR PRESTAÇÃO DE CONTAS ============ -->
+  <div class="modal-fundo" id="modal-pc">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Prestação de contas</div>
+          <div style="font-size:11px; color:var(--mt-sub); margin-top:3px;" id="pc-contador"></div>
+        </div>
+        <button class="fechar" onclick="fecharMontadorPC()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+
+        <div class="campo-bloco">
+          <label for="pc-nome-campo">Nome do modelo</label>
+          <input type="text" id="pc-nome-campo" maxlength="40" placeholder="Ex.: Fechamento do mês" />
+        </div>
+
+        <div class="rel-secao-rot" style="margin-top:6px;">No documento, nesta ordem</div>
+        <div class="rel-lista" id="pc-escolhidos"></div>
+
+        <div class="rel-secao-rot" style="margin-top:20px;">Acrescentar</div>
+        <div class="rel-lista" id="pc-resto"></div>
+
+        <div class="rel-secao-rot" style="margin-top:20px;">Assinaturas na capa</div>
+        <div class="linha-dupla">
+          <div class="campo-bloco">
+            <label for="pc-ass1">Primeira</label>
+            <input type="text" id="pc-ass1" maxlength="30" placeholder="Nome" />
+          </div>
+          <div class="campo-bloco">
+            <label for="pc-ass2">Segunda</label>
+            <input type="text" id="pc-ass2" maxlength="30" placeholder="Nome" />
+          </div>
+        </div>
+        <div class="cfg-aviso">Deixe em branco para sair só a linha.</div>
+
+        <button class="btn-modal cancelar" id="pc-btn-excluir" style="width:100%; color:var(--vermelho); margin-top:14px; display:none;"
+                onclick="excluirModeloPC()">Apagar este modelo</button>
+
+        <div class="pc-rodape">
+          <button class="pc-btn neutro" style="flex:0 0 auto; padding:0 16px;" onclick="salvarModeloPC()">Salvar</button>
+          <button class="pc-btn" style="flex:1;" id="pc-btn-montar" onclick="montarDoMontador()">Montar</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: ESCOLHER MÊS ============ -->
   <div class="modal-fundo" id="modal-meses">
     <div class="modal-caixa">
@@ -6158,7 +6422,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=103"></script>
+  <script src="app.js?v=104"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
