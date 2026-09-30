@@ -5460,6 +5460,14 @@ async function gerarFixasApp() {
       limparTodoCache();
       await recarregarDados();
       checarPendentesAprovacao();
+    } else if (r.erro === "NADA_A_GERAR" && (r.detalhe || []).length) {
+      // Um toque de "já está tudo lançado" não dá para conferir: se a tela
+      // pedir o lançamento e o servidor disser que já existe, um dos dois está
+      // olhando a data errada, e sem ver ONDE não há como saber qual.
+      alert("Nada a gerar — cada uma já existe, nesta data:\n\n" +
+            r.detalhe.map(function (p) {
+              return "· " + p.descricao + " — " + p.data + " (" + p.onde + ")";
+            }).join("\n"));
     } else {
       mostrarToast("⚠️ " + (r.mensagem || "Nada foi gerado."));
     }
@@ -11165,7 +11173,7 @@ async function abrirFatia(tipo, grupo) {
   if (tipo === "fixas") {
     const itens = ((d.saldo || {}).fixasPrevistasItens) || [];
     pintarFatia(itens.map(function (f) {
-      return { descricao: f.descricao, valor: f.valor, data: "dia " + f.dia,
+      return { descricao: f.descricao, valor: f.valor, data: dataDaFixa(f),
                metodo: f.metodo || "", categoria: f.categoria || "", numMov: 0 };
     }), true);
     return;
@@ -11212,6 +11220,22 @@ function fecharFatia() {
  * Num mês em que a maior parte é cartão, a pergunta seguinte é sempre
  * "quanto disso é a fatura?" -- e uma lista corrida de 34 linhas não responde.
  */
+/**
+ * Quando a fixa cai de verdade.
+ *
+ * Mostrar "dia 10" é mostrar a REGRA, não a data: no cartão a despesa cai na
+ * fatura, que pode ser outro dia e até outro mês. Era essa etiqueta que
+ * escondia a divergência -- onze fixas apareciam todas como "dia 10" e não
+ * havia como ver que o app esperava cada uma em 31/10.
+ */
+function dataDaFixa(f) {
+  if (f && f.vencimento) {
+    const p = String(f.vencimento).split("-");   // yyyy-MM-dd
+    if (p.length === 3) return p[2] + "/" + p[1];
+  }
+  return f && f.dia ? "dia " + f.dia : "";
+}
+
 function pintarFatia(itens, saoPrevistas) {
   const alvo = document.getElementById("ft-corpo");
 
@@ -11337,7 +11361,7 @@ function pintarPrevisto(d, s, receitaDaConta, fixasJaContadas) {
     if (itens.length) {
       html += '<div class="pvd-lista">' + itens.map(function (f) {
         return '<div class="pvd-sub-item"><span>' + escaparHtml(f.descricao) +
-               ' · dia ' + f.dia + '</span><b>' + formatarMoeda(f.valor) + '</b></div>';
+               ' · ' + dataDaFixa(f) + '</span><b>' + formatarMoeda(f.valor) + '</b></div>';
       }).join("") + '</div>';
     }
   }
