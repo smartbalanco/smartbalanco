@@ -5026,7 +5026,7 @@ async function carregarCartoesConfig() {
             ? ' · <b>vence no último dia do mês anterior</b>'
             : '') +
         '</div>' +
-        (c.diaVencimento <= 1
+        (c.diaVencimento === 0 || c.diaVencimento === 1
           ? '<button class="cart-alinhar" onclick="anteciparCartao(' + i + ')">' +
               (c.diaVencimento === 0
                 ? 'Conferir se sobrou parcela no dia 1º'
@@ -5099,7 +5099,13 @@ async function anteciparCartao(indice) {
 
   try {
     const r1 = await chamarServidor("salvarCartaoConfig", { cartao: c.nome, diaVencimento: 0 });
-    if (!r1 || !r1.ok) { mostrarToast((r1 && r1.mensagem) || "Não consegui salvar o cartão."); return; }
+    if (!r1 || !r1.ok) {
+      // Um toast some sozinho, e foi assim que a recusa da configuração
+      // passou batida: a migração não rodou e pareceu que nada aconteceu.
+      alert("Não consegui mudar o cartão, então NADA foi alterado nos lançamentos.\n\n" +
+            ((r1 && r1.mensagem) || "o servidor não respondeu"));
+      return;
+    }
 
     const r2 = await chamarServidor("anteciparFaturasDoCartao", { cartao: c.nome, simular: "false" });
     mostrarToast((r2 && r2.mensagem) || "Pronto.");
