@@ -2612,6 +2612,12 @@
     }
     .sd-limite-nota { display: block; font-size: 10px; color: var(--fraco-2); margin-top: 2px; }
 
+    .fix-fatura {
+      height: 44px; display: flex; align-items: center; padding: 0 13px;
+      border-radius: 11px; font-size: 12.5px; color: var(--cinza-texto);
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+    }
+
     /* ---------- Legenda que abre ---------- */
     .sd-linha.abre {
       width: 100%; border: none; background: none; cursor: pointer;
@@ -5993,6 +5999,17 @@
             &quot;Alinhar as compras em aberto&quot;.
           </div>
           <div id="cfg-lista-cartoes"></div>
+
+          <!-- Vale para TODOS os cartões de uma vez: o problema não é de um
+               cartão, é de lançamento que nasceu com a data errada. -->
+          <button class="btn-modal cancelar" style="width:100%; margin-top:14px;"
+                  onclick="corrigirVencimentosCartao()">
+            Pôr todo lançamento de cartão na data da fatura
+          </button>
+          <div class="cfg-aviso">
+            Despesa no cartão vence junto com a fatura, não no dia dela. Isto
+            acerta as que ficaram fora — e não toca em parcela já paga.
+          </div>
         </div>
 
         <div id="cfg-secao-fixas" style="display:none;">
@@ -6008,14 +6025,19 @@
                 <label for="fix-valor">Valor</label>
                 <input type="number" id="fix-valor" step="0.01" inputmode="decimal" />
               </div>
-              <div class="campo-bloco">
+              <div class="campo-bloco" id="fix-bloco-dia">
                 <label for="fix-dia">Dia do vencimento</label>
                 <input type="number" id="fix-dia" min="1" max="31" inputmode="numeric" />
+              </div>
+              <!-- No cartão não há dia a preencher: quem manda é a fatura. -->
+              <div class="campo-bloco" id="fix-bloco-fatura" style="display:none;">
+                <label>Vencimento</label>
+                <div class="fix-fatura">com a fatura do cartão</div>
               </div>
             </div>
             <div class="campo-bloco">
               <label for="fix-metodo">Método</label>
-              <select id="fix-metodo"></select>
+              <select id="fix-metodo" onchange="ajustarCamposDaFixa()"></select>
             </div>
             <div class="campo-bloco">
               <label>Categoria</label>
@@ -6627,7 +6649,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=116"></script>
+  <script src="app.js?v=117"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

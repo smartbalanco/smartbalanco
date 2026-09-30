@@ -5062,6 +5062,52 @@ async function carregarCartoesConfig() {
  * de histórico, e ver "137 parcelas" antes de confirmar é diferente de
  * descobrir depois.
  */
+/**
+ * Põe cada lançamento de cartão na data da fatura dele.
+ *
+ * Simula antes: são dezenas de linhas, e ver o número e alguns exemplos antes
+ * de confirmar é diferente de descobrir depois. Não toca em parcela paga --
+ * o dinheiro saiu naquele dia, e mudar o vencimento reescreveria mês fechado.
+ */
+async function corrigirVencimentosCartao() {
+  mostrarToast("Conferindo…");
+
+  let sim;
+  try {
+    sim = await chamarServidor("corrigirVencimentosDeCartao", { simular: "true" });
+  } catch (e) {
+    mostrarToast("Falhou: " + (e.message || "sem conexão"));
+    return;
+  }
+  if (!sim || !sim.ok) { mostrarToast((sim && sim.mensagem) || "Não consegui conferir."); return; }
+
+  if (!sim.mexidos) {
+    mostrarToast("Nada fora do lugar: todo lançamento de cartão está na data da fatura.");
+    return;
+  }
+
+  let aviso = sim.mexidos + " lançamento(s) de cartão estão fora da data da fatura.\n\n";
+  sim.exemplos.forEach(function (e) {
+    aviso += "• " + e.descricao + ": " + e.de + " → " + e.para + "\n";
+  });
+  if (sim.mexidos > sim.exemplos.length) {
+    aviso += "… e mais " + (sim.mexidos - sim.exemplos.length) + ".\n";
+  }
+  aviso += "\nParcela já paga não é tocada (" + sim.pulouPagos + " deixadas como estão). Corrigir?";
+
+  if (!confirm(aviso)) return;
+
+  try {
+    const r = await chamarServidor("corrigirVencimentosDeCartao", { simular: "false" });
+    mostrarToast((r && r.mensagem) || "Pronto.");
+    esquecerDominio("transacoes");
+    await carregarCartoesConfig();
+    await recarregarDados();
+  } catch (e) {
+    mostrarToast("Falhou: " + (e.message || "sem conexão"));
+  }
+}
+
 async function anteciparCartao(indice) {
   const c = cartoesConfig[indice];
   if (!c) return;
@@ -5246,6 +5292,28 @@ async function carregarFixas() {
   }
 }
 
+/**
+ * No cartão, o dia da fixa não decide nada: quem decide é a fatura.
+ *
+ * O campo some e fica valendo o DIA 15 por baixo -- um dia no meio do ciclo,
+ * que é o que faz a fixa cair na fatura daquele mês em vez de escorregar para
+ * a seguinte. Ele continua gravado porque é dele que sai a resposta de "em
+ * qual fatura isto entra"; o que muda é não perguntar o que você não precisa
+ * decidir.
+ */
+function ajustarCamposDaFixa() {
+  const metodo = (document.getElementById("fix-metodo").value || "").toLowerCase();
+  const ehCartao = metodo.indexOf("cart") >= 0;
+
+  document.getElementById("fix-bloco-dia").style.display = ehCartao ? "none" : "block";
+  document.getElementById("fix-bloco-fatura").style.display = ehCartao ? "block" : "none";
+
+  if (ehCartao) {
+    const campo = document.getElementById("fix-dia");
+    if (!campo.value || parseInt(campo.value) < 1) campo.value = 15;
+  }
+}
+
 function abrirFormFixa(indice) {
   const f = (indice !== undefined) ? fixasCarregadas[indice] : null;
   const form = document.getElementById("fix-form");
@@ -5264,6 +5332,8 @@ function abrirFormFixa(indice) {
   document.getElementById("fix-periodo").value = f && f.periodo ? f.periodo : 12;
   document.getElementById("fix-desde").value = (f && f.desde) ? f.desde : dataHojeISO();
   alternarCamposJuros();
+  // Depois de escolher o método: é ele que decide se o dia aparece.
+  aplicarFormatoDaFixa();
   document.getElementById("fix-aviso").textContent = "";
 }
 
@@ -5286,6 +5356,11 @@ function alternarCamposJuros() {
   const depois = (tipo === "composto") ? base * Math.pow(1 + t, 3) : base * (1 + t * 3);
   previa.textContent = "Depois de 3 ciclos de " + periodo + " meses: " +
                        formatarMoeda(base) + " vira " + formatarMoeda(Math.round(depois * 100) / 100) + ".";
+}
+
+/** Chamado no fim de abrirFormFixa: o método já está escolhido aqui. */
+function aplicarFormatoDaFixa() {
+  try { ajustarCamposDaFixa(); } catch (e) {}
 }
 
 function fecharFormFixa() {
