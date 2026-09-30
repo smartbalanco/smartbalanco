@@ -5026,13 +5026,17 @@ async function carregarCartoesConfig() {
             ? ' · <b>vence no último dia do mês anterior</b>'
             : '') +
         '</div>' +
-        (c.diaVencimento === 1
+        (c.diaVencimento <= 1
           ? '<button class="cart-alinhar" onclick="anteciparCartao(' + i + ')">' +
-              'Antecipar: passar a vencer no último dia do mês anterior' +
+              (c.diaVencimento === 0
+                ? 'Conferir se sobrou parcela no dia 1º'
+                : 'Antecipar: passar a vencer no último dia do mês anterior') +
             '</button>'
           : '') +
         aviso +
-        (c.emAberto > 0
+        // No cartão antecipado este botão não tem o que dizer: "alinhar ao
+        // dia 0" não quer dizer nada, e quem varre o dia 1º é o de cima.
+        (c.emAberto > 0 && c.diaVencimento > 0
           ? '<button class="cart-alinhar" onclick="alinharCartao(' + i + ')">' +
               'Alinhar as compras em aberto ao dia ' + c.diaVencimento +
             '</button>'
@@ -5072,6 +5076,11 @@ async function anteciparCartao(indice) {
     return;
   }
   if (!sim || !sim.ok) { mostrarToast((sim && sim.mensagem) || "Não consegui conferir."); return; }
+
+  if (c.diaVencimento === 0 && !sim.mexidos) {
+    mostrarToast("Nada fora do lugar: nenhuma parcela no dia 1º neste cartão.");
+    return;
+  }
 
   let aviso = "Antecipar o " + c.nome + "?\n\n" +
     sim.mexidos + " parcela(s) que vencem no dia 1º passam para o último dia " +
