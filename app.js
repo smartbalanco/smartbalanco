@@ -5464,10 +5464,18 @@ async function gerarFixasApp() {
       // Um toque de "já está tudo lançado" não dá para conferir: se a tela
       // pedir o lançamento e o servidor disser que já existe, um dos dois está
       // olhando a data errada, e sem ver ONDE não há como saber qual.
+      const antigas = r.detalhe.filter(function (p) { return p.antiga; }).length;
       alert("Nada a gerar — cada uma já existe, nesta data:\n\n" +
             r.detalhe.map(function (p) {
-              return "· " + p.descricao + " — " + p.data + " (" + p.onde + ")";
-            }).join("\n"));
+              return "· " + p.descricao + " — " + p.data +
+                     " (" + p.onde + (p.antiga ? ", data antiga" : "") + ")";
+            }).join("\n") +
+            (antigas
+              ? "\n\n" + antigas + " está(ão) na data velha, de antes de as fixas de " +
+                "cartão passarem a cair na fatura. Elas continuam aparecendo como " +
+                "não lançadas na tela do mês. Use 'Pôr as fixas de cartão na data " +
+                "da fatura' em Configurações → Cartões — simule antes."
+              : ""));
     } else {
       mostrarToast("⚠️ " + (r.mensagem || "Nada foi gerado."));
     }
