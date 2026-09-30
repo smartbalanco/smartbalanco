@@ -5079,21 +5079,31 @@ async function corrigirVencimentosCartao() {
     mostrarToast("Falhou: " + (e.message || "sem conexão"));
     return;
   }
-  if (!sim || !sim.ok) { mostrarToast((sim && sim.mensagem) || "Não consegui conferir."); return; }
-
-  if (!sim.mexidos) {
-    mostrarToast("Nada fora do lugar: todo lançamento de cartão está na data da fatura.");
+  if (!sim || !sim.ok) {
+    // A trava de "mudaria mais de um ano" não pode sair num toast que some:
+    // ela é o aviso de que a conta deu errado.
+    alert((sim && sim.mensagem) || "Não consegui conferir.");
     return;
   }
 
-  let aviso = sim.mexidos + " lançamento(s) de cartão estão fora da data da fatura.\n\n";
+  if (!sim.mexidos) {
+    mostrarToast("Nada fora do lugar: as fixas de cartão estão na data da fatura.");
+    return;
+  }
+
+  let aviso = sim.mexidos + " fixa(s) de cartão estão fora da data da fatura.\n\n";
   sim.exemplos.forEach(function (e) {
     aviso += "• " + e.descricao + ": " + e.de + " → " + e.para + "\n";
   });
   if (sim.mexidos > sim.exemplos.length) {
     aviso += "… e mais " + (sim.mexidos - sim.exemplos.length) + ".\n";
   }
-  aviso += "\nParcela já paga não é tocada (" + sim.pulouPagos + " deixadas como estão). Corrigir?";
+  // Dizer o que NÃO é tocado importa tanto quanto o que é: foi por não
+  // separar parcelamento que a primeira versão quis mover 55 linhas.
+  aviso += "\nNão são tocados: " + sim.pulouParcelados + " parcelamento(s), " +
+           sim.pulouPagos + " já paga(s)" +
+           (sim.pulouSemCompra ? ", " + sim.pulouSemCompra + " sem data de compra" : "") +
+           ".\n\nCorrigir?";
 
   if (!confirm(aviso)) return;
 
