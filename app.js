@@ -11232,7 +11232,25 @@ async function abrirFatia(tipo, grupo) {
       alvo.innerHTML = '<p class="vazio">' + escaparHtml((r && r.mensagem) || "Não consegui buscar.") + '</p>';
       return;
     }
-    pintarFatia((r.itens || []).map(function (it) {
+
+    // A BUSCA VEM PAGINADA, de 30 em 30. Esta folha existe para conferir um
+    // número do card -- e somar só a primeira página dava um total menor que
+    // o do card, sem nada dizendo que faltava o resto. Um número que não bate
+    // com o de cima é pior que nenhum: parece erro de conta.
+    //
+    // Teto de páginas para o caso de um filtro pegar o histórico inteiro; o
+    // mês corrente não chega perto disso.
+    let itens = (r.itens || []).slice();
+    let temMais = r.temMais;
+    for (let p = 1; temMais && p < 12; p++) {
+      const extra = await lerCacheado("buscarLancamentos",
+        Object.assign({}, params, { pagina: p }));
+      if (!extra || !extra.ok) break;
+      itens = itens.concat(extra.itens || []);
+      temMais = extra.temMais;
+    }
+
+    pintarFatia(itens.map(function (it) {
       return {
         descricao: it.descricao,
         valor: it.valor,
