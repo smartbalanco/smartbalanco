@@ -2590,6 +2590,28 @@
       border-top: 1px solid var(--borda); display: flex; gap: 9px;
     }
 
+    /* ---------- O limite no card do saldo ---------- */
+    /* O número grande passa a ser o limite; o da receita continua na tela,
+       um degrau abaixo. Ele não sai: some daí a diferença entre destacar e
+       esconder. */
+    .sd-segundo {
+      font-size: 13px; color: var(--cinza-texto); margin-top: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+    .sd-segundo b { color: var(--texto-2); font-weight: 700; }
+
+    /* A marca do limite na barra. */
+    .sd-barra { position: relative; }
+    .sd-marca {
+      position: absolute; top: -3px; bottom: -3px; width: 2px;
+      border-radius: 1px; z-index: 2;
+    }
+    #sd-limite {
+      font-size: 11px; color: var(--cinza-texto); line-height: 1.5;
+      margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--borda);
+    }
+    .sd-limite-nota { display: block; font-size: 10px; color: var(--fraco-2); margin-top: 2px; }
+
     /* ---------- Legenda que abre ---------- */
     .sd-linha.abre {
       width: 100%; border: none; background: none; cursor: pointer;
@@ -4234,6 +4256,7 @@
       <div class="card">
         <div class="sd-rotulo" id="saldo-rotulo">SOBRA DO MÊS</div>
         <div class="saldo-destaque" id="saldo-valor">R$ 0,00</div>
+        <div class="sd-segundo" id="saldo-segundo" style="display:none;"></div>
         <button class="sd-porque" id="aviso-base" onclick="explicarBaseDeCalculo()"></button>
 
         <div class="sd-barra-bloco" id="sd-barra-bloco">
@@ -4242,6 +4265,7 @@
             <b id="sd-barra-total">R$ 0,00</b>
           </div>
           <div class="sd-barra" id="sd-barra"></div>
+          <div id="sd-limite" style="display:none;"></div>
           <div class="sd-legenda" id="sd-legenda"></div>
         </div>
 
@@ -5895,6 +5919,21 @@
 
           </div>
 
+          <div class="cfg-rot">Limite de gastos</div>
+          <div class="cfg-cx" style="padding:14px;">
+            <label for="cfg-limite" style="display:block; font-size:12.5px; font-weight:600; color:var(--texto); margin-bottom:7px;">Teto para o que sai por mês</label>
+            <div style="display:flex; gap:9px;">
+              <input type="number" id="cfg-limite" step="0.01" inputmode="decimal" placeholder="sem limite"
+                     style="flex:1; min-width:0; height:40px; border:none; border-radius:11px; padding:0 12px; font-family:inherit; font-size:13px; color:var(--texto); background:var(--cinza-fundo); box-shadow:var(--afundado-leve);" />
+              <button class="pc-btn" style="flex:0 0 auto; padding:0 16px;" onclick="salvarLimiteApp()">Salvar</button>
+            </div>
+            <div class="cfg-aviso" style="margin-top:9px;">
+              É uma meta, não uma máscara: nenhum número do app passa a ser contado
+              contra ele. As mesadas e as viagens entram dentro do teto — são gasto
+              como qualquer outro. Em branco, desliga.
+            </div>
+          </div>
+
           <div class="cfg-rot">Aplicativo</div>
           <div class="cfg-cx" id="cfg-versao"></div>
 
@@ -6588,7 +6627,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=114"></script>
+  <script src="app.js?v=115"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

@@ -5482,6 +5482,21 @@ function dicaDoSubConfig(texto) {
   if (el) el.textContent = texto || "";
 }
 
+async function salvarLimiteApp() {
+  const campo = document.getElementById("cfg-limite");
+  try {
+    const r = await chamarServidor("salvarLimiteDeGastos", { limite: campo.value.trim() });
+    mostrarToast((r && r.mensagem) || "Pronto.");
+    if (r && r.ok) {
+      esquecerDominio("config");
+      esquecerDominio("transacoes");   // o dashboard carrega o limite junto
+      await recarregarDados();
+    }
+  } catch (e) {
+    mostrarToast("Falhou: " + (e.message || "sem conexão"));
+  }
+}
+
 function contarCategorias() {
   return (listasValidas && listasValidas.categorias) ? listasValidas.categorias.length : 0;
 }
@@ -5502,6 +5517,13 @@ function pintarDicasDeConfig() {
 
   const cats = contarCategorias();
   if (cats) por("cfg-dica-categorias", cats + " no plano de contas");
+
+  // O limite vem do dashboard, que já está carregado.
+  const campoLim = document.getElementById("cfg-limite");
+  if (campoLim && dashboardAtual) {
+    const L = dashboardAtual.limite;
+    campoLim.value = L ? L.limite : "";
+  }
 
   // gruposCompletos vem do dashboard, que já carregou antes daqui.
   const g = (typeof gruposCompletos !== "undefined" ? gruposCompletos : []).length;
@@ -6217,16 +6239,34 @@ function preencherDashboard(d) {
   const sobraReal = r.sobra;
 
   const elSaldo = document.getElementById("saldo-valor");
-  elSaldo.textContent = (supondo ? "≈ " : "") + formatarMoeda(sobraReal);
-  elSaldo.style.color = (sobraReal >= 0) ? "var(--verde)" : "var(--vermelho)";
+  const elSegundo = document.getElementById("saldo-segundo");
+  const L = d.limite;
+
+  if (L) {
+    // COM LIMITE, ele é o número grande -- é a pergunta que você faz todo
+    // dia. A sobra da receita não sai da tela: desce um degrau. Destacar é
+    // mudar a ordem, não esconder.
+    elSaldo.textContent = (L.estourou ? "− " : "") + formatarMoeda(Math.abs(L.sobra));
+    elSaldo.style.color = L.estourou ? "var(--vermelho)" : "var(--verde)";
+
+    elSegundo.style.display = "block";
+    elSegundo.innerHTML = (sobraReal >= 0 ? "sobra" : "falta") + " de verdade: <b>" +
+      (supondo ? "≈ " : "") + formatarMoeda(Math.abs(sobraReal)) + "</b>";
+  } else {
+    elSaldo.textContent = (supondo ? "≈ " : "") + formatarMoeda(sobraReal);
+    elSaldo.style.color = (sobraReal >= 0) ? "var(--verde)" : "var(--vermelho)";
+    elSegundo.style.display = "none";
+  }
 
   const ds = d.despesasStatus || {};
   pintarBarraDoSaldo(d, s, ds, supondo, receitaDaConta, sobraReal, fixasNaConta);
   pintarPrevisto(d, s, receitaDaConta, fixasNaConta > 0);
 
-  document.getElementById("saldo-rotulo").textContent =
-    (sobraReal >= 0 ? (supondo ? "SOBRA PREVISTA EM " : "SOBRA EM ") : "FALTA EM ") +
-    (d.mesReferencia || "").split("/")[0].toUpperCase();
+  document.getElementById("saldo-rotulo").textContent = d.limite
+    ? (d.limite.estourou ? "PASSOU DO LIMITE EM " : "AINDA CABE NO LIMITE DE ") +
+      (d.mesReferencia || "").split("/")[0].toUpperCase()
+    : (sobraReal >= 0 ? (supondo ? "SOBRA PREVISTA EM " : "SOBRA EM ") : "FALTA EM ") +
+      (d.mesReferencia || "").split("/")[0].toUpperCase();
 
   // A explicação virou um link de uma linha. O texto inteiro continua
   // existindo, atrás de um toque -- ele importa uma vez, não toda abertura.
@@ -10798,6 +10838,20 @@ async function alternarPlanosNoRelatorio() {
  * A base é a receita, não a despesa: a pergunta é quanto do que entrou já
  * está comprometido.
  */
+/** Quais barras estão mostrando porcentagem. Some ao trocar de mês. */
+let barrasEmPct = {};
+
+function alternarPct(qual) {
+  barrasEmPct[qual] = !barrasEmPct[qual];
+  if (dashboardAtual) preencherDashboard(dashboardAtual);
+}
+
+/** "R$ 5.602,30" ou "R$ 5.602,30 · 67%", conforme a barra esteja alternada. */
+function valorOuPct(qual, valor, total) {
+  if (!barrasEmPct[qual] || !total) return formatarMoeda(valor);
+  return formatarMoeda(valor) + " · " + Math.round((valor / total) * 100) + "%";
+}
+
 function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
   const pagas = Math.max(0, ds.pagas || 0);
   const pendentes = Math.max(0, ds.pendentes || 0);
@@ -10840,14 +10894,19 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
   }
 
   if (sobra > 0) faixas.push('<span style="flex-grow:1; background:var(--verde)"></span>');
-  document.getElementById("sd-barra").innerHTML = faixas.join("");
+  document.getElementById("sd-barra").innerHTML = faixas.join("") + marcaDoLimite(d, teto);
 
-  const linha = function (cor, nome, valor, corNum, abre) {
+  // A barra inteira é o alvo: tocar nela troca valor por valor + porcentagem.
+  const elBarra = document.getElementById("sd-barra");
+  elBarra.onclick = function () { alternarPct("saldo"); };
+  elBarra.style.cursor = "pointer";
+
+  const linha = function (cor, nome, valor, corNum, abre, pctDe) {
     const conteudo =
       '<span class="sd-ponto" style="background:' + cor + '"></span>' +
       '<span class="sd-nome">' + nome + '</span>' +
       '<span class="sd-num"' + (corNum ? ' style="color:' + corNum + '"' : '') + '>' +
-        formatarMoeda(valor) + '</span>';
+        (pctDe ? valorOuPct("saldo", valor, pctDe) : formatarMoeda(valor)) + '</span>';
 
     if (!abre) return '<div class="sd-linha">' + conteudo + '</div>';
 
@@ -10859,13 +10918,15 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
 
   document.getElementById("sd-legenda").innerHTML =
     linha("var(--azul)", "já pago", pagas, null,
-          pagas > 0 ? "abrirFatia('pago')" : null) +
+          pagas > 0 ? "abrirFatia('pago')" : null, teto) +
     linha("var(--laranja)", "a pagar ainda", pendentes, null,
-          pendentes > 0 ? "abrirFatia('pendente')" : null) +
-    (previstas > 0 ? linha(listrado, "fixas ainda não lançadas", previstas, null, "abrirFatia('fixas')") : "") +
+          pendentes > 0 ? "abrirFatia('pendente')" : null, teto) +
+    (previstas > 0 ? linha(listrado, "fixas ainda não lançadas", previstas, null, "abrirFatia('fixas')", teto) : "") +
     (sobra >= 0
-      ? linha("var(--verde)", supondo ? "sobraria" : "sobra", sobra, "var(--verde)")
-      : linha("var(--vermelho)", "falta", Math.abs(sobra), "var(--vermelho)"));
+      ? linha("var(--verde)", supondo ? "sobraria" : "sobra", sobra, "var(--verde)", null, teto)
+      : linha("var(--vermelho)", "falta", Math.abs(sobra), "var(--vermelho)", null, teto));
+
+  pintarLinhaDoLimite(d);
 
   pintarBarraDosGrupos(d);
 }
@@ -10882,6 +10943,42 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
 // parte do mês está fora de qualquer combinado, uma cor forte ali dominaria a
 // barra e as mesadas sumiriam. Branco ocupa o espaço sem disputar atenção.
 // ============================================================================
+/** O tracinho na posição do limite. Fora da escala da barra, não aparece. */
+function marcaDoLimite(d, teto) {
+  const L = d.limite;
+  if (!L || !teto || L.limite > teto) return "";
+
+  const pos = (L.limite / teto) * 100;
+  const cor = L.estourou ? "var(--vermelho)" : "var(--texto)";
+
+  return '<span class="sd-marca" style="left:' + pos.toFixed(2) + '%; background:' + cor + '"></span>';
+}
+
+function pintarLinhaDoLimite(d) {
+  const el = document.getElementById("sd-limite");
+  if (!el) return;
+
+  const L = d.limite;
+  if (!L) { el.style.display = "none"; return; }
+  el.style.display = "block";
+
+  const partes = ["Limite " + formatarMoeda(L.limite)];
+
+  if (L.estourou) {
+    partes.push('<b style="color:var(--vermelho)">passou ' + formatarMoeda(-L.sobra) + '</b>');
+  } else {
+    partes.push('<b style="color:var(--verde)">faltam ' + formatarMoeda(L.sobra) + '</b>');
+    // Por dia só no mês corrente: num mês passado ou futuro, "até o fim" não
+    // quer dizer nada.
+    if (L.porDia > 0) {
+      partes.push(formatarMoeda(L.porDia) + "/dia em " + L.diasQueFaltam + " dias");
+    }
+  }
+
+  el.innerHTML = partes.join(" &middot; ") +
+    '<span class="sd-limite-nota">contando o que ainda vai ser lançado</span>';
+}
+
 function pintarBarraDosGrupos(d) {
   const barra = document.getElementById("bg-bloco");
   if (!barra) return;
@@ -10910,6 +11007,10 @@ function pintarBarraDosGrupos(d) {
   }
   document.getElementById("bg-barra").innerHTML = faixas;
 
+  const elBG = document.getElementById("bg-barra");
+  elBG.onclick = function () { alternarPct("grupos"); };
+  elBG.style.cursor = "pointer";
+
   let legenda = "";
   grupos.forEach(function (g) {
     legenda +=
@@ -10917,7 +11018,7 @@ function pintarBarraDosGrupos(d) {
         JSON.stringify(g.nome).replace(/"/g, "&quot;") + ')">' +
         '<span class="sd-ponto" style="' + corDeFatia(g) + '"></span>' +
         '<span class="sd-nome">' + escaparHtml(g.nome) + '</span>' +
-        '<span class="sd-num">' + formatarMoeda(g.gasto) + '</span>' +
+        '<span class="sd-num">' + valorOuPct("grupos", g.gasto, total) + '</span>' +
         '<span class="sd-seta">&#8250;</span>' +
       '</button>';
   });
@@ -10926,7 +11027,7 @@ function pintarBarraDosGrupos(d) {
       '<button type="button" class="sd-linha abre" onclick="abrirFatia(\'grupo\', \'__sem__\')">' +
         '<span class="sd-ponto" style="background:#ffffff; box-shadow: inset 0 0 0 1.5px var(--texto)"></span>' +
         '<span class="sd-nome">sem grupo</span>' +
-        '<span class="sd-num">' + formatarMoeda(semGrupo) + '</span>' +
+        '<span class="sd-num">' + valorOuPct("grupos", semGrupo, total) + '</span>' +
         '<span class="sd-seta">&#8250;</span>' +
       '</button>';
   }
