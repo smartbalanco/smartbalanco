@@ -6190,7 +6190,11 @@ function resumoDoMes(d) {
   };
 }
 
+/** O ultimo dashboard pintado. As fatias leem dele em vez de rebuscar. */
+let dashboardAtual = null;
+
 function preencherDashboard(d) {
+  dashboardAtual = d;
   // "Setembro/2026" vira "Setembro 2026": a barra é o rótulo do mês, não um
   // caminho. A barra continua em d.mesReferencia, que outras partes partem.
   document.getElementById("mes-referencia").textContent =
@@ -10838,24 +10842,252 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
   if (sobra > 0) faixas.push('<span style="flex-grow:1; background:var(--verde)"></span>');
   document.getElementById("sd-barra").innerHTML = faixas.join("");
 
-  const linha = function (cor, nome, valor, corNum) {
-    return '<div class="sd-linha">' +
-        '<span class="sd-ponto" style="background:' + cor + '"></span>' +
-        '<span class="sd-nome">' + nome + '</span>' +
-        '<span class="sd-num"' + (corNum ? ' style="color:' + corNum + '"' : '') + '>' +
-          formatarMoeda(valor) + '</span>' +
-      '</div>';
+  const linha = function (cor, nome, valor, corNum, abre) {
+    const conteudo =
+      '<span class="sd-ponto" style="background:' + cor + '"></span>' +
+      '<span class="sd-nome">' + nome + '</span>' +
+      '<span class="sd-num"' + (corNum ? ' style="color:' + corNum + '"' : '') + '>' +
+        formatarMoeda(valor) + '</span>';
+
+    if (!abre) return '<div class="sd-linha">' + conteudo + '</div>';
+
+    return '<button type="button" class="sd-linha abre" onclick="' + abre + '">' +
+      conteudo + '<span class="sd-seta">&#8250;</span></button>';
   };
 
   const listrado = "repeating-linear-gradient(45deg, var(--laranja) 0 2px, transparent 2px 4px)";
 
   document.getElementById("sd-legenda").innerHTML =
-    linha("var(--azul)", "já pago", pagas) +
-    linha("var(--laranja)", "a pagar ainda", pendentes) +
-    (previstas > 0 ? linha(listrado, "fixas ainda não lançadas", previstas) : "") +
+    linha("var(--azul)", "já pago", pagas, null,
+          pagas > 0 ? "abrirFatia('pago')" : null) +
+    linha("var(--laranja)", "a pagar ainda", pendentes, null,
+          pendentes > 0 ? "abrirFatia('pendente')" : null) +
+    (previstas > 0 ? linha(listrado, "fixas ainda não lançadas", previstas, null, "abrirFatia('fixas')") : "") +
     (sobra >= 0
       ? linha("var(--verde)", supondo ? "sobraria" : "sobra", sobra, "var(--verde)")
       : linha("var(--vermelho)", "falta", Math.abs(sobra), "var(--vermelho)"));
+
+  pintarBarraDosGrupos(d);
+}
+
+// ============================================================================
+// A BARRA POR GRUPO DE SALDO
+// ----------------------------------------------------------------------------
+// Ela mede o GASTO JÁ LANÇADO do mês, repartido pelos combinados. Não inclui
+// as fixas que ainda não viraram lançamento: elas não têm grupo, e não dá
+// para classificar o que ainda não existe. Por isso o total daqui é menor
+// que o da barra de cima, e a legenda diz de que total se trata.
+//
+// "Sem grupo" é BRANCO COM CONTORNO, e isso não é só estética: quando a maior
+// parte do mês está fora de qualquer combinado, uma cor forte ali dominaria a
+// barra e as mesadas sumiriam. Branco ocupa o espaço sem disputar atenção.
+// ============================================================================
+function pintarBarraDosGrupos(d) {
+  const barra = document.getElementById("bg-bloco");
+  if (!barra) return;
+
+  const grupos = (d.gruposDeSaldo || []).filter(function (g) {
+    return !g.antesDaOrigem && g.gasto > 0;
+  });
+  const semGrupo = Math.max(0, d.despesaSemGrupo || 0);
+  const total = grupos.reduce(function (acc, g) { return acc + g.gasto; }, 0) + semGrupo;
+
+  if (total <= 0) { barra.style.display = "none"; return; }
+  barra.style.display = "block";
+
+  document.getElementById("bg-total").textContent = formatarMoeda(total);
+
+  const pct = function (v) { return Math.max(0, (v / total) * 100); };
+
+  let faixas = "";
+  grupos.forEach(function (g) {
+    faixas += '<span style="width:' + pct(g.gasto).toFixed(2) + '%; ' +
+      corDeFatia(g) + '"></span>';
+  });
+  if (semGrupo > 0) {
+    faixas += '<span style="flex-grow:1; background:#ffffff; ' +
+      'box-shadow: inset 0 0 0 1.5px var(--texto)"></span>';
+  }
+  document.getElementById("bg-barra").innerHTML = faixas;
+
+  let legenda = "";
+  grupos.forEach(function (g) {
+    legenda +=
+      '<button type="button" class="sd-linha abre" onclick="abrirFatia(\'grupo\', ' +
+        JSON.stringify(g.nome).replace(/"/g, "&quot;") + ')">' +
+        '<span class="sd-ponto" style="' + corDeFatia(g) + '"></span>' +
+        '<span class="sd-nome">' + escaparHtml(g.nome) + '</span>' +
+        '<span class="sd-num">' + formatarMoeda(g.gasto) + '</span>' +
+        '<span class="sd-seta">&#8250;</span>' +
+      '</button>';
+  });
+  if (semGrupo > 0) {
+    legenda +=
+      '<button type="button" class="sd-linha abre" onclick="abrirFatia(\'grupo\', \'__sem__\')">' +
+        '<span class="sd-ponto" style="background:#ffffff; box-shadow: inset 0 0 0 1.5px var(--texto)"></span>' +
+        '<span class="sd-nome">sem grupo</span>' +
+        '<span class="sd-num">' + formatarMoeda(semGrupo) + '</span>' +
+        '<span class="sd-seta">&#8250;</span>' +
+      '</button>';
+  }
+  document.getElementById("bg-legenda").innerHTML = legenda;
+
+  const fora = total > 0 ? Math.round((semGrupo / total) * 100) : 0;
+  document.getElementById("bg-nota").innerHTML = semGrupo > 0
+    ? fora + "% do que saiu está fora de qualquer combinado. Toque em " +
+      "<b>sem grupo</b> para classificar."
+    : "Todo o gasto do mês está dentro de um combinado.";
+}
+
+/**
+ * O estilo de uma fatia: cor de dentro e cor de borda.
+ *
+ * O fio de contorno padrão existe porque as cores escuras da paleta somem no
+ * fundo dos temas escuros. A borda escolhida passa por cima dele.
+ */
+function corDeFatia(g) {
+  const dentro = g.cor || "var(--fraco-2)";
+  const borda = g.corBorda
+    ? ("inset 0 0 0 1.5px " + g.corBorda)
+    : "inset 0 0 0 1px var(--contorno-fatia)";
+  return "background:" + dentro + "; box-shadow: " + borda;
+}
+
+// ============================================================================
+// O QUE TEM DENTRO DE UMA FATIA
+// ============================================================================
+let fatiaAtual = null;
+
+async function abrirFatia(tipo, grupo) {
+  const d = dashboardAtual || {};
+  fatiaAtual = { tipo: tipo, grupo: grupo || "" };
+
+  document.getElementById("modal-fatia").style.display = "flex";
+
+  const titulos = {
+    pago: "Já pago",
+    pendente: "A pagar ainda",
+    fixas: "Fixas ainda não lançadas",
+    grupo: grupo === "__sem__" ? "Sem grupo" : (grupo || "Grupo")
+  };
+  document.getElementById("ft-titulo").textContent = titulos[tipo] || "Detalhe";
+  document.getElementById("ft-sub").textContent = (d.mesReferencia || "").toLowerCase();
+
+  const alvo = document.getElementById("ft-corpo");
+
+  // As fixas previstas JÁ estão no dashboard: não custam uma ida ao servidor.
+  if (tipo === "fixas") {
+    const itens = ((d.saldo || {}).fixasPrevistasItens) || [];
+    pintarFatia(itens.map(function (f) {
+      return { descricao: f.descricao, valor: f.valor, data: "dia " + f.dia,
+               metodo: f.metodo || "", categoria: f.categoria || "", numMov: 0 };
+    }), true);
+    return;
+  }
+
+  alvo.innerHTML = '<div style="text-align:center; padding:40px 0;">' +
+    '<div class="spinner" style="margin:0 auto;"></div></div>';
+
+  try {
+    const params = { mes: mesExibido, ano: anoExibido, pagina: 0 };
+    if (tipo === "pago" || tipo === "pendente") params.status = tipo;
+    if (tipo === "grupo") params.grupo = grupo;
+
+    const r = await lerCacheado("buscarLancamentos", params);
+    if (!r || !r.ok) {
+      alvo.innerHTML = '<p class="vazio">' + escaparHtml((r && r.mensagem) || "Não consegui buscar.") + '</p>';
+      return;
+    }
+    pintarFatia(r.lancamentos || [], false);
+  } catch (e) {
+    alvo.innerHTML = '<p class="vazio">Sem conexão.</p>';
+  }
+}
+
+function fecharFatia() {
+  document.getElementById("modal-fatia").style.display = "none";
+  fatiaAtual = null;
+}
+
+/**
+ * A lista, agrupada por MÉTODO com subtotal.
+ *
+ * Num mês em que a maior parte é cartão, a pergunta seguinte é sempre
+ * "quanto disso é a fatura?" -- e uma lista corrida de 34 linhas não responde.
+ */
+function pintarFatia(itens, saoPrevistas) {
+  const alvo = document.getElementById("ft-corpo");
+
+  if (!itens.length) {
+    alvo.innerHTML = '<p class="vazio">Nada aqui neste mês.</p>';
+    document.getElementById("ft-total").textContent = formatarMoeda(0);
+    return;
+  }
+
+  const porMetodo = {};
+  let total = 0;
+  itens.forEach(function (it) {
+    const m = (it.metodo || "sem método").toString();
+    if (!porMetodo[m]) porMetodo[m] = { total: 0, itens: [] };
+    porMetodo[m].total += it.valor || 0;
+    porMetodo[m].itens.push(it);
+    total += it.valor || 0;
+  });
+
+  document.getElementById("ft-total").textContent = formatarMoeda(total);
+
+  const nomes = Object.keys(porMetodo).sort(function (a, b) {
+    return porMetodo[b].total - porMetodo[a].total;
+  });
+
+  let html = "";
+  nomes.forEach(function (m) {
+    html +=
+      '<div class="ft-grupo">' +
+        '<span>' + escaparHtml(m) + '</span>' +
+        '<b>' + formatarMoeda(porMetodo[m].total) + '</b>' +
+      '</div>';
+
+    porMetodo[m].itens.forEach(function (it) {
+      const acao = (!saoPrevistas && it.numMov)
+        ? ' onclick="fecharFatia(); abrirFichaPorMov(' + it.numMov + ')"'
+        : '';
+      html +=
+        '<' + (acao ? 'button type="button"' : 'div') + ' class="ft-item"' + acao + '>' +
+          '<span class="ft-data">' + escaparHtml(it.data || "") + '</span>' +
+          '<span class="ft-nome">' + escaparHtml(it.descricao || "") +
+            (it.categoria
+              ? '<span class="ft-cat">' + escaparHtml(nomeDaCategoria(it.categoria)) + '</span>'
+              : '') +
+          '</span>' +
+          '<span class="ft-val">' + formatarMoeda(it.valor) + '</span>' +
+        '</' + (acao ? 'button' : 'div') + '>';
+    });
+  });
+
+  if (saoPrevistas) {
+    html += '<div class="rel-nota">Estas contas ainda não viraram lançamento, ' +
+            'então não têm ficha para abrir.</div>';
+  }
+
+  alvo.innerHTML = html;
+}
+
+/** Abre a ficha do lançamento pela tela de Lançamentos, que é onde ela mora. */
+async function abrirFichaPorMov(numMov) {
+  trocarAba("busca");
+
+  const campo = document.getElementById("bl-nummov");
+  if (campo) campo.value = numMov;
+
+  try {
+    await executarBusca(true);
+    // A ficha e a MESMA da tela de Lancamentos: abrirDetalheBusca indexa
+    // resultadosBusca, entao a busca vem primeiro e o indice e o zero.
+    if (resultadosBusca.length === 1) abrirDetalheBusca(0);
+  } catch (e) {
+    mostrarToast("Abri os lancamentos: procure por MOV-" + numMov + ".");
+  }
 }
 
 /**

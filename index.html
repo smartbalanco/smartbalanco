@@ -22,6 +22,7 @@
       --borda: #dbe2ec;
       --vermelho: #b91c1c;      /* um tom mais fundo: 4,1:1 -> 5,5:1 */
       --laranja: #f97316;
+      --contorno-fatia: rgba(0, 0, 0, .22);
       --roxo: #8b5cf6;          /* o mesmo do botão da IA: a cor do "ainda não
                                    aconteceu" no app */
 
@@ -115,6 +116,7 @@
        No escuro o relevo inverte: a "sombra clara" vira um cinza um pouco
        ACIMA do fundo, nunca branco -- branco ali vira contorno, não luz. */
     :root[data-tema="ardosia"] {
+      --contorno-fatia: rgba(255, 255, 255, .28);
       --cinza-fundo: #2a2f37;
       --sombra-clara: #343a44; --sombra-escura: #1e2228;
       --texto: #e6ebf2; --texto-2: #ccd4de;
@@ -127,6 +129,7 @@
 
     /* ---- Café: escuro e quente ---- */
     :root[data-tema="cafe"] {
+      --contorno-fatia: rgba(255, 255, 255, .28);
       --cinza-fundo: #2b2622;
       --sombra-clara: #353029; --sombra-escura: #1f1b18;
       --texto: #f0e9e1; --texto-2: #d8cfc4;
@@ -2587,6 +2590,66 @@
       border-top: 1px solid var(--borda); display: flex; gap: 9px;
     }
 
+    /* ---------- Legenda que abre ---------- */
+    .sd-linha.abre {
+      width: 100%; border: none; background: none; cursor: pointer;
+      font-family: inherit; text-align: left;
+    }
+    .sd-linha.abre:active .sd-nome { color: var(--azul-claro); }
+    .sd-seta { font-size: 14px; color: var(--fraco-2); flex-shrink: 0; margin-left: 2px; }
+
+    /* ---------- Barra por grupo de saldo ---------- */
+    .bg-topo {
+      display: flex; align-items: baseline; justify-content: space-between;
+      margin: 18px 0 9px; padding-top: 14px; border-top: 1px solid var(--borda);
+    }
+    .bg-rot {
+      font-size: 10px; font-weight: 800; letter-spacing: 1px;
+      text-transform: uppercase; color: var(--cinza-texto);
+    }
+    .bg-total {
+      font-size: 13px; font-weight: 700; color: var(--texto);
+      font-variant-numeric: tabular-nums;
+    }
+    .bg-barra {
+      height: 22px; border-radius: 11px; padding: 3px; gap: 3px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado);
+      overflow: hidden; display: flex;
+    }
+    .bg-barra > span { height: 16px; border-radius: 8px; min-width: 3px; }
+    .bg-nota {
+      font-size: 10.5px; color: var(--cinza-texto); line-height: 1.5;
+      margin-top: 9px; padding-top: 9px; border-top: 1px dashed var(--borda);
+    }
+
+    /* ---------- O que tem dentro de uma fatia ---------- */
+    .ft-cabeca {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--borda);
+      font-size: 12px; color: var(--cinza-texto);
+    }
+    .ft-cabeca b { font-size: 17px; color: var(--texto); font-variant-numeric: tabular-nums; }
+    .ft-grupo {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding: 14px 0 5px; font-size: 10px; font-weight: 800; letter-spacing: .9px;
+      text-transform: uppercase; color: var(--cinza-texto);
+    }
+    .ft-grupo b { font-size: 11.5px; letter-spacing: 0; color: var(--texto-2); }
+    .ft-item {
+      display: flex; align-items: center; gap: 11px; width: 100%;
+      background: none; border: none; font-family: inherit; text-align: left;
+      padding: 10px 0; border-bottom: 1px solid var(--separador);
+    }
+    button.ft-item { cursor: pointer; }
+    button.ft-item:active .ft-nome { color: var(--azul-claro); }
+    .ft-data { width: 44px; flex-shrink: 0; font-size: 10.5px; color: var(--fraco-2); }
+    .ft-nome { flex: 1; min-width: 0; font-size: 12.5px; color: var(--texto); }
+    .ft-cat { display: block; font-size: 10px; color: var(--cinza-texto); margin-top: 1px; }
+    .ft-val {
+      flex-shrink: 0; font-size: 12.5px; font-weight: 700; color: var(--texto);
+      font-variant-numeric: tabular-nums;
+    }
+
     /* ---------- Conciliação de fatura ---------- */
     .cc-item {
       display: flex; align-items: flex-start; gap: 10px;
@@ -4212,6 +4275,18 @@
           <button class="btn-ver-tudo" onclick="abrirGerenciarGrupos()">Gerenciar →</button>
         </div>
         <div id="grupos-lista"></div>
+
+        <!-- Onde o gasto do mês caiu, repartido pelos combinados. -->
+        <div id="bg-bloco" style="display:none;">
+          <div class="bg-topo">
+            <span class="bg-rot">Onde o gasto caiu</span>
+            <span class="bg-total" id="bg-total"></span>
+          </div>
+          <div class="bg-barra" id="bg-barra"></div>
+          <div class="sd-legenda" id="bg-legenda"></div>
+          <div class="bg-nota" id="bg-nota"></div>
+        </div>
+
         <div class="gs-aviso">Este saldo não está reservado em lugar nenhum. Ele sai do dinheiro do mês em que você gastar.</div>
       </div>
 
@@ -5967,6 +6042,26 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: O QUE TEM DENTRO DE UMA FATIA ============ -->
+  <div class="modal-fundo" id="modal-fatia">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo" id="ft-titulo"></div>
+          <div style="font-size:11px; color:var(--mt-sub); margin-top:3px;" id="ft-sub"></div>
+        </div>
+        <button class="fechar" onclick="fecharFatia()">&times;</button>
+      </div>
+      <div class="modal-conteudo">
+        <div class="ft-cabeca">
+          <span>Somam</span>
+          <b id="ft-total"></b>
+        </div>
+        <div id="ft-corpo"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: CONFERIR FATURA ============ -->
   <div class="modal-fundo" id="modal-conciliar">
     <div class="modal-caixa">
@@ -6493,7 +6588,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=113"></script>
+  <script src="app.js?v=114"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
