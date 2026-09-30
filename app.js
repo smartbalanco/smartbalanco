@@ -6146,7 +6146,7 @@ function preencherDashboard(d) {
   explicandoSuposicao = supondo;
   document.getElementById("aviso-base").textContent = supondo
     ? "supondo a última receita conhecida · por quê?"
-    : "sobre a receita de " + (d.mesBaseNome || "-").toLowerCase() + " · por quê?";
+    : "conta o que já saiu da conta · como assim?";
 
   // Só aparece quando há receita recebida. "R$ 0,00" todo mês, no rodapé de
   // um card, é uma linha que nunca diz nada -- e ela sobrava justamente no
@@ -9563,6 +9563,260 @@ const MESES_NOMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
 
 // ---------- Tela inicial de relatórios ----------
 // ============================================================================
+// CONCILIAÇÃO DE FATURA
+// ----------------------------------------------------------------------------
+// Manda a fatura, o servidor lê e compara com o que está lançado, e a tela
+// mostra três listas: o que falta lançar, o que está sobrando no app e o que
+// está com valor diferente.
+//
+// O app SÓ ACRESCENTA. Nada é apagado nem alterado: compra cancelada, estorno
+// e lançamento errado se parecem aqui e se resolvem de formas diferentes, e
+// nenhuma delas melhora com o app decidindo sozinho.
+// ============================================================================
+let conciliacaoAtual = null;
+
+function abrirConciliacao() {
+  document.getElementById("modal-conciliar").style.display = "flex";
+  conciliacaoAtual = null;
+
+  const sel = document.getElementById("cc-cartao");
+  sel.innerHTML = (cartoesConfig.length
+    ? cartoesConfig
+    : [{ nome: "Cartão XP" }, { nome: "Cartão Inter" }]
+  ).map(function (c) {
+    return '<option value="' + escaparHtml(c.nome) + '">' + escaparHtml(c.nome) + '</option>';
+  }).join("");
+
+  document.getElementById("cc-resultado").innerHTML = "";
+  document.getElementById("cc-inicio").style.display = "block";
+  document.getElementById("cc-arquivo").value = "";
+}
+
+function fecharConciliacao() {
+  document.getElementById("modal-conciliar").style.display = "none";
+}
+
+async function enviarFaturaParaConciliar() {
+  const inp = document.getElementById("cc-arquivo");
+  const arq = inp.files && inp.files[0];
+  if (!arq) { mostrarToast("Escolha o arquivo da fatura."); return; }
+
+  const cartao = document.getElementById("cc-cartao").value;
+  const alvo = document.getElementById("cc-resultado");
+
+  document.getElementById("cc-inicio").style.display = "none";
+  alvo.innerHTML =
+    '<div class="card" style="text-align:center; padding:40px 20px;">' +
+      '<div class="spinner" style="margin:0 auto 14px;"></div>' +
+      '<div style="font-size:13px; color:var(--cinza-texto);">Lendo a fatura e comparando…</div>' +
+      '<div style="font-size:11px; color:var(--fraco-2); margin-top:6px;">' +
+        'fatura grande costuma levar uns 30 segundos</div>' +
+    '</div>';
+
+  try {
+    const base64 = await arquivoParaBase64(arq);
+    const r = await chamarServidor("conciliarFatura", {
+      arquivo: base64, mimeType: arq.type || "application/pdf", cartao: cartao
+    });
+
+    if (!r || !r.ok) {
+      alvo.innerHTML = '<div class="card"><p class="vazio">' +
+        escaparHtml((r && r.mensagem) || "Não consegui ler a fatura.") + '</p></div>';
+      document.getElementById("cc-inicio").style.display = "block";
+      return;
+    }
+
+    conciliacaoAtual = r;
+    pintarConciliacao();
+
+  } catch (e) {
+    alvo.innerHTML = '<div class="card"><p class="vazio">Falhou: ' +
+      escaparHtml(e.message || "sem conexão") + '</p></div>';
+    document.getElementById("cc-inicio").style.display = "block";
+  }
+}
+
+function arquivoParaBase64(arq) {
+  return new Promise(function (ok, erro) {
+    const r = new FileReader();
+    r.onload = function () { ok((r.result || "").toString().split(",")[1] || ""); };
+    r.onerror = function () { erro(new Error("não consegui ler o arquivo")); };
+    r.readAsDataURL(arq);
+  });
+}
+
+function pintarConciliacao() {
+  const r = conciliacaoAtual;
+  const alvo = document.getElementById("cc-resultado");
+  const res = r.resumo;
+
+  // A diferença é a manchete: é ela que você está procurando todo mês.
+  const bateu = Math.abs(res.diferenca) < 0.01;
+
+  let html =
+    '<div class="card">' +
+      '<div class="nv-heroi ' + (bateu ? "verde" : "laranja") + '">' +
+        (bateu ? "Bateu" : formatarMoeda(Math.abs(res.diferenca))) +
+      '</div>' +
+      '<div class="nv-heroi-rot">' +
+        (bateu
+          ? "a fatura e o app fecham no mesmo valor"
+          : (res.diferenca > 0 ? "a mais na fatura do que no app" : "a mais no app do que na fatura")) +
+      '</div>' +
+      nvLinha("Fatura " + escaparHtml(r.vencimento), formatarMoeda(res.somaFatura)) +
+      nvLinha("Lançado no app", formatarMoeda(res.somaApp)) +
+      nvLinha("Linhas que casaram", res.casados + " de " + res.itensFatura) +
+      (Math.abs(r.totalDeclarado - res.somaFatura) > 0.01
+        ? '<div class="rel-nota">A fatura declara ' + formatarMoeda(r.totalDeclarado) +
+          ' no topo, e as linhas que consegui ler somam ' + formatarMoeda(res.somaFatura) +
+          '. A diferença pode ser linha que não foi lida — confira antes de lançar.</div>'
+        : '') +
+    '</div>';
+
+  // ---- o que falta lançar ----
+  if (r.faltando.length) {
+    let itens = "";
+    r.faltando.forEach(function (it, i) {
+      itens +=
+        '<div class="cc-item">' +
+          '<label class="cc-marca">' +
+            '<input type="checkbox" id="cc-f-' + i + '"' +
+              (it.precisaCategoria ? "" : " checked") + ' />' +
+          '</label>' +
+          '<div class="cc-txt">' +
+            '<div class="cc-nome">' + escaparHtml(it.descricao) +
+              (it.totalParcelas > 1
+                ? ' <span class="cinza">' + it.parcela + "/" + it.totalParcelas + '</span>'
+                : '') +
+            '</div>' +
+            '<div class="cc-sub">' + escaparHtml(it.data) + '</div>' +
+            '<select class="cc-cat" id="cc-cat-' + i + '">' +
+              opcoesDeCategoria(it.categoriaSugerida) +
+            '</select>' +
+          '</div>' +
+          '<div class="cc-valor">' + formatarMoeda(it.valor) + '</div>' +
+        '</div>';
+    });
+
+    html +=
+      '<div class="card">' +
+        '<h2>Falta lançar · ' + r.faltando.length + '</h2>' +
+        '<div class="rel-nota" style="margin:0 0 10px; border:none; padding:0;">' +
+          'Está na fatura e não está no app. Confira a categoria antes de lançar.' +
+        '</div>' +
+        itens +
+        '<button class="btn-modal confirmar" style="width:100%; margin-top:12px;" ' +
+        'onclick="lancarFaltantes()">Lançar os marcados</button>' +
+      '</div>';
+  }
+
+  // ---- o que está sobrando ----
+  if (r.sobrando.length) {
+    let itens = "";
+    r.sobrando.forEach(function (l) {
+      itens += '<div class="cc-item">' +
+        '<div class="cc-txt"><div class="cc-nome">' + escaparHtml(l.descricao) + '</div>' +
+        '<div class="cc-sub">' + escaparHtml(l.data) +
+          (l.totalParcelas > 1 ? ' · ' + l.parcela + "/" + l.totalParcelas : '') +
+          ' · nº ' + l.numMov + '</div></div>' +
+        '<div class="cc-valor">' + formatarMoeda(l.valor) + '</div></div>';
+    });
+
+    html +=
+      '<div class="card">' +
+        '<h2>Está no app e não na fatura · ' + r.sobrando.length + '</h2>' +
+        '<div class="rel-nota" style="margin:0 0 10px; border:none; padding:0;">' +
+          'Pode ser compra cancelada, estorno ou lançamento no cartão errado. ' +
+          'O app não apaga nada — se algum estiver errado, apague pela tela de ' +
+          'Lançamentos, onde dá para ver a ficha inteira antes.' +
+        '</div>' +
+        itens +
+      '</div>';
+  }
+
+  // ---- valores diferentes ----
+  if (r.divergentes.length) {
+    let itens = "";
+    r.divergentes.forEach(function (d) {
+      itens += '<div class="cc-item">' +
+        '<div class="cc-txt"><div class="cc-nome">' + escaparHtml(d.descricao) + '</div>' +
+        '<div class="cc-sub">app ' + formatarMoeda(d.noApp) +
+          ' · fatura ' + formatarMoeda(d.naFatura) + ' · nº ' + d.numMov + '</div></div>' +
+        '<div class="cc-valor ' + (d.diferenca > 0 ? "vermelho" : "verde") + '">' +
+          (d.diferenca > 0 ? "+" : "") + formatarMoeda(d.diferenca) + '</div></div>';
+    });
+
+    html += '<div class="card"><h2>Valor diferente · ' + r.divergentes.length + '</h2>' +
+      '<div class="rel-nota" style="margin:0 0 10px; border:none; padding:0;">' +
+      'Mesma compra, valor diferente. Corrija pela ficha do lançamento.</div>' +
+      itens + '</div>';
+  }
+
+  if (!r.faltando.length && !r.sobrando.length && !r.divergentes.length) {
+    html += '<div class="card"><p class="vazio">Nada a conciliar: todas as linhas ' +
+      'da fatura casaram com o que está lançado.</p></div>';
+  }
+
+  alvo.innerHTML = html;
+}
+
+/** As categorias do plano de contas, com a sugerida já escolhida. */
+function opcoesDeCategoria(sugerida) {
+  const cats = (listasValidas && listasValidas.categorias) || [];
+  let o = '<option value="">— escolha a categoria —</option>';
+  cats.forEach(function (c) {
+    if (c.indexOf("2.") !== 0) return;   // conciliação de fatura é despesa
+    o += '<option value="' + escaparHtml(c) + '"' +
+         (c === sugerida ? " selected" : "") + '>' + escaparHtml(nomeDaCategoria(c)) + '</option>';
+  });
+  return o;
+}
+
+async function lancarFaltantes() {
+  if (!conciliacaoAtual) return;
+
+  const escolhidos = [];
+  conciliacaoAtual.faltando.forEach(function (it, i) {
+    const marcado = document.getElementById("cc-f-" + i);
+    if (!marcado || !marcado.checked) return;
+
+    const cat = document.getElementById("cc-cat-" + i);
+    escolhidos.push({
+      descricao: it.descricao,
+      valor: it.valor,
+      totalParcelas: it.totalParcelas,
+      data: it.data,
+      categoria: cat ? cat.value : ""
+    });
+  });
+
+  if (!escolhidos.length) { mostrarToast("Marque o que você quer lançar."); return; }
+
+  const semCategoria = escolhidos.filter(function (x) { return !x.categoria; });
+  if (semCategoria.length) {
+    mostrarToast(semCategoria.length + " item(ns) sem categoria. Sem ela o lançamento não aparece no balanço.");
+    return;
+  }
+
+  mostrarToast("Lançando…");
+  try {
+    const r = await chamarServidor("aplicarConciliacao", {
+      cartao: conciliacaoAtual.cartao,
+      itens: JSON.stringify(escolhidos)
+    });
+
+    mostrarToast((r && r.mensagem) || "Pronto.");
+    if (r && r.ok) {
+      esquecerDominio("transacoes");
+      fecharConciliacao();
+      await recarregarDados();
+    }
+  } catch (e) {
+    mostrarToast("Falhou: " + (e.message || "sem conexão"));
+  }
+}
+
+// ============================================================================
 // PRESTAÇÃO DE CONTAS
 // ----------------------------------------------------------------------------
 // Vários relatórios num documento só, com capa, índice e assinaturas.
@@ -9646,6 +9900,7 @@ function htmlModelosDeFechamento() {
       cartoes +
       '<div class="pc-linha">' +
         '<button class="pc-btn neutro" onclick="abrirMontadorPC(-1)">Novo modelo</button>' +
+        '<button class="pc-btn neutro" onclick="abrirConciliacao()">Conferir fatura</button>' +
       '</div>' +
     '</div>';
 }
@@ -10598,7 +10853,7 @@ let explicandoSuposicao = false;
 function explicarBaseDeCalculo() {
   mostrarToast(explicandoSuposicao
     ? "Este mês ainda não tem receita lançada, então o cálculo usa a última que entrou de verdade. É estimativa, por isso o ≈."
-    : "O mês gasta o que entrou no mês anterior. Por isso a base é a receita do mês passado, e não a deste mês.");
+    : "Conta a receita deste mês. A despesa entra pelo vencimento enquanto está em aberto e pelo PAGAMENTO depois de paga — antecipar a fatura traz o gasto para o mês em que você pagou.");
 }
 
 /**
@@ -11181,7 +11436,7 @@ function pintarTendenciaDoScore(d, sc) {
   if (antes === null || antes === undefined || antes === 0) return;
 
   const dif = sc.valor - antes;
-  const nome = (d.mesBaseNome || "").toLowerCase();
+  const nome = ((d.comparacao && d.comparacao.mesBaseNome) || "mês passado").toLowerCase();
 
   alvo.style.display = "block";
   alvo.innerHTML = (Math.abs(dif) < 1)

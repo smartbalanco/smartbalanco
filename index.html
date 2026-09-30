@@ -2587,6 +2587,32 @@
       border-top: 1px solid var(--borda); display: flex; gap: 9px;
     }
 
+    /* ---------- Conciliação de fatura ---------- */
+    .cc-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 11px 0; border-bottom: 1px solid var(--borda);
+    }
+    .cc-item:last-child { border-bottom: none; }
+    .cc-marca { flex-shrink: 0; padding-top: 2px; }
+    .cc-txt { flex: 1; min-width: 0; }
+    .cc-nome { font-size: 12.5px; font-weight: 600; color: var(--texto); }
+    .cc-sub { font-size: 10px; color: var(--cinza-texto); margin-top: 2px; }
+    .cc-cat {
+      width: 100%; margin-top: 7px; height: 32px; font-size: 11.5px;
+      border-radius: 9px; border: none; font-family: inherit;
+      background: var(--cinza-fundo) !important; box-shadow: var(--afundado-leve);
+      color: var(--texto); padding: 0 8px;
+    }
+    .cc-valor {
+      flex-shrink: 0; font-size: 12.5px; font-weight: 700;
+      color: var(--texto); font-variant-numeric: tabular-nums; padding-top: 1px;
+    }
+    #cc-arquivo {
+      width: 100%; font-size: 12px; color: var(--cinza-texto);
+      padding: 10px; border-radius: 11px;
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+    }
+
     /* ---------- A capa da prestação de contas ---------- */
     .pc-capa {
       font-family: Georgia, "Times New Roman", serif;
@@ -5941,6 +5967,40 @@
     </div>
   </div>
 
+  <!-- ============ MODAL: CONFERIR FATURA ============ -->
+  <div class="modal-fundo" id="modal-conciliar">
+    <div class="modal-caixa">
+      <div class="modal-topo">
+        <div>
+          <div class="mt-titulo">Conferir fatura</div>
+          <div style="font-size:11px; color:var(--mt-sub); margin-top:3px;">o que a fatura tem e o app não</div>
+        </div>
+        <button class="fechar" onclick="fecharConciliacao()">&times;</button>
+      </div>
+
+      <div class="modal-conteudo">
+        <div id="cc-inicio">
+          <div class="campo-bloco">
+            <label for="cc-cartao">Cartão</label>
+            <select id="cc-cartao"></select>
+          </div>
+          <div class="campo-bloco">
+            <label for="cc-arquivo">Arquivo da fatura</label>
+            <input type="file" id="cc-arquivo" accept="application/pdf,image/*" />
+          </div>
+          <div class="cfg-aviso">
+            Serve o PDF do banco ou uma foto. A leitura é feita pela IA; a
+            comparação, não — ela é conta, e dá o mesmo resultado toda vez.
+          </div>
+          <button class="btn-modal confirmar" style="width:100%;"
+                  onclick="enviarFaturaParaConciliar()">Conferir</button>
+        </div>
+
+        <div id="cc-resultado"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ============ MODAL: MONTAR PRESTAÇÃO DE CONTAS ============ -->
   <div class="modal-fundo" id="modal-pc">
     <div class="modal-caixa">
@@ -6422,7 +6482,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=105"></script>
+  <script src="app.js?v=107"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
