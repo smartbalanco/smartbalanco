@@ -11099,7 +11099,18 @@ async function abrirFatia(tipo, grupo) {
       alvo.innerHTML = '<p class="vazio">' + escaparHtml((r && r.mensagem) || "Não consegui buscar.") + '</p>';
       return;
     }
-    pintarFatia(r.lancamentos || [], false);
+    pintarFatia((r.itens || []).map(function (it) {
+      return {
+        descricao: it.descricao,
+        valor: it.valor,
+        // Só dia e mês: o ano é o do título da folha.
+        data: (it.vencimento || "").split("/").slice(0, 2).join("/"),
+        metodo: it.ehCartao ? (it.cartao || it.metodo) : it.metodo,
+        categoria: it.categoria,
+        parcela: it.parcela,
+        numMov: it.numMov
+      };
+    }), false);
   } catch (e) {
     alvo.innerHTML = '<p class="vazio">Sem conexão.</p>';
   }
@@ -11157,6 +11168,7 @@ function pintarFatia(itens, saoPrevistas) {
         '<' + (acao ? 'button type="button"' : 'div') + ' class="ft-item"' + acao + '>' +
           '<span class="ft-data">' + escaparHtml(it.data || "") + '</span>' +
           '<span class="ft-nome">' + escaparHtml(it.descricao || "") +
+            (it.parcela ? ' <span style="color:var(--fraco-2)">' + escaparHtml(it.parcela) + '</span>' : '') +
             (it.categoria
               ? '<span class="ft-cat">' + escaparHtml(nomeDaCategoria(it.categoria)) + '</span>'
               : '') +
