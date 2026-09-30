@@ -83,24 +83,47 @@ function revalidarListasValidas(aoAtualizar) {
 // Permite mostrar a tela instantaneamente ao abrir, enquanto busca os novos.
 // Guarda só dados do dashboard (saldos, contas). Nunca token ou senha.
 // ============================================================================
+/** O cache antigo, por mês. Só existe para limpar o que ficou dos aparelhos. */
 const CACHE_PREFIXO = "sb_dash_";
 
 function chaveCache(mes, ano) {
   return CACHE_PREFIXO + ano + "_" + mes;
 }
 
+/**
+ * A chave do dashboard de um mês no cache de leitura.
+ *
+ * Passa pelo MESMO limparVazios que lerDoServidor usa: ele ordena as chaves,
+ * e escrever { ano, mes } à mão em um lugar e { mes, ano } no outro daria
+ * strings diferentes para o mesmo mês. Já foi assim, e só não quebrou por
+ * sorte.
+ */
+function chaveDashboard(mes, ano) {
+  return CACHE_LEITURA + "dashboard|" + JSON.stringify(limparVazios({ mes: mes, ano: ano }));
+}
+
+/** Devolve se coube. Quem chama decide o que fazer quando não cabe. */
 function salvarCache(mes, ano, dados) {
   try {
-    const pacote = { quando: Date.now(), dados: dados };
-    localStorage.setItem(chaveCache(mes, ano), JSON.stringify(pacote));
+    localStorage.setItem(chaveDashboard(mes, ano), JSON.stringify({
+      carimbo: carimbosConhecidos.transacoes,
+      quando: Date.now(),
+      dados: dados
+    }));
+    return true;
   } catch (e) {
-    // Se o armazenamento estiver cheio ou bloqueado, apenas ignora.
+    return false;
   }
 }
 
 function lerCache(mes, ano) {
   try {
-    const bruto = localStorage.getItem(chaveCache(mes, ano));
+    let bruto = localStorage.getItem(chaveDashboard(mes, ano));
+
+    // O cache antigo ainda vale para quem já tinha meses guardados nele:
+    // sem isto, atualizar o app esvaziaria o seletor até a próxima pré-carga.
+    if (!bruto) bruto = localStorage.getItem(chaveCache(mes, ano));
+
     if (!bruto) return null;
     const pacote = JSON.parse(bruto);
     return pacote && pacote.dados ? pacote : null;
@@ -659,18 +682,12 @@ async function preCarregarAno() {
 
   for (let i = 0; i < ordenados.length; i++) {
     const m = ordenados[i];
-    try {
-      // Nos DOIS caches: o de leitura é o que dispensa a rede, e o do
-      // dashboard é o que pinta a tela na hora enquanto confere.
-      localStorage.setItem(
-        CACHE_LEITURA + "dashboard|" + JSON.stringify({ ano: m.ano, mes: m.mes }),
-        JSON.stringify({ carimbo: carimbo, quando: Date.now(), dados: m.dados }));
-      salvarCache(m.mes, m.ano, m.dados);
-      guardados++;
-      prova = CACHE_LEITURA + "dashboard|" + JSON.stringify({ ano: m.ano, mes: m.mes });
-    } catch (e) {
-      break;   // encheu: para por aqui e fica com o que já entrou
-    }
+    // Uma escrita só. Guardar duas cópias do mesmo mês era o que enchia o
+    // armazenamento -- e a segunda falhava calada, deixando o seletor cego.
+    if (!salvarCache(m.mes, m.ano, m.dados)) break;   // encheu: fica o que entrou
+
+    guardados++;
+    prova = chaveDashboard(m.mes, m.ano);
   }
 
   try {
