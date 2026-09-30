@@ -5984,6 +5984,17 @@
             <label for="cc-cartao">Cartão</label>
             <select id="cc-cartao"></select>
           </div>
+          <div class="linha-dupla">
+            <div class="campo-bloco">
+              <label for="cc-mes">Mês da fatura</label>
+              <select id="cc-mes"></select>
+            </div>
+            <div class="campo-bloco">
+              <label for="cc-ano">Ano</label>
+              <select id="cc-ano"></select>
+            </div>
+          </div>
+
           <div class="campo-bloco">
             <label for="cc-arquivo">Arquivo da fatura</label>
             <input type="file" id="cc-arquivo" accept="application/pdf,image/*" />
@@ -6482,7 +6493,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=108"></script>
+  <script src="app.js?v=109"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>

@@ -9587,6 +9587,10 @@ function abrirConciliacao() {
     return '<option value="' + escaparHtml(c.nome) + '">' + escaparHtml(c.nome) + '</option>';
   }).join("");
 
+  const hoje = new Date();
+  document.getElementById("cc-mes").innerHTML = opcoesMeses(hoje.getMonth());
+  document.getElementById("cc-ano").innerHTML = opcoesAnos(hoje.getFullYear());
+
   document.getElementById("cc-resultado").innerHTML = "";
   document.getElementById("cc-inicio").style.display = "block";
   document.getElementById("cc-arquivo").value = "";
@@ -9629,12 +9633,29 @@ async function enviarFaturaParaConciliar() {
     // na URL, e a fatura em base64 passa de 1 MB -- a requisição nem chega a
     // sair do navegador, e o erro que aparece é "Failed to fetch".
     const r = await chamarServidorPost("conciliarFatura", {
-      arquivo: base64, mimeType: arq.type || "application/pdf", cartao: cartao
+      arquivo: base64,
+      mimeType: arq.type || "application/pdf",
+      cartao: cartao,
+      // Vai junto como reserva: se a IA não achar o vencimento no documento,
+      // o servidor monta a data com este mês e o dia cadastrado do cartão.
+      mes: document.getElementById("cc-mes").value,
+      ano: document.getElementById("cc-ano").value
     });
 
     if (!r || !r.ok) {
+      const d = r && r.diagnostico;
       alvo.innerHTML = '<div class="card"><p class="vazio">' +
-        escaparHtml((r && r.mensagem) || "Não consegui ler a fatura.") + '</p></div>';
+        escaparHtml((r && r.mensagem) || "Não consegui ler a fatura.") + '</p>' +
+        // O que a IA devolveu. Sem isso, "não consegui" não diz se ela leu
+        // mal uma linha ou se não leu o documento inteiro.
+        (d ? '<div class="rel-nota">A leitura devolveu ' + d.itensLidos +
+             ' lançamento(s)' +
+             (d.banco ? ', banco "' + escaparHtml(d.banco) + '"' : '') +
+             (d.vencimentoBruto ? ', vencimento "' + escaparHtml(d.vencimentoBruto) + '"' : '') +
+             (d.totalBruto ? ', total "' + escaparHtml(d.totalBruto) + '"' : '') +
+             '.</div>'
+           : '') +
+        '</div>';
       document.getElementById("cc-inicio").style.display = "block";
       return;
     }
