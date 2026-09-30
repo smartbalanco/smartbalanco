@@ -9601,6 +9601,15 @@ async function enviarFaturaParaConciliar() {
   const arq = inp.files && inp.files[0];
   if (!arq) { mostrarToast("Escolha o arquivo da fatura."); return; }
 
+  // Em base64 o arquivo cresce um terço. Acima disso o envio falha sem dizer
+  // por quê -- e uma fatura desse tamanho costuma ser foto em resolução
+  // máxima, que dá para trocar por uma menor ou pelo PDF do banco.
+  if (arq.size > 6 * 1024 * 1024) {
+    mostrarToast("Arquivo muito grande (" + Math.round(arq.size / 1048576) +
+                 " MB). Use o PDF do banco ou uma foto menor.");
+    return;
+  }
+
   const cartao = document.getElementById("cc-cartao").value;
   const alvo = document.getElementById("cc-resultado");
 
@@ -9615,7 +9624,11 @@ async function enviarFaturaParaConciliar() {
 
   try {
     const base64 = await arquivoParaBase64(arq);
-    const r = await chamarServidor("conciliarFatura", {
+
+    // POST, como o envio de documento. chamarServidor monta um GET com tudo
+    // na URL, e a fatura em base64 passa de 1 MB -- a requisição nem chega a
+    // sair do navegador, e o erro que aparece é "Failed to fetch".
+    const r = await chamarServidorPost("conciliarFatura", {
       arquivo: base64, mimeType: arq.type || "application/pdf", cartao: cartao
     });
 
@@ -9800,7 +9813,7 @@ async function lancarFaltantes() {
 
   mostrarToast("Lançando…");
   try {
-    const r = await chamarServidor("aplicarConciliacao", {
+    const r = await chamarServidorPost("aplicarConciliacao", {
       cartao: conciliacaoAtual.cartao,
       itens: JSON.stringify(escolhidos)
     });
