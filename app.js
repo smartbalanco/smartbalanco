@@ -6448,9 +6448,14 @@ function preencherDashboard(d) {
     elSaldo.textContent = (L.estourou ? "− " : "") + formatarMoeda(Math.abs(L.sobra));
     elSaldo.style.color = L.estourou ? "var(--vermelho)" : "var(--verde)";
 
+    // "Real:" e o sinal fazem o trabalho que as palavras faziam. Negativo
+    // sai com menos e em vermelho, positivo em verde -- a mesma convenção do
+    // número grande logo acima, para os dois se lerem juntos sem traduzir.
     elSegundo.style.display = "block";
-    elSegundo.innerHTML = (sobraReal >= 0 ? "sobra" : "falta") + " de verdade: <b>" +
-      (supondo ? "≈ " : "") + formatarMoeda(Math.abs(sobraReal)) + "</b>";
+    elSegundo.innerHTML = 'Real: <b style="color:' +
+      (sobraReal < 0 ? "var(--vermelho)" : "var(--verde)") + '">' +
+      (sobraReal < 0 ? "− " : "") + (supondo ? "≈ " : "") +
+      formatarMoeda(Math.abs(sobraReal)) + "</b>";
   } else {
     elSaldo.textContent = (supondo ? "≈ " : "") + formatarMoeda(sobraReal);
     elSaldo.style.color = (sobraReal >= 0) ? "var(--verde)" : "var(--vermelho)";
@@ -11051,6 +11056,128 @@ function valorOuPct(qual, valor, total) {
   return formatarMoeda(valor) + " · " + Math.round((valor / total) * 100) + "%";
 }
 
+// ============================================================================
+// MODO DRE — a mesma barra respondendo outra pergunta
+// ----------------------------------------------------------------------------
+// A barra normal responde "quanto já saiu e quanto ainda sai". Esta responde
+// "saiu PARA ONDE". São perguntas diferentes sobre o mesmo mês, e por isso
+// dividem o mesmo lugar em vez de virarem dois cards: duas barras empilhadas
+// fariam procurar qual delas é a que interessa agora.
+//
+// A escolha fica guardada: quem liga o DRE quer vê-lo amanhã também, e voltar
+// ao modo normal a cada abertura transformaria um modo em um clique repetido.
+// ============================================================================
+let modoDRE = false;
+try { modoDRE = localStorage.getItem("sb_modo_dre") === "1"; } catch (e) {}
+
+/** "65,4" e não "65.4". Uma casa só: a segunda não muda decisão nenhuma. */
+function pctBR(v) {
+  return (Math.round((v || 0) * 10) / 10).toLocaleString("pt-BR");
+}
+
+/**
+ * O rótulo de uma linha do DRE: o código e o nome.
+ *
+ * O código vem na frente e em tom apagado. Ele é a chave do plano de contas --
+ * é por ele que a linha se acha na planilha --, mas quem varre a lista lê o
+ * NOME: deixar os dois com o mesmo peso faria a coluna virar uma parede de
+ * números iguais, todos começando com "2.".
+ *
+ * Sem nome, fica só o código, sem repetição.
+ */
+function rotuloDRE(chave, nome) {
+  const cod = '<i class="dre-cod">' + escaparHtml(chave) + '</i>';
+  if (!nome || nome === chave) return cod;
+  return cod + ' ' + escaparHtml(nome);
+}
+
+function alternarModoDRE() {
+  modoDRE = !modoDRE;
+  try { localStorage.setItem("sb_modo_dre", modoDRE ? "1" : "0"); } catch (e) {}
+  if (dashboardAtual) preencherDashboard(dashboardAtual);
+}
+
+/** A barra repartida pelo plano de contas. Devolve se conseguiu pintar. */
+function pintarBarraDRE(d) {
+  const dre = d.dre;
+  if (!dre || !dre.grupos || !dre.grupos.length || !(dre.total > 0)) return false;
+
+  document.getElementById("sd-barra-rotulo").textContent = "GASTO DO MÊS";
+  document.getElementById("sd-barra-total").textContent = formatarMoeda(dre.total);
+
+  document.getElementById("sd-barra").innerHTML = dre.grupos.map(function (g) {
+    return '<span style="width:' + Math.max(0, g.pct) + '%; background:' +
+           escaparHtml(g.cor) + '" title="' + escaparHtml(g.nome) + '"></span>';
+  }).join("");
+
+  const elBarra = document.getElementById("sd-barra");
+  elBarra.onclick = abrirDRE;
+  elBarra.style.cursor = "pointer";
+
+  // A marca do limite sai: ela compara com a RECEITA, e aqui a barra inteira
+  // é despesa. Deixá-la viraria uma linha medindo outra régua.
+  document.getElementById("sd-limite").style.display = "none";
+
+  document.getElementById("sd-legenda").innerHTML = dre.grupos.map(function (g) {
+    return '<button type="button" class="sd-linha abre" onclick="abrirDRE(\'' +
+      escaparHtml(g.chave) + '\')">' +
+      '<span class="sd-ponto" style="background:' + escaparHtml(g.cor) + '"></span>' +
+      '<span class="sd-nome">' + rotuloDRE(g.chave, g.nome) + '</span>' +
+      // Sempre com a porcentagem: no modo DRE ela é a informação, não um
+      // extra que se revela tocando. "R$ 392,09" não diz nada sozinho;
+      // "65% de tudo que saiu" diz.
+      '<span class="sd-num">' + formatarMoeda(g.valor) +
+      ' <i style="font-style:normal; color:var(--fraco)">' + pctBR(g.pct) + '%</i></span>' +
+      '<span class="sd-seta">&#8250;</span></button>';
+  }).join("");
+
+  return true;
+}
+
+/** Quais grupos do DRE estão abertos na folha. */
+let dreAberto = {};
+
+function abrirDRE(chave) {
+  if (chave) dreAberto[chave] = !dreAberto[chave];
+  const d = dashboardAtual;
+  if (!d || !d.dre) return;
+
+  document.getElementById("ft-titulo").textContent = "Para onde foi";
+  document.getElementById("ft-sub").textContent = (d.mesReferencia || "").toLowerCase();
+  document.getElementById("modal-fatia").style.display = "flex";
+
+  const dre = d.dre;
+  document.getElementById("ft-total").textContent = formatarMoeda(dre.total);
+  let html = "";
+
+  dre.grupos.forEach(function (g) {
+    const aberto = !!dreAberto[g.chave];
+    html += '<button type="button" class="dre-grupo" onclick="abrirDRE(\'' +
+      escaparHtml(g.chave) + '\')">' +
+      '<span class="sd-ponto" style="background:' + escaparHtml(g.cor) + '"></span>' +
+      '<span class="dre-nome">' + rotuloDRE(g.chave, g.nome) +
+      // Quando o plano de contas não dá nome ao nível 2, fica só o código. Um
+      // nome deduzido dos filhos seria chute, e chute errado aqui não aparece.
+      (g.temNome ? '' : ' <i class="dre-sem-nome">sem nome no plano</i>') +
+      '</span>' +
+      '<b class="dre-val">' + formatarMoeda(g.valor) + '</b>' +
+      '<span class="dre-pct">' + pctBR(g.pct) + '%</span>' +
+      '<span class="sd-seta">' + (aberto ? '&#8964;' : '&#8250;') + '</span>' +
+      '</button>';
+
+    if (aberto) {
+      html += '<div class="dre-filhos">' + g.filhos.map(function (f) {
+        return '<div class="dre-filho"><span class="dre-nome">' +
+          rotuloDRE(f.chave, f.nome) +
+          '</span><b class="dre-val">' + formatarMoeda(f.valor) +
+          '</b><span class="dre-pct">' + pctBR(f.pct) + '%</span></div>';
+      }).join("") + '</div>';
+    }
+  });
+
+  document.getElementById("ft-corpo").innerHTML = html;
+}
+
 function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
   const pagas = Math.max(0, ds.pagas || 0);
   const pendentes = Math.max(0, ds.pendentes || 0);
@@ -11061,14 +11188,34 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
   // a barra mostrava o mês quase vazio -- dois cálculos para a mesma coisa.
   const bloco = document.getElementById("sd-barra-bloco");
 
+  // O botão de modo é do CARD, e por isso é resolvido ANTES de qualquer saída
+  // antecipada: num mês sem barra ele precisa sumir, e deixá-lo depois do
+  // return o congelaria no estado do mês anterior.
+  //
+  // Só aparece quando há DRE para mostrar -- um botão que não leva a lugar
+  // nenhum é pior que botão nenhum.
+  const btModo = document.getElementById("sd-modo");
+  const temDRE = !!(d.dre && d.dre.grupos && d.dre.grupos.length && d.dre.total > 0);
+  if (btModo) {
+    btModo.style.display = temDRE ? "" : "none";
+    btModo.classList.toggle("ligado", modoDRE && temDRE);
+  }
+
   // Sem receita nenhuma não há proporção possível: a barra some e sobram os
   // números. Uma barra cheia de despesa sobre base zero diria "100% gasto",
   // o que não é verdade -- é "não sei".
-  if (!(receita > 0) && !(pagas + pendentes > 0)) {
+  //
+  // O DRE, porém, não depende de receita: ele reparte o que SAIU. Então um
+  // mês só de gastos continua tendo o que mostrar.
+  if (!(receita > 0) && !(pagas + pendentes > 0) && !(modoDRE && temDRE)) {
     bloco.style.display = "none";
     return;
   }
   bloco.style.display = "block";
+
+  // Modo DRE desenha a mesma barra respondendo outra pergunta. Se não houver
+  // o que repartir, cai no normal em vez de mostrar uma barra vazia.
+  if (modoDRE && temDRE && pintarBarraDRE(d)) return;
 
   document.getElementById("sd-barra-rotulo").textContent =
     supondo ? "PARA ONDE IRIA" : "PARA ONDE VAI";
@@ -11828,9 +11975,57 @@ function pintarGerenciarGrupos() {
  * o passado -- o valor de um grupo tem data de início, e é o lápis do card
  * (só no mês corrente) que registra desde quando o novo vale.
  */
+/**
+ * A cor escolhida no formulário. Vive fora do DOM porque "nenhuma" é uma
+ * escolha legítima e precisa ser distinguível de "ainda não mexi".
+ */
+let corGrupoEscolhida = "";
+let corBordaGrupoEscolhida = "";
+
+/**
+ * A paleta, pintada como botões.
+ *
+ * A lista vem do SERVIDOR (listasValidas.paletaGrupos) porque é a mesma de
+ * onde sai o sorteio da cor de um grupo novo. Uma cópia no app divergiria, e
+ * o seletor passaria a oferecer cores que o sorteio nunca dá -- duas paletas
+ * que se dizem a mesma.
+ */
+function pintarPaletaGrupo(idAlvo, escolhida, aoEscolher) {
+  const alvo = document.getElementById(idAlvo);
+  if (!alvo) return;
+
+  const cores = (listasValidas && listasValidas.paletaGrupos)
+    ? listasValidas.paletaGrupos : [];
+
+  alvo.innerHTML =
+    '<button type="button" class="gf-cor nenhuma' + (!escolhida ? ' escolhida' : '') +
+    '" data-cor="" aria-label="sem cor"></button>' +
+    cores.map(function (c) {
+      return '<button type="button" class="gf-cor' +
+             (escolhida === c ? ' escolhida' : '') +
+             '" data-cor="' + escaparHtml(c) + '" style="background:' + escaparHtml(c) +
+             '" aria-label="' + escaparHtml(c) + '"></button>';
+    }).join("");
+
+  Array.prototype.forEach.call(alvo.querySelectorAll(".gf-cor"), function (b) {
+    b.onclick = function () {
+      aoEscolher(b.getAttribute("data-cor") || "");
+      Array.prototype.forEach.call(alvo.querySelectorAll(".gf-cor"), function (o) {
+        o.classList.remove("escolhida");
+      });
+      b.classList.add("escolhida");
+    };
+  });
+}
+
 function abrirFormGrupo(i) {
   const g = (i === null || i === undefined) ? null : gruposCompletos[i];
   grupoDeSaldoEditando = g;
+
+  corGrupoEscolhida = g ? (g.cor || "") : "";
+  corBordaGrupoEscolhida = g ? (g.corBorda || "") : "";
+  pintarPaletaGrupo("gf-paleta", corGrupoEscolhida, function (c) { corGrupoEscolhida = c; });
+  pintarPaletaGrupo("gf-paleta-borda", corBordaGrupoEscolhida, function (c) { corBordaGrupoEscolhida = c; });
 
   document.getElementById("gf-titulo").textContent = g ? "Editar grupo" : "Novo grupo";
   document.getElementById("gf-nome").value = g ? g.nome : "";
@@ -11911,7 +12106,12 @@ async function salvarGrupoNaTela() {
       categorias: catsGrupo.join("|"),
       acumula: document.getElementById("gf-acumula").checked ? "sim" : "não",
       corrige: document.getElementById("gf-corrige").checked ? "sim" : "não",
-      ativo: document.getElementById("gf-ativo").checked ? "sim" : "não"
+      ativo: document.getElementById("gf-ativo").checked ? "sim" : "não",
+      // Sempre enviadas, inclusive vazias: o servidor só grava a coluna quando
+      // o campo vem definido, então omitir seria o jeito de nunca conseguir
+      // APAGAR uma cor depois de escolhida.
+      cor: corGrupoEscolhida,
+      corBorda: corBordaGrupoEscolhida
     });
 
     if (!r.ok) return erro(r.mensagem || "Não deu para salvar.");

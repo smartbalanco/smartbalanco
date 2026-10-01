@@ -970,6 +970,19 @@
       text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
     }
     .sd-barra-bloco { margin-top: 17px; }
+    /* O botão de modo, ancorado no canto do card. Absoluto para não empurrar
+       o rótulo nem o número herói: o valor grande continua começando na mesma
+       altura com o botão ligado ou desligado. */
+    .sd-card { position: relative; }
+    .sd-modo {
+      position: absolute; top: 14px; right: 14px; z-index: 2;
+      border: none; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+      font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: .6px;
+      color: var(--cinza-texto); background: var(--cinza-fundo);
+      box-shadow: var(--relevo-baixo);
+    }
+    .sd-modo.ligado { box-shadow: var(--afundado); color: var(--texto); }
+
     .sd-barra-topo {
       display: flex; justify-content: space-between; align-items: baseline;
       font-size: 10.5px; font-weight: 700; letter-spacing: .7px;
@@ -1458,6 +1471,60 @@
     .gf-dica { font-size: 10px; color: var(--cinza-texto); line-height: 1.5; margin-top: 6px; }
     .gf-opcoes { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
     .gf-check { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+
+    /* A paleta. A escolha é marcada por um anel AFUNDADO, como o resto do app
+       -- um contorno colorido por cima da amostra disputaria leitura com a
+       própria cor, que é o que se está escolhendo. */
+    /* O DRE na folha. Grade de 4 colunas para valor e porcentagem ficarem
+       alinhados entre grupos e filhos -- número que dança de coluna em coluna
+       obriga a procurar a mesma informação em cada linha. */
+    .dre-grupo, .dre-filho {
+      display: grid; grid-template-columns: auto 1fr auto 44px auto;
+      align-items: center; gap: 9px; width: 100%; text-align: left;
+      padding: 11px 2px; border: none; background: none; font-family: inherit;
+      border-bottom: 1px solid var(--linha-sutil, rgba(0,0,0,.06));
+    }
+    .dre-grupo { cursor: pointer; }
+    .dre-nome { font-size: 13px; color: var(--texto); min-width: 0; }
+    .dre-val { font-size: 13px; color: var(--texto); font-variant-numeric: tabular-nums; }
+    .dre-pct {
+      font-size: 11.5px; color: var(--fraco); text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    /* O código em tom apagado e com dígito de largura fixa: numa coluna de
+       "2.4.001", "2.4.002", "2.3.001", o que se compara é o último pedaço, e
+       dígito que dança de largura obriga a reler a linha inteira. */
+    .dre-cod {
+      font-style: normal; color: var(--fraco-2); font-variant-numeric: tabular-nums;
+      font-size: .92em;
+    }
+    .dre-sem-nome { font-style: normal; color: var(--fraco-2); font-size: .85em; }
+
+    .dre-filhos { padding-left: 22px; }
+    /* Os filhos não têm o ponto de cor nem a seta: a cor é do grupo, e repeti-la
+       em cada item faria parecer que cada um tem a sua. */
+    .dre-filho { grid-template-columns: 1fr auto 44px; padding: 9px 2px; }
+    .dre-filho .dre-nome, .dre-filho .dre-val { font-size: 12.5px; color: var(--fraco); }
+
+    .gf-cor-bloco { margin-top: 14px; }
+    .gf-cor-rot { font-size: 11.5px; font-weight: 600; color: var(--fraco); margin-bottom: 7px; }
+    .gf-paleta {
+      display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px;
+    }
+    .gf-cor {
+      aspect-ratio: 1 / 1; border-radius: 50%; border: none; padding: 0;
+      cursor: pointer; box-shadow: var(--relevo-baixo);
+    }
+    .gf-cor.escolhida { box-shadow: var(--afundado), 0 0 0 2px var(--texto); }
+    /* "Sem cor" precisa ser visível como ausência, não como mais uma cor. */
+    .gf-cor.nenhuma {
+      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
+      position: relative;
+    }
+    .gf-cor.nenhuma::after {
+      content: ""; position: absolute; inset: 30%;
+      border-left: 1.5px solid var(--fraco-2); transform: rotate(45deg);
+    }
     .gf-check input { width: 18px; height: 18px; accent-color: var(--verde); flex-shrink: 0; }
     .gf-check span { font-size: 12px; color: var(--azul); }
     .gf-aviso {
@@ -4259,7 +4326,11 @@
            que havia antes (receita, despesas, pagas, pendentes). A barra diz a
            mesma coisa com proporção: dá para ver quanto do mês já está
            comprometido sem ler número nenhum. -->
-      <div class="card">
+      <div class="card sd-card">
+        <!-- O botão de modo mora no canto do CARD, não na barra: ele troca o
+             que o card inteiro está respondendo, e dentro da barra parecia
+             um controle da barra. O canto superior direito já estava vazio. -->
+        <button class="sd-modo" id="sd-modo" onclick="alternarModoDRE()">DRE</button>
         <div class="sd-rotulo" id="saldo-rotulo">SOBRA DO MÊS</div>
         <div class="saldo-destaque" id="saldo-valor">R$ 0,00</div>
         <div class="sd-segundo" id="saldo-segundo" style="display:none;"></div>
@@ -6623,6 +6694,13 @@
         <label class="gf-check"><input type="checkbox" id="gf-ativo" checked /> <span>Ativo</span></label>
       </div>
 
+      <div class="gf-cor-bloco">
+        <div class="gf-cor-rot">Cor no gráfico</div>
+        <div class="gf-paleta" id="gf-paleta"></div>
+        <div class="gf-cor-rot" style="margin-top:12px;">Contorno</div>
+        <div class="gf-paleta" id="gf-paleta-borda"></div>
+      </div>
+
       <div class="gf-aviso" id="gf-aviso"></div>
 
       <button class="btn-modal confirmar" style="width:100%; margin-top:12px;"
@@ -6663,7 +6741,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=123"></script>
+  <script src="app.js?v=124"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
