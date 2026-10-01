@@ -11105,12 +11105,12 @@ function pintarBarraDRE(d) {
   document.getElementById("sd-barra-rotulo").textContent = "GASTO DO MÊS";
   document.getElementById("sd-barra-total").textContent = formatarMoeda(dre.total);
 
-  document.getElementById("sd-barra").innerHTML = dre.grupos.map(function (g) {
+  const elBarra = document.getElementById("sd-barra");
+  elBarra.classList.add("dre");
+  elBarra.innerHTML = dre.grupos.map(function (g) {
     return '<span style="width:' + Math.max(0, g.pct) + '%; background:' +
            escaparHtml(g.cor) + '" title="' + escaparHtml(g.nome) + '"></span>';
   }).join("");
-
-  const elBarra = document.getElementById("sd-barra");
   elBarra.onclick = abrirDRE;
   elBarra.style.cursor = "pointer";
 
@@ -11118,18 +11118,41 @@ function pintarBarraDRE(d) {
   // é despesa. Deixá-la viraria uma linha medindo outra régua.
   document.getElementById("sd-limite").style.display = "none";
 
-  document.getElementById("sd-legenda").innerHTML = dre.grupos.map(function (g) {
-    return '<button type="button" class="sd-linha abre" onclick="abrirDRE(\'' +
-      escaparHtml(g.chave) + '\')">' +
-      '<span class="sd-ponto" style="background:' + escaparHtml(g.cor) + '"></span>' +
-      '<span class="sd-nome">' + rotuloDRE(g.chave, g.nome) + '</span>' +
+  // SÓ OS MAIORES na legenda do card. Onze linhas embaixo de um card é uma
+  // parede: quem olha quer saber para onde foi a maior parte, e a cauda de
+  // grupos abaixo de 1% não responde isso -- ela só empurra o resto do
+  // dashboard para baixo. A lista inteira continua a um toque, na folha.
+  const TETO_LEGENDA = 6;
+  const visiveis = dre.grupos.slice(0, TETO_LEGENDA);
+  const resto = dre.grupos.slice(TETO_LEGENDA);
+
+  const linhaDRE = function (cor, rotulo, valor, pct, acao) {
+    return '<button type="button" onclick="' + acao + '">' +
+      '<span class="sd-ponto" style="background:' + cor + '"></span>' +
+      '<span class="dre-leg-nome">' + rotulo + '</span>' +
       // Sempre com a porcentagem: no modo DRE ela é a informação, não um
       // extra que se revela tocando. "R$ 392,09" não diz nada sozinho;
       // "65% de tudo que saiu" diz.
-      '<span class="sd-num">' + formatarMoeda(g.valor) +
-      ' <i style="font-style:normal; color:var(--fraco)">' + pctBR(g.pct) + '%</i></span>' +
+      '<span class="dre-leg-val">' + formatarMoeda(valor) + '</span>' +
+      '<span class="dre-leg-pct">' + pctBR(pct) + '%</span>' +
       '<span class="sd-seta">&#8250;</span></button>';
+  };
+
+  let legenda = visiveis.map(function (g) {
+    return linhaDRE(escaparHtml(g.cor), rotuloDRE(g.chave, g.nome),
+                    g.valor, g.pct, "abrirDRE('" + escaparHtml(g.chave) + "')");
   }).join("");
+
+  if (resto.length) {
+    const somaResto = resto.reduce(function (a, g) { return a + g.valor; }, 0);
+    const pctResto = resto.reduce(function (a, g) { return a + g.pct; }, 0);
+    legenda += linhaDRE("var(--fraco-2)",
+      '+ ' + resto.length + ' grupos menores', somaResto, pctResto, "abrirDRE()");
+  }
+
+  const elLeg = document.getElementById("sd-legenda");
+  elLeg.classList.add("dre-legenda");
+  elLeg.innerHTML = legenda;
 
   return true;
 }
@@ -11216,6 +11239,13 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
   // Modo DRE desenha a mesma barra respondendo outra pergunta. Se não houver
   // o que repartir, cai no normal em vez de mostrar uma barra vazia.
   if (modoDRE && temDRE && pintarBarraDRE(d)) return;
+
+  // Voltou ao normal: as classes do DRE saem. Elas mudam grade e
+  // arredondamento, e deixadas para trás a barra comum herdaria a aparência
+  // do outro modo -- defeito que só apareceria ao desligar, e portanto o
+  // último a ser notado.
+  document.getElementById("sd-barra").classList.remove("dre");
+  document.getElementById("sd-legenda").classList.remove("dre-legenda");
 
   document.getElementById("sd-barra-rotulo").textContent =
     supondo ? "PARA ONDE IRIA" : "PARA ONDE VAI";
