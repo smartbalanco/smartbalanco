@@ -5630,6 +5630,49 @@ async function salvarLimiteApp() {
   }
 }
 
+/**
+ * As quatro cores da barra do primeiro card, na mesma roda do grupo.
+ *
+ * As cores vivas do app entram como ponto de partida quando não há escolha
+ * guardada: a roda precisa de um lugar para a bolinha, e começar tudo no
+ * centro faria parecer que nada está definido.
+ */
+const CORES_BARRA_PADRAO = { pago: "#2b6cb0", pendente: "#c2703d",
+                             fixas: "#c2703d", sobra: "#3f7a4e" };
+
+function montarRodaDasCoresDaBarra() {
+  if (!document.getElementById("cb-roda")) return;
+  const C = (dashboardAtual && dashboardAtual.coresBarra) || {};
+
+  montarRodaDeCor({
+    ids: { alvos: "cb-alvos", roda: "cb-roda", knob: "cb-knob",
+           escuro: "cb-roda-escuro", brilho: "cb-brilho" },
+    alvos: [
+      { chave: "pago",     rotulo: "Já pago",   cor: C.pago     || CORES_BARRA_PADRAO.pago },
+      { chave: "pendente", rotulo: "A pagar",   cor: C.pendente || CORES_BARRA_PADRAO.pendente },
+      { chave: "fixas",    rotulo: "Fixas",     cor: C.fixas    || CORES_BARRA_PADRAO.fixas },
+      { chave: "sobra",    rotulo: "Sobra",     cor: C.sobra    || CORES_BARRA_PADRAO.sobra }
+    ]
+  });
+}
+
+async function salvarCoresDaBarraApp() {
+  if (!roda) return;
+  const params = {};
+  roda.alvos.forEach(function (a) { params[a.chave] = a.cor || ""; });
+
+  try {
+    const r = await chamarServidor("salvarCoresDaBarra", params);
+    if (!r || !r.ok) { alert((r && r.mensagem) || "Não deu para salvar."); return; }
+    mostrarToast("✅ " + r.mensagem);
+    esquecerDominio("config");
+    esquecerDominio("transacoes");   // as cores viajam dentro do dashboard
+    await recarregarDados();
+  } catch (e) {
+    alert("Falhou: " + (e.message || "sem conexão"));
+  }
+}
+
 async function salvarCartaoValeApp() {
   const campo = document.getElementById("cfg-cartao-vale");
   try {
@@ -5658,6 +5701,11 @@ function contarCategorias() {
  * fica com a descrição, e ganha o número quando a sub-tela abrir.
  */
 function pintarDicasDeConfig() {
+  // A roda das cores é montada toda vez que Configurações abre: ela guarda o
+  // estado em `roda`, que o formulário de grupo também usa. Montar uma só vez,
+  // no início, faria a segunda tela encontrar os alvos da primeira.
+  montarRodaDasCoresDaBarra();
+
   function por(id, texto) {
     const el = document.getElementById(id);
     if (el && texto) el.textContent = texto;
@@ -11257,19 +11305,28 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
   const teto = Math.max(receita, pagas + pendentes + previstas, 1);
   const pct = function (v) { return Math.max(0, (v / teto) * 100); };
 
+  // A cor escolhida vence a de estado; vazia, fica a de sempre. O padrão é a
+  // AUSÊNCIA de valor guardado, e não um valor igual ao padrão -- assim não
+  // existe "restaurar", basta apagar.
+  const C = d.coresBarra || {};
+  const cPago = C.pago || "var(--azul)";
+  const cPend = C.pendente || "var(--laranja)";
+  const cFixas = C.fixas || "var(--laranja)";
+  const cSobra = C.sobra || "var(--verde)";
+
   const faixas = [];
-  if (pagas > 0) faixas.push('<span style="width:' + pct(pagas) + '%; background:var(--azul)"></span>');
-  if (pendentes > 0) faixas.push('<span style="width:' + pct(pendentes) + '%; background:var(--laranja)"></span>');
+  if (pagas > 0) faixas.push('<span style="width:' + pct(pagas) + '%; background:' + cPago + '"></span>');
+  if (pendentes > 0) faixas.push('<span style="width:' + pct(pendentes) + '%; background:' + cPend + '"></span>');
 
   // Listrada, não chapada: é a mesma marca que a Projeção Futura usa para o
   // que ainda não virou lançamento. Cor sozinha diria que já aconteceu.
   if (previstas > 0) {
     faixas.push('<span style="width:' + pct(previstas) + '%; ' +
-      'background: repeating-linear-gradient(45deg, var(--laranja) 0 3px, transparent 3px 6px); ' +
+      'background: repeating-linear-gradient(45deg, ' + cFixas + ' 0 3px, transparent 3px 6px); ' +
       'background-color: rgba(249, 115, 22, .18)"></span>');
   }
 
-  if (sobra > 0) faixas.push('<span style="flex-grow:1; background:var(--verde)"></span>');
+  if (sobra > 0) faixas.push('<span style="flex-grow:1; background:' + cSobra + '"></span>');
   document.getElementById("sd-barra").innerHTML = faixas.join("") + marcaDoLimite(d, teto);
 
   // A barra inteira é o alvo: tocar nela troca valor por valor + porcentagem.
@@ -11290,16 +11347,16 @@ function pintarBarraDoSaldo(d, s, ds, supondo, receita, sobra, fixas) {
       conteudo + '<span class="sd-seta">&#8250;</span></button>';
   };
 
-  const listrado = "repeating-linear-gradient(45deg, var(--laranja) 0 2px, transparent 2px 4px)";
+  const listrado = "repeating-linear-gradient(45deg, " + cFixas + " 0 2px, transparent 2px 4px)";
 
   document.getElementById("sd-legenda").innerHTML =
-    linha("var(--azul)", "já pago", pagas, null,
+    linha(cPago, "já pago", pagas, null,
           pagas > 0 ? "abrirFatia('pago')" : null, teto) +
-    linha("var(--laranja)", "a pagar ainda", pendentes, null,
+    linha(cPend, "a pagar ainda", pendentes, null,
           pendentes > 0 ? "abrirFatia('pendente')" : null, teto) +
     (previstas > 0 ? linha(listrado, "fixas ainda não lançadas", previstas, null, "abrirFatia('fixas')", teto) : "") +
     (sobra >= 0
-      ? linha("var(--verde)", supondo ? "sobraria" : "sobra", sobra, "var(--verde)", null, teto)
+      ? linha(cSobra, supondo ? "sobraria" : "sobra", sobra, cSobra, null, teto)
       : linha("var(--vermelho)", "falta", Math.abs(sobra), "var(--vermelho)", null, teto));
 
   pintarLinhaDoLimite(d);
@@ -11425,6 +11482,26 @@ async function abrirAjusteDoLimite() {
   }
 }
 
+/**
+ * A barra dos grupos sem o "sem grupo".
+ *
+ * Com metade do mês fora de qualquer combinado, a fatia branca domina e as
+ * outras viram tiras finas -- a barra deixa de responder "como se repartiu o
+ * que ESTÁ combinado", que é a pergunta de quem já organizou os grupos.
+ *
+ * É um modo, não um conserto: desligado, a barra volta a mostrar o mês
+ * inteiro. Esconder o não classificado por padrão seria esconder o trabalho
+ * que falta fazer.
+ */
+let soComGrupo = false;
+try { soComGrupo = localStorage.getItem("sb_so_com_grupo") === "1"; } catch (e) {}
+
+function alternarSoComGrupo() {
+  soComGrupo = !soComGrupo;
+  try { localStorage.setItem("sb_so_com_grupo", soComGrupo ? "1" : "0"); } catch (e) {}
+  if (dashboardAtual) preencherDashboard(dashboardAtual);
+}
+
 function pintarBarraDosGrupos(d) {
   const barra = document.getElementById("bg-bloco");
   if (!barra) return;
@@ -11432,8 +11509,24 @@ function pintarBarraDosGrupos(d) {
   const grupos = (d.gruposDeSaldo || []).filter(function (g) {
     return !g.antesDaOrigem && g.gasto > 0;
   });
-  const semGrupo = Math.max(0, d.despesaSemGrupo || 0);
+
+  // Ligado, o "sem grupo" sai da barra E da base da porcentagem: deixá-lo na
+  // base faria as fatias somarem menos de 100% e sobrar um vão sem dono.
+  const semGrupoReal = Math.max(0, d.despesaSemGrupo || 0);
+  const semGrupo = soComGrupo ? 0 : semGrupoReal;
   const total = grupos.reduce(function (acc, g) { return acc + g.gasto; }, 0) + semGrupo;
+
+  const btModo = document.getElementById("bg-modo");
+  if (btModo) {
+    // Sem nada fora de combinado, os dois modos mostram a mesma barra: o botão
+    // sumiria de nada.
+    btModo.style.display = semGrupoReal > 0 ? "" : "none";
+    btModo.classList.toggle("ligado", soComGrupo);
+  }
+  const elRot = document.getElementById("bg-rot");
+  if (elRot) {
+    elRot.textContent = soComGrupo ? "Onde o gasto combinado caiu" : "Onde o gasto caiu";
+  }
 
   if (total <= 0) { barra.style.display = "none"; return; }
   barra.style.display = "block";
@@ -11479,10 +11572,18 @@ function pintarBarraDosGrupos(d) {
   }
   document.getElementById("bg-legenda").innerHTML = legenda;
 
-  const fora = total > 0 ? Math.round((semGrupo / total) * 100) : 0;
-  document.getElementById("bg-nota").innerHTML = semGrupo > 0
-    ? fora + "% do que saiu está fora de qualquer combinado. Toque em " +
-      "<b>sem grupo</b> para classificar."
+  // A nota fala do MÊS, não da barra. Com o modo ligado, semGrupo é zero e a
+  // conta sobre ele diria "todo o gasto está combinado" -- exatamente a
+  // mentira que o modo poderia contar, já que ele esconde o que falta.
+  const totalDoMes = grupos.reduce(function (acc, g) { return acc + g.gasto; }, 0) + semGrupoReal;
+  const fora = totalDoMes > 0 ? Math.round((semGrupoReal / totalDoMes) * 100) : 0;
+
+  document.getElementById("bg-nota").innerHTML = semGrupoReal > 0
+    ? (soComGrupo
+        ? "Fora da barra: " + fora + "% do mês (" + formatarMoeda(semGrupoReal) +
+          ") está fora de qualquer combinado."
+        : fora + "% do que saiu está fora de qualquer combinado. Toque em " +
+          "<b>sem grupo</b> para classificar.")
     : "Todo o gasto do mês está dentro de um combinado.";
 }
 
@@ -12130,9 +12231,6 @@ let corBordaGrupoEscolhida = "";
  * Uma roda só para as duas cores, com o alvo sempre à vista nos botões de
  * cima. Duas rodas empilhadas passariam de 400px num formulário que já rola.
  */
-let alvoDeCor = "cor";          // "cor" (preenchimento) ou "borda"
-let brilhoDaRoda = 70;
-
 function hsvParaHex(h, s, v) {
   h = ((h % 360) + 360) % 360;
   const c = v * s;
@@ -12167,23 +12265,67 @@ function hexParaHsv(hex) {
   return { h: ((h % 360) + 360) % 360, s: mx ? d / mx : 0, v: mx };
 }
 
+/**
+ * A roda deixou de ser só do formulário de grupo.
+ *
+ * Ela guarda uma LISTA DE ALVOS -- cada um com rótulo, a cor atual e o que
+ * fazer quando mudar -- e os ids dos elementos que vai usar. Assim a mesma
+ * roda serve o formulário de grupo (preenchimento e contorno) e as cores da
+ * barra do primeiro card (pago, a pagar, fixas, sobra), sem uma segunda
+ * implementação que divergiria da primeira na próxima correção.
+ */
+let roda = null;   // { ids, alvos: [{chave, rotulo, cor}], atual, brilho }
+
+function montarRodaDeCor(cfg) {
+  roda = {
+    ids: cfg.ids,
+    alvos: cfg.alvos.map(function (a) { return { chave: a.chave, rotulo: a.rotulo, cor: a.cor || "" }; }),
+    aoMudar: cfg.aoMudar || function () {},
+    atual: 0,
+    brilho: 70
+  };
+
+  const barra = document.getElementById(roda.ids.alvos);
+  if (barra) {
+    barra.innerHTML = roda.alvos.map(function (a, k) {
+      return '<button type="button" class="gf-alvo' + (k === 0 ? ' ativo' : '') +
+        '" data-k="' + k + '">' +
+        '<span class="gf-alvo-amostra"></span>' + escaparHtml(a.rotulo) + '</button>';
+    }).join("");
+    Array.prototype.forEach.call(barra.querySelectorAll(".gf-alvo"), function (b) {
+      b.onclick = function () { escolherAlvoDeCor(parseInt(b.getAttribute("data-k"))); };
+    });
+  }
+
+  pintarAmostrasDeCor();
+  ligarRodaDeCor();
+  // Depois que o container aparece: a roda é medida por offsetWidth, e com ele
+  // ainda escondido isso é zero -- a bolinha iria toda para o canto. Mesmo
+  // tropeço do seletor de tema, que já custou uma correção.
+  setTimeout(posicionarKnob, 0);
+}
+
 /** A cor do alvo que está sendo editado agora. */
 function corDoAlvo() {
-  return alvoDeCor === "borda" ? corBordaGrupoEscolhida : corGrupoEscolhida;
+  return (roda && roda.alvos[roda.atual]) ? roda.alvos[roda.atual].cor : "";
 }
 
 function definirCorDoAlvo(hex) {
-  if (alvoDeCor === "borda") corBordaGrupoEscolhida = hex;
-  else corGrupoEscolhida = hex;
+  if (!roda || !roda.alvos[roda.atual]) return;
+  roda.alvos[roda.atual].cor = hex;
   pintarAmostrasDeCor();
+  roda.aoMudar(roda.alvos[roda.atual].chave, hex, roda.alvos);
 }
 
-function escolherAlvoDeCor(qual) {
-  alvoDeCor = qual;
-  const a = document.getElementById("gf-alvo-cor");
-  const b = document.getElementById("gf-alvo-borda");
-  if (a) a.classList.toggle("ativo", qual === "cor");
-  if (b) b.classList.toggle("ativo", qual === "borda");
+function escolherAlvoDeCor(k) {
+  if (!roda) return;
+  roda.atual = k;
+  const barra = document.getElementById(roda.ids.alvos);
+  if (barra) {
+    Array.prototype.forEach.call(barra.querySelectorAll(".gf-alvo"), function (b, idx) {
+      b.classList.toggle("ativo", idx === k);
+    });
+  }
   posicionarKnob();
 }
 
@@ -12193,10 +12335,12 @@ function limparCorDoAlvo() {
 }
 
 function pintarAmostrasDeCor() {
-  const am = { cor: document.getElementById("gf-amostra-cor"),
-               borda: document.getElementById("gf-amostra-borda") };
-  if (am.cor) am.cor.style.background = corGrupoEscolhida || "var(--cinza-fundo)";
-  if (am.borda) am.borda.style.background = corBordaGrupoEscolhida || "var(--cinza-fundo)";
+  if (!roda) return;
+  const barra = document.getElementById(roda.ids.alvos);
+  if (!barra) return;
+  Array.prototype.forEach.call(barra.querySelectorAll(".gf-alvo-amostra"), function (el, k) {
+    el.style.background = (roda.alvos[k] && roda.alvos[k].cor) || "var(--cinza-fundo)";
+  });
 }
 
 /**
@@ -12207,26 +12351,27 @@ function pintarAmostrasDeCor() {
  * travou.
  */
 function posicionarKnob() {
-  const roda = document.getElementById("gf-roda");
-  const knob = document.getElementById("gf-knob");
-  const escuro = document.getElementById("gf-roda-escuro");
-  if (!roda || !knob) return;
+  if (!roda) return;
+  const el = document.getElementById(roda.ids.roda);
+  const knob = document.getElementById(roda.ids.knob);
+  const escuro = document.getElementById(roda.ids.escuro);
+  if (!el || !knob) return;
 
   const hsv = hexParaHsv(corDoAlvo());
-  const raio = roda.offsetWidth / 2;
+  const raio = el.offsetWidth / 2;
 
   if (hsv) {
-    brilhoDaRoda = Math.max(12, Math.round(hsv.v * 100));
-    const faixa = document.getElementById("gf-brilho");
-    if (faixa) faixa.value = brilhoDaRoda;
+    roda.brilho = Math.max(12, Math.round(hsv.v * 100));
+    const faixa = document.getElementById(roda.ids.brilho);
+    if (faixa) faixa.value = roda.brilho;
 
     // O mesmo ângulo do conic-gradient: começa no topo e anda no sentido
     // horário. Medir a partir da direita, como atan2 faz por padrão,
     // deixaria a bolinha 90° fora da cor que ela representa.
     const rad = (hsv.h * Math.PI) / 180;
-    const d = hsv.s * raio;
-    knob.style.left = (raio + Math.sin(rad) * d) + "px";
-    knob.style.top = (raio - Math.cos(rad) * d) + "px";
+    const dist = hsv.s * raio;
+    knob.style.left = (raio + Math.sin(rad) * dist) + "px";
+    knob.style.top = (raio - Math.cos(rad) * dist) + "px";
     knob.style.background = corDoAlvo();
   } else {
     knob.style.left = raio + "px";
@@ -12234,25 +12379,29 @@ function posicionarKnob() {
     knob.style.background = "transparent";
   }
 
-  if (escuro) escuro.style.opacity = String(1 - brilhoDaRoda / 100);
+  if (escuro) escuro.style.opacity = String(1 - roda.brilho / 100);
 }
 
 function corDaPosicao(ev) {
-  const roda = document.getElementById("gf-roda");
-  const r = roda.getBoundingClientRect();
+  const el = document.getElementById(roda.ids.roda);
+  const r = el.getBoundingClientRect();
   const raio = r.width / 2;
+
+  // Roda sem tamanho (tela ainda escondida, animação em curso): dividir pelo
+  // raio zero dá NaN, e o NaN viraria "#NaNNaNNaN" gravado como cor. Melhor
+  // ignorar o toque do que gravar lixo que só aparece na próxima abertura.
+  if (!(raio > 0)) return null;
   const dx = ev.clientX - (r.left + raio);
   const dy = ev.clientY - (r.top + raio);
 
-  const dist = Math.sqrt(dx * dx + dy * dy);
   // Arrastar para FORA da roda não cancela: gruda na borda. Soltar a cor
   // porque o dedo passou da linha é o jeito mais fácil de perder a escolha.
-  const sat = Math.min(1, dist / raio);
+  const sat = Math.min(1, Math.sqrt(dx * dx + dy * dy) / raio);
 
   let ang = (Math.atan2(dx, -dy) * 180) / Math.PI;
   if (ang < 0) ang += 360;
 
-  return hsvParaHex(ang, sat, brilhoDaRoda / 100);
+  return hsvParaHex(ang, sat, roda.brilho / 100);
 }
 
 /**
@@ -12260,41 +12409,42 @@ function corDaPosicao(ev) {
  * navegador decide que não foi rolagem -- o primeiro arrasto sairia perdido.
  */
 function ligarRodaDeCor() {
-  const roda = document.getElementById("gf-roda");
-  const faixa = document.getElementById("gf-brilho");
-  if (!roda || roda._ligada) return;
-  roda._ligada = true;
+  const el = document.getElementById(roda.ids.roda);
+  const faixa = document.getElementById(roda.ids.brilho);
+  if (!el || el._ligada) return;
+  el._ligada = true;
 
   let arrastando = false;
-
   const aplicar = function (ev) {
-    definirCorDoAlvo(corDaPosicao(ev));
+    const hex = corDaPosicao(ev);
+    if (!hex) return;
+    definirCorDoAlvo(hex);
     posicionarKnob();
   };
 
-  roda.addEventListener("pointerdown", function (ev) {
+  el.addEventListener("pointerdown", function (ev) {
     arrastando = true;
-    roda.setPointerCapture(ev.pointerId);
+    el.setPointerCapture(ev.pointerId);
     aplicar(ev);
     ev.preventDefault();
   });
-  roda.addEventListener("pointermove", function (ev) {
+  el.addEventListener("pointermove", function (ev) {
     if (arrastando) { aplicar(ev); ev.preventDefault(); }
   });
   const soltar = function (ev) {
     arrastando = false;
-    try { roda.releasePointerCapture(ev.pointerId); } catch (e) {}
+    try { el.releasePointerCapture(ev.pointerId); } catch (e) {}
   };
-  roda.addEventListener("pointerup", soltar);
-  roda.addEventListener("pointercancel", soltar);
+  el.addEventListener("pointerup", soltar);
+  el.addEventListener("pointercancel", soltar);
 
   if (faixa) {
     faixa.addEventListener("input", function () {
-      brilhoDaRoda = parseInt(faixa.value) || 70;
+      roda.brilho = parseInt(faixa.value) || 70;
       // Mexer no brilho sem cor escolhida não inventa uma: só a roda escurece,
       // e a escolha continua sendo "sem cor" até você tocar nela.
       const hsv = hexParaHsv(corDoAlvo());
-      if (hsv) definirCorDoAlvo(hsvParaHex(hsv.h, hsv.s, brilhoDaRoda / 100));
+      if (hsv) definirCorDoAlvo(hsvParaHex(hsv.h, hsv.s, roda.brilho / 100));
       posicionarKnob();
     });
   }
@@ -12306,14 +12456,16 @@ function abrirFormGrupo(i) {
 
   corGrupoEscolhida = g ? (g.cor || "") : "";
   corBordaGrupoEscolhida = g ? (g.corBorda || "") : "";
-  alvoDeCor = "cor";
-  escolherAlvoDeCor("cor");
-  pintarAmostrasDeCor();
-  ligarRodaDeCor();
-  // Depois que o modal aparece: a roda é medida por offsetWidth, e com o
-  // formulário ainda escondido isso é zero -- a bolinha iria toda para o
-  // canto. Mesmo tropeço do seletor de tema, que já custou uma correção.
-  setTimeout(posicionarKnob, 0);
+
+  montarRodaDeCor({
+    ids: { alvos: "gf-alvos", roda: "gf-roda", knob: "gf-knob",
+           escuro: "gf-roda-escuro", brilho: "gf-brilho" },
+    alvos: [{ chave: "cor", rotulo: "Preenchimento", cor: corGrupoEscolhida },
+            { chave: "borda", rotulo: "Contorno", cor: corBordaGrupoEscolhida }],
+    aoMudar: function (chave, hex) {
+      if (chave === "borda") corBordaGrupoEscolhida = hex; else corGrupoEscolhida = hex;
+    }
+  });
 
   document.getElementById("gf-titulo").textContent = g ? "Editar grupo" : "Novo grupo";
   document.getElementById("gf-nome").value = g ? g.nome : "";

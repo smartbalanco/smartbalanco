@@ -2790,6 +2790,10 @@
       display: flex; align-items: baseline; justify-content: space-between;
       margin: 18px 0 9px; padding-top: 14px; border-top: 1px solid var(--borda);
     }
+    /* O rótulo empurra o botão, e o total continua colado na direita -- sem
+       isso o total andaria conforme o texto do botão mudasse de tamanho. */
+    .bg-topo > .bg-rot { margin-right: auto; }
+    .bg-topo > .sd-modo { position: static; margin: 0 9px; align-self: center; }
     .bg-rot {
       font-size: 10px; font-weight: 800; letter-spacing: 1px;
       text-transform: uppercase; color: var(--cinza-texto);
@@ -4472,7 +4476,8 @@
         <!-- Onde o gasto do mês caiu, repartido pelos combinados. -->
         <div id="bg-bloco" style="display:none;">
           <div class="bg-topo">
-            <span class="bg-rot">Onde o gasto caiu</span>
+            <span class="bg-rot" id="bg-rot">Onde o gasto caiu</span>
+            <button class="sd-modo" id="bg-modo" onclick="alternarSoComGrupo()">só com grupo</button>
             <span class="bg-total" id="bg-total"></span>
           </div>
           <div class="bg-barra" id="bg-barra"></div>
@@ -6117,6 +6122,26 @@
             </div>
           </div>
 
+          <div class="cfg-rot">Cores da barra do saldo</div>
+          <div class="cfg-cx" style="padding:14px;">
+            <div class="gf-alvos" id="cb-alvos"></div>
+            <div class="gf-roda-area">
+              <div class="gf-roda" id="cb-roda">
+                <div class="gf-roda-escuro" id="cb-roda-escuro"></div>
+                <div class="gf-knob" id="cb-knob"></div>
+              </div>
+            </div>
+            <label class="gf-cor-rot" for="cb-brilho" style="margin-top:10px;">Brilho</label>
+            <input type="range" id="cb-brilho" class="gf-brilho" min="12" max="100" value="70" />
+            <button type="button" class="gf-sem-cor" onclick="limparCorDoAlvo()">voltar esta ao padrão</button>
+            <button class="pc-btn" style="width:100%; margin-top:12px;"
+                    onclick="salvarCoresDaBarraApp()">Salvar cores</button>
+            <div class="cfg-aviso" style="margin-top:9px;">
+              A legenda mostra a bolinha ao lado de cada nome, então a cor não precisa
+              ser decorada — mas vale manter as quatro distintas entre si.
+            </div>
+          </div>
+
           <div class="cfg-rot">Aplicativo</div>
           <div class="cfg-cx" id="cfg-versao"></div>
 
@@ -6792,16 +6817,7 @@
         <!-- QUAL das duas cores está sendo escolhida fica sempre à vista, com
              a amostra dentro do próprio botão: uma roda só, mas sem modo
              invisível — você vê o que está mexendo e como está o outro. -->
-        <div class="gf-alvos">
-          <button type="button" class="gf-alvo ativo" id="gf-alvo-cor"
-                  onclick="escolherAlvoDeCor('cor')">
-            <span class="gf-alvo-amostra" id="gf-amostra-cor"></span>Preenchimento
-          </button>
-          <button type="button" class="gf-alvo" id="gf-alvo-borda"
-                  onclick="escolherAlvoDeCor('borda')">
-            <span class="gf-alvo-amostra" id="gf-amostra-borda"></span>Contorno
-          </button>
-        </div>
+        <div class="gf-alvos" id="gf-alvos"></div>
 
         <div class="gf-roda-area">
           <div class="gf-roda" id="gf-roda">
@@ -6856,7 +6872,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=128"></script>
+  <script src="app.js?v=129"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
