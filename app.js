@@ -12518,7 +12518,7 @@ function abrirFormGrupo(i) {
   const campoAporte = document.getElementById("gf-aporte");
   campoAporte.disabled = !!g;
   document.getElementById("gf-dica-aporte").textContent = g
-    ? "Para mudar o valor, use o lápis no card do dashboard — ele registra desde quando o novo vale."
+    ? "Para mudar o valor — ou tirar o limite — use o lápis no card do dashboard. Ele registra desde quando o novo vale, e os meses anteriores ficam como foram."
     : "Depois de criado, o valor só muda pelo lápis no card, e só no mês corrente.";
 
   catsGrupo = g ? (g.categorias || []).slice() : [];
@@ -12679,6 +12679,12 @@ function pintarGruposDeSaldo(d) {
             '<span class="gs-nome">' + escaparHtml(g.nome) + '</span>' +
             '<span class="gs-num">' + formatarMoeda(g.gasto) + '</span>' +
             '<span class="gs-de">sem limite</span>' +
+            // O lápis FICA: é por ele que se põe um teto de volta. Sem ele, a
+            // conversão seria de mão única e só se desfaria na planilha.
+            (g.editavel
+              ? '<button class="gs-editar" aria-label="Pôr um limite em ' + escaparHtml(g.nome) +
+                '" onclick="mudarAporteDoGrupo(' + i + ')">&#9998;</button>'
+              : '') +
           '</div>' +
         '</div>';
     }
