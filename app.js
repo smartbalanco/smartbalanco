@@ -12450,9 +12450,50 @@ function ligarRodaDeCor() {
   }
 }
 
+/**
+ * "Sem limite" esconde o valor E as duas regras que dependem dele.
+ *
+ * Acumular o que sobrou e corrigir pela inflação são regras SOBRE o teto:
+ * sem teto, não sobra nada para passar adiante nem valor para corrigir.
+ * Deixá-las marcadas e sem efeito seria mentir sobre o que o grupo faz.
+ */
+function aplicarSemLimite() {
+  const sem = document.getElementById("gf-sem-limite");
+  const ligado = !!(sem && sem.checked);
+
+  const campo = document.getElementById("gf-aporte");
+  if (campo) campo.parentElement.querySelector("label[for='gf-aporte']").style.display = ligado ? "none" : "";
+  if (campo) campo.style.display = ligado ? "none" : "";
+
+  const dica = document.getElementById("gf-dica-aporte");
+  if (dica) {
+    dica.textContent = ligado
+      ? "O grupo aparece no gráfico e soma o gasto do mês, mas não tem teto para estourar."
+      : "Depois de criado, o valor só muda pelo lápis no card — e só no mês corrente.";
+  }
+
+  ["gf-acumula", "gf-corrige"].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = ligado;
+    if (ligado) el.checked = false;
+    if (el.parentElement) el.parentElement.style.opacity = ligado ? ".45" : "";
+  });
+}
+
 function abrirFormGrupo(i) {
   const g = (i === null || i === undefined) ? null : gruposCompletos[i];
   grupoDeSaldoEditando = g;
+
+  const semLim = document.getElementById("gf-sem-limite");
+  if (semLim) {
+    // Grupo já criado tem o aporte travado, então a caixa só é editável ao
+    // CRIAR -- mudar "tem teto" depois reescreveria meses fechados.
+    semLim.checked = g ? !!g.semLimite : false;
+    semLim.disabled = !!g;
+    if (semLim.parentElement) semLim.parentElement.style.opacity = g ? ".45" : "";
+  }
+  aplicarSemLimite();
 
   corGrupoEscolhida = g ? (g.cor || "") : "";
   corBordaGrupoEscolhida = g ? (g.corBorda || "") : "";
@@ -12523,7 +12564,13 @@ async function salvarGrupoNaTela() {
 
   const novo = !grupoDeSaldoEditando;
   const aporte = document.getElementById("gf-aporte").value;
-  if (novo && !(parseFloat(aporte) >= 0)) return erro("Informe o valor mensal.");
+  const semLimite = document.getElementById("gf-sem-limite").checked;
+  // Sem limite não pede valor -- e passou a exigir MAIOR que zero quando há
+  // limite: antes um "0" digitado passava e criava um grupo que estourava no
+  // primeiro gasto, sem ninguém ter pedido teto nenhum.
+  if (novo && !semLimite && !(parseFloat(aporte) > 0)) {
+    return erro("Informe o valor mensal, ou marque que o grupo não tem limite.");
+  }
 
   // Uma categoria em dois grupos é ambígua: o primeiro da lista ganharia, e
   // ninguém adivinha qual é o primeiro. Avisa antes de gravar.
@@ -12550,6 +12597,7 @@ async function salvarGrupoNaTela() {
       // Sempre enviadas, inclusive vazias: o servidor só grava a coluna quando
       // o campo vem definido, então omitir seria o jeito de nunca conseguir
       // APAGAR uma cor depois de escolhida.
+      semLimite: document.getElementById("gf-sem-limite").checked ? "sim" : "não",
       cor: corGrupoEscolhida,
       corBorda: corBordaGrupoEscolhida
     });
@@ -12619,6 +12667,20 @@ function pintarGruposDeSaldo(d) {
     } else if (g.acumulado < 0) {
       nota = '<div class="gs-nota">Já entrou devendo <b>' +
              formatarMoeda(Math.abs(g.acumulado)) + '</b> do mês passado.</div>';
+    }
+
+    // SEM LIMITE: o que importa é quanto saiu, e não quanto sobra de um
+    // teto que não existe. Barra, "de X" e a cor de estouro saem da tela --
+    // régua sem medida não mede nada, e pintar vermelho um grupo sem teto
+    // seria acusar um estouro impossível.
+    if (g.semLimite) {
+      return '<div class="gs-item">' +
+          '<div class="gs-topo">' +
+            '<span class="gs-nome">' + escaparHtml(g.nome) + '</span>' +
+            '<span class="gs-num">' + formatarMoeda(g.gasto) + '</span>' +
+            '<span class="gs-de">sem limite</span>' +
+          '</div>' +
+        '</div>';
     }
 
     return '<div class="gs-item">' +

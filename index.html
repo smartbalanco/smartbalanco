@@ -6791,6 +6791,10 @@
       </div>
 
       <div class="campo-bloco" id="gf-bloco-aporte">
+        <label class="gf-check" style="margin-bottom:10px;">
+          <input type="checkbox" id="gf-sem-limite" onchange="aplicarSemLimite()" />
+          <span>Sem limite — só acompanhar o gasto</span>
+        </label>
         <label for="gf-aporte">Valor mensal (R$)</label>
         <input type="number" id="gf-aporte" step="0.01" inputmode="decimal" placeholder="150,00" />
         <div class="gf-dica" id="gf-dica-aporte">Depois de criado, o valor só muda pelo lápis no card — e só no mês corrente.</div>
@@ -6872,7 +6876,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=129"></script>
+  <script src="app.js?v=130"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
