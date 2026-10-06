@@ -11605,6 +11605,51 @@ function pintarFatia(itens, saoPrevistas) {
 }
 
 /** Abre a ficha do lançamento pela tela de Lançamentos, que é onde ela mora. */
+// ============================================================================
+// PAGAR SÓ UMA PARTE
+// ----------------------------------------------------------------------------
+// A parcela é DIVIDIDA em duas linhas no servidor (ver 66-PagamentoParcial.js);
+// aqui só se pergunta quanto e quando, e se mostra o resultado ANTES de
+// gravar. Dividir é escrever no histórico: o mesmo cuidado do botão de
+// corrigir vencimento, que só não destruiu um parcelamento porque simulava.
+// ============================================================================
+async function abrirPagamentoParcial(numMov, valorAberto) {
+  const bruto = prompt(
+    "Quanto você pagou desta parcela?\n\n" +
+    "Em aberto: " + formatarMoeda(valorAberto) + "\n" +
+    "O resto continua em aberto, no mesmo vencimento.", "");
+  if (bruto === null) return;
+
+  const valor = parseFloat(String(bruto).replace(/\./g, "").replace(",", "."));
+  if (!(valor > 0)) { mostrarToast("⚠️ Valor inválido."); return; }
+
+  const hoje = new Date();
+  const iso = hoje.getFullYear() + "-" +
+    ("0" + (hoje.getMonth() + 1)).slice(-2) + "-" + ("0" + hoje.getDate()).slice(-2);
+  const quando = prompt("Em que dia você pagou? (AAAA-MM-DD)", iso);
+  if (quando === null) return;
+
+  try {
+    const sim = await chamarServidor("pagarParteDaParcela",
+      { numMov: numMov, valorPago: valor, dataPagamento: quando, simular: "true" });
+
+    if (!sim || !sim.ok) { alert((sim && sim.mensagem) || "Não deu para simular."); return; }
+    if (!confirm(sim.mensagem + "\n\nConfirma?")) return;
+
+    const r = await chamarServidor("pagarParteDaParcela",
+      { numMov: numMov, valorPago: valor, dataPagamento: quando, simular: "false" });
+
+    if (!r || !r.ok) { alert((r && r.mensagem) || "Não deu para gravar."); return; }
+
+    mostrarToast("✅ " + r.mensagem);
+    fecharDetalhe();
+    limparTodoCache();
+    await recarregarDados();
+  } catch (e) {
+    alert("Falhou: " + (e.message || "sem conexão"));
+  }
+}
+
 async function abrirFichaPorMov(numMov) {
   trocarAba("busca");
 
@@ -15763,7 +15808,12 @@ function abrirDetalheBusca(idx) {
     (!it.pago && it.tipo === "despesa"
       ? '<button class="det-btn liquidar" onclick="fecharDetalhe(); abrirLiquidacao(' + it.numMov + ');">' +
           'Liquidar esta despesa' +
-        '</button>'
+        '</button>' +
+        // Pagar parte fica ABAIXO de liquidar e com menos peso: o caso comum é
+        // pagar tudo, e o parcial é a exceção. Invertido, a exceção viraria a
+        // primeira coisa que se lê.
+        '<button class="det-btn" onclick="abrirPagamentoParcial(' + it.numMov + ', ' +
+          (it.valor || 0) + ');">Pagar só uma parte</button>'
       : '') +
 
     // As quatro ações em 2x2. Eram quatro botões de largura inteira,
