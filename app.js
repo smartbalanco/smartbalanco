@@ -12120,39 +12120,184 @@ let corGrupoEscolhida = "";
 let corBordaGrupoEscolhida = "";
 
 /**
- * A paleta, pintada como botões.
+ * A RODA DE COR do formulário de grupo.
  *
- * A lista vem do SERVIDOR (listasValidas.paletaGrupos) porque é a mesma de
- * onde sai o sorteio da cor de um grupo novo. Uma cópia no app divergiria, e
- * o seletor passaria a oferecer cores que o sorteio nunca dá -- duas paletas
- * que se dizem a mesma.
+ * Matiz pelo ÂNGULO, saturação pelo RAIO, brilho num controle à parte. Os três
+ * saem de conta sobre a posição do dedo -- a roda é gradiente CSS, não canvas,
+ * então não há buffer para dimensionar nem pixel para ler, e a cor é a mesma
+ * em qualquer densidade de tela.
+ *
+ * Uma roda só para as duas cores, com o alvo sempre à vista nos botões de
+ * cima. Duas rodas empilhadas passariam de 400px num formulário que já rola.
  */
-function pintarPaletaGrupo(idAlvo, escolhida, aoEscolher) {
-  const alvo = document.getElementById(idAlvo);
-  if (!alvo) return;
+let alvoDeCor = "cor";          // "cor" (preenchimento) ou "borda"
+let brilhoDaRoda = 70;
 
-  const cores = (listasValidas && listasValidas.paletaGrupos)
-    ? listasValidas.paletaGrupos : [];
+function hsvParaHex(h, s, v) {
+  h = ((h % 360) + 360) % 360;
+  const c = v * s;
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) { r = c; g = x; }
+  else if (h < 120) { r = x; g = c; }
+  else if (h < 180) { g = c; b = x; }
+  else if (h < 240) { g = x; b = c; }
+  else if (h < 300) { r = x; b = c; }
+  else { r = c; b = x; }
+  const dois = function (n) {
+    const t = Math.round((n + m) * 255).toString(16);
+    return t.length === 1 ? "0" + t : t;
+  };
+  return "#" + dois(r) + dois(g) + dois(b);
+}
 
-  alvo.innerHTML =
-    '<button type="button" class="gf-cor nenhuma' + (!escolhida ? ' escolhida' : '') +
-    '" data-cor="" aria-label="sem cor"></button>' +
-    cores.map(function (c) {
-      return '<button type="button" class="gf-cor' +
-             (escolhida === c ? ' escolhida' : '') +
-             '" data-cor="' + escaparHtml(c) + '" style="background:' + escaparHtml(c) +
-             '" aria-label="' + escaparHtml(c) + '"></button>';
-    }).join("");
+function hexParaHsv(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec((hex || "").trim());
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let h = 0;
+  if (d) {
+    if (mx === r) h = 60 * (((g - b) / d) % 6);
+    else if (mx === g) h = 60 * ((b - r) / d + 2);
+    else h = 60 * ((r - g) / d + 4);
+  }
+  return { h: ((h % 360) + 360) % 360, s: mx ? d / mx : 0, v: mx };
+}
 
-  Array.prototype.forEach.call(alvo.querySelectorAll(".gf-cor"), function (b) {
-    b.onclick = function () {
-      aoEscolher(b.getAttribute("data-cor") || "");
-      Array.prototype.forEach.call(alvo.querySelectorAll(".gf-cor"), function (o) {
-        o.classList.remove("escolhida");
-      });
-      b.classList.add("escolhida");
-    };
+/** A cor do alvo que está sendo editado agora. */
+function corDoAlvo() {
+  return alvoDeCor === "borda" ? corBordaGrupoEscolhida : corGrupoEscolhida;
+}
+
+function definirCorDoAlvo(hex) {
+  if (alvoDeCor === "borda") corBordaGrupoEscolhida = hex;
+  else corGrupoEscolhida = hex;
+  pintarAmostrasDeCor();
+}
+
+function escolherAlvoDeCor(qual) {
+  alvoDeCor = qual;
+  const a = document.getElementById("gf-alvo-cor");
+  const b = document.getElementById("gf-alvo-borda");
+  if (a) a.classList.toggle("ativo", qual === "cor");
+  if (b) b.classList.toggle("ativo", qual === "borda");
+  posicionarKnob();
+}
+
+function limparCorDoAlvo() {
+  definirCorDoAlvo("");
+  posicionarKnob();
+}
+
+function pintarAmostrasDeCor() {
+  const am = { cor: document.getElementById("gf-amostra-cor"),
+               borda: document.getElementById("gf-amostra-borda") };
+  if (am.cor) am.cor.style.background = corGrupoEscolhida || "var(--cinza-fundo)";
+  if (am.borda) am.borda.style.background = corBordaGrupoEscolhida || "var(--cinza-fundo)";
+}
+
+/**
+ * Põe a bolinha onde está a cor atual, e escurece a roda conforme o brilho.
+ *
+ * Sem cor escolhida a bolinha vai para o CENTRO -- que é o branco, o ponto
+ * neutro --, e não some: uma bolinha escondida faria parecer que a roda
+ * travou.
+ */
+function posicionarKnob() {
+  const roda = document.getElementById("gf-roda");
+  const knob = document.getElementById("gf-knob");
+  const escuro = document.getElementById("gf-roda-escuro");
+  if (!roda || !knob) return;
+
+  const hsv = hexParaHsv(corDoAlvo());
+  const raio = roda.offsetWidth / 2;
+
+  if (hsv) {
+    brilhoDaRoda = Math.max(12, Math.round(hsv.v * 100));
+    const faixa = document.getElementById("gf-brilho");
+    if (faixa) faixa.value = brilhoDaRoda;
+
+    // O mesmo ângulo do conic-gradient: começa no topo e anda no sentido
+    // horário. Medir a partir da direita, como atan2 faz por padrão,
+    // deixaria a bolinha 90° fora da cor que ela representa.
+    const rad = (hsv.h * Math.PI) / 180;
+    const d = hsv.s * raio;
+    knob.style.left = (raio + Math.sin(rad) * d) + "px";
+    knob.style.top = (raio - Math.cos(rad) * d) + "px";
+    knob.style.background = corDoAlvo();
+  } else {
+    knob.style.left = raio + "px";
+    knob.style.top = raio + "px";
+    knob.style.background = "transparent";
+  }
+
+  if (escuro) escuro.style.opacity = String(1 - brilhoDaRoda / 100);
+}
+
+function corDaPosicao(ev) {
+  const roda = document.getElementById("gf-roda");
+  const r = roda.getBoundingClientRect();
+  const raio = r.width / 2;
+  const dx = ev.clientX - (r.left + raio);
+  const dy = ev.clientY - (r.top + raio);
+
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  // Arrastar para FORA da roda não cancela: gruda na borda. Soltar a cor
+  // porque o dedo passou da linha é o jeito mais fácil de perder a escolha.
+  const sat = Math.min(1, dist / raio);
+
+  let ang = (Math.atan2(dx, -dy) * 180) / Math.PI;
+  if (ang < 0) ang += 360;
+
+  return hsvParaHex(ang, sat, brilhoDaRoda / 100);
+}
+
+/**
+ * Pointer Events, e não mouse: no toque, 'mousedown' só chega depois que o
+ * navegador decide que não foi rolagem -- o primeiro arrasto sairia perdido.
+ */
+function ligarRodaDeCor() {
+  const roda = document.getElementById("gf-roda");
+  const faixa = document.getElementById("gf-brilho");
+  if (!roda || roda._ligada) return;
+  roda._ligada = true;
+
+  let arrastando = false;
+
+  const aplicar = function (ev) {
+    definirCorDoAlvo(corDaPosicao(ev));
+    posicionarKnob();
+  };
+
+  roda.addEventListener("pointerdown", function (ev) {
+    arrastando = true;
+    roda.setPointerCapture(ev.pointerId);
+    aplicar(ev);
+    ev.preventDefault();
   });
+  roda.addEventListener("pointermove", function (ev) {
+    if (arrastando) { aplicar(ev); ev.preventDefault(); }
+  });
+  const soltar = function (ev) {
+    arrastando = false;
+    try { roda.releasePointerCapture(ev.pointerId); } catch (e) {}
+  };
+  roda.addEventListener("pointerup", soltar);
+  roda.addEventListener("pointercancel", soltar);
+
+  if (faixa) {
+    faixa.addEventListener("input", function () {
+      brilhoDaRoda = parseInt(faixa.value) || 70;
+      // Mexer no brilho sem cor escolhida não inventa uma: só a roda escurece,
+      // e a escolha continua sendo "sem cor" até você tocar nela.
+      const hsv = hexParaHsv(corDoAlvo());
+      if (hsv) definirCorDoAlvo(hsvParaHex(hsv.h, hsv.s, brilhoDaRoda / 100));
+      posicionarKnob();
+    });
+  }
 }
 
 function abrirFormGrupo(i) {
@@ -12161,8 +12306,14 @@ function abrirFormGrupo(i) {
 
   corGrupoEscolhida = g ? (g.cor || "") : "";
   corBordaGrupoEscolhida = g ? (g.corBorda || "") : "";
-  pintarPaletaGrupo("gf-paleta", corGrupoEscolhida, function (c) { corGrupoEscolhida = c; });
-  pintarPaletaGrupo("gf-paleta-borda", corBordaGrupoEscolhida, function (c) { corBordaGrupoEscolhida = c; });
+  alvoDeCor = "cor";
+  escolherAlvoDeCor("cor");
+  pintarAmostrasDeCor();
+  ligarRodaDeCor();
+  // Depois que o modal aparece: a roda é medida por offsetWidth, e com o
+  // formulário ainda escondido isso é zero -- a bolinha iria toda para o
+  // canto. Mesmo tropeço do seletor de tema, que já custou uma correção.
+  setTimeout(posicionarKnob, 0);
 
   document.getElementById("gf-titulo").textContent = g ? "Editar grupo" : "Novo grupo";
   document.getElementById("gf-nome").value = g ? g.nome : "";

@@ -1559,23 +1559,56 @@
     .dre-filho .dre-nome, .dre-filho .dre-val { font-size: 12.5px; color: var(--fraco); }
 
     .gf-cor-bloco { margin-top: 14px; }
-    .gf-cor-rot { font-size: 11.5px; font-weight: 600; color: var(--fraco); margin-bottom: 7px; }
-    .gf-paleta {
-      display: grid; grid-template-columns: repeat(10, 1fr); gap: 6px;
+    .gf-cor-rot { font-size: 11.5px; font-weight: 600; color: var(--fraco); margin-bottom: 7px; display: block; }
+
+    .gf-alvos { display: flex; gap: 8px; margin-bottom: 12px; }
+    .gf-alvo {
+      flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 9px 6px; border: none; border-radius: 11px; cursor: pointer;
+      font-family: inherit; font-size: 12px; color: var(--fraco);
+      background: var(--cinza-fundo); box-shadow: var(--relevo-baixo);
     }
-    .gf-cor {
-      aspect-ratio: 1 / 1; border-radius: 50%; border: none; padding: 0;
-      cursor: pointer; box-shadow: var(--relevo-baixo);
+    /* Seleção AFUNDADA, como o resto do app -- destacar com cor disputaria
+       leitura com a amostra, que é justamente o que se está escolhendo. */
+    .gf-alvo.ativo { box-shadow: var(--afundado); color: var(--texto); font-weight: 600; }
+    .gf-alvo-amostra {
+      width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
+      box-shadow: var(--afundado-leve); background: var(--cinza-fundo);
     }
-    .gf-cor.escolhida { box-shadow: var(--afundado), 0 0 0 2px var(--texto); }
-    /* "Sem cor" precisa ser visível como ausência, não como mais uma cor. */
-    .gf-cor.nenhuma {
-      background: var(--cinza-fundo); box-shadow: var(--afundado-leve);
-      position: relative;
+
+    .gf-roda-area { display: flex; justify-content: center; }
+    /* Matiz pelo ÂNGULO e saturação pelo RAIO, as duas em gradiente CSS: sem
+       canvas, não há buffer para dimensionar nem leitura de pixel -- a cor sai
+       de conta sobre a posição do dedo, que é exata em qualquer tela. */
+    .gf-roda {
+      position: relative; width: 196px; height: 196px; border-radius: 50%;
+      touch-action: none; cursor: crosshair;
+      background:
+        radial-gradient(circle closest-side, #fff, rgba(255,255,255,0) 100%),
+        conic-gradient(
+          hsl(0,100%,50%), hsl(30,100%,50%), hsl(60,100%,50%), hsl(90,100%,50%),
+          hsl(120,100%,50%), hsl(150,100%,50%), hsl(180,100%,50%), hsl(210,100%,50%),
+          hsl(240,100%,50%), hsl(270,100%,50%), hsl(300,100%,50%), hsl(330,100%,50%),
+          hsl(360,100%,50%));
+      box-shadow: var(--relevo-medio);
     }
-    .gf-cor.nenhuma::after {
-      content: ""; position: absolute; inset: 30%;
-      border-left: 1.5px solid var(--fraco-2); transform: rotate(45deg);
+    /* O brilho escurece a roda inteira, para a bolinha mostrar a cor que vai
+       sair de verdade -- e não uma versão clara dela. */
+    .gf-roda-escuro {
+      position: absolute; inset: 0; border-radius: 50%;
+      background: #000; opacity: 0; pointer-events: none;
+    }
+    .gf-knob {
+      position: absolute; width: 22px; height: 22px; border-radius: 50%;
+      margin: -11px 0 0 -11px; pointer-events: none;
+      border: 3px solid #fff; box-shadow: 0 0 0 1.5px rgba(0,0,0,.45);
+      background: transparent;
+    }
+    .gf-brilho { width: 100%; accent-color: var(--verde); }
+    .gf-sem-cor {
+      display: block; margin: 10px auto 0; padding: 0; border: none;
+      background: none; font-family: inherit; font-size: 11.5px;
+      color: var(--fraco); text-decoration: underline; cursor: pointer;
     }
     .gf-check input { width: 18px; height: 18px; accent-color: var(--verde); flex-shrink: 0; }
     .gf-check span { font-size: 12px; color: var(--azul); }
@@ -6755,9 +6788,32 @@
 
       <div class="gf-cor-bloco">
         <div class="gf-cor-rot">Cor no gráfico</div>
-        <div class="gf-paleta" id="gf-paleta"></div>
-        <div class="gf-cor-rot" style="margin-top:12px;">Contorno</div>
-        <div class="gf-paleta" id="gf-paleta-borda"></div>
+
+        <!-- QUAL das duas cores está sendo escolhida fica sempre à vista, com
+             a amostra dentro do próprio botão: uma roda só, mas sem modo
+             invisível — você vê o que está mexendo e como está o outro. -->
+        <div class="gf-alvos">
+          <button type="button" class="gf-alvo ativo" id="gf-alvo-cor"
+                  onclick="escolherAlvoDeCor('cor')">
+            <span class="gf-alvo-amostra" id="gf-amostra-cor"></span>Preenchimento
+          </button>
+          <button type="button" class="gf-alvo" id="gf-alvo-borda"
+                  onclick="escolherAlvoDeCor('borda')">
+            <span class="gf-alvo-amostra" id="gf-amostra-borda"></span>Contorno
+          </button>
+        </div>
+
+        <div class="gf-roda-area">
+          <div class="gf-roda" id="gf-roda">
+            <div class="gf-roda-escuro" id="gf-roda-escuro"></div>
+            <div class="gf-knob" id="gf-knob"></div>
+          </div>
+        </div>
+
+        <label class="gf-cor-rot" for="gf-brilho" style="margin-top:10px;">Brilho</label>
+        <input type="range" id="gf-brilho" class="gf-brilho" min="12" max="100" value="70" />
+
+        <button type="button" class="gf-sem-cor" onclick="limparCorDoAlvo()">deixar sem cor</button>
       </div>
 
       <div class="gf-aviso" id="gf-aviso"></div>
@@ -6800,7 +6856,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=127"></script>
+  <script src="app.js?v=128"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
