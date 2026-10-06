@@ -12723,14 +12723,25 @@ async function mudarAporteDoGrupo(i) {
   const txt = prompt(
     "Novo valor mensal de " + g.nome + "\n\n" +
     "Vale deste mês em diante, e segue corrigindo pela inflação.\n" +
-    "Hoje: " + formatarMoeda(g.aporte) +
-    (g.aporteBase !== g.aporte ? " (combinado original: " + formatarMoeda(g.aporteBase) + ")" : ""),
-    String(g.aporte).replace(".", ","));
+    "Deixe EM BRANCO para o grupo ficar sem limite.\n\n" +
+    "Hoje: " + (g.semLimite ? "sem limite" : formatarMoeda(g.aporte)) +
+    (!g.semLimite && g.aporteBase !== g.aporte
+      ? " (combinado original: " + formatarMoeda(g.aporteBase) + ")" : ""),
+    g.semLimite ? "" : String(g.aporte).replace(".", ","));
 
   if (txt === null) return;
 
-  const valor = parseFloat(txt.toString().replace(/\./g, "").replace(",", "."));
+  // Em branco = sem limite. É o mesmo ajuste de sempre, com valor zero: os
+  // meses passados ficam como foram, e o teto some deste mês em diante --
+  // reescrever a coluna do aporte mudaria o passado junto.
+  const bruto = txt.toString().trim();
+  const valor = bruto === "" ? 0 : parseFloat(bruto.replace(/\./g, "").replace(",", "."));
   if (isNaN(valor) || valor < 0) { mostrarToast("⚠ Valor inválido."); return; }
+
+  if (valor === 0 && !confirm(
+      "Tirar o limite de " + g.nome + " a partir deste mês?\n\n" +
+      "Ele continua somando o gasto e aparecendo no gráfico, sem teto. " +
+      "Os meses anteriores ficam como foram.")) return;
 
   try {
     const r = await chamarServidor("ajustarAporteDoGrupo", {
