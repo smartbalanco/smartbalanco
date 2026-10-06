@@ -11351,16 +11351,78 @@ function pintarLinhaDoLimite(d) {
     }
   }
 
-  // De onde saiu o teto, por extenso. Um limite que muda de valor sozinho, mês
-  // a mês, sem dizer por quê, faz desconfiar do app inteiro -- e aqui ele muda
-  // mesmo, porque o crédito do vale entra nele.
-  const nota = (L.vale > 0)
-    ? formatarMoeda(L.limiteBase) + " + " + formatarMoeda(L.vale) + " de " +
-      escaparHtml(L.cartaoVale || "benefício") + " · contando o que ainda vai ser lançado"
-    : "contando o que ainda vai ser lançado";
+  // De onde saiu o teto, PARCELA POR PARCELA. Um limite que muda de valor
+  // sozinho, mês a mês, sem dizer por quê, faz desconfiar do app inteiro -- e
+  // aqui ele muda mesmo: o crédito do vale entra, e o ajuste do mês também.
+  //
+  // O teto BASE vem sempre primeiro e nunca é substituído: é ele que você
+  // combinou consigo, e o resto é anotação em cima dele.
+  const soma = [];
+  if (L.vale > 0 || L.extra > 0) soma.push(formatarMoeda(L.limiteBase));
+  if (L.vale > 0) {
+    soma.push("+ " + formatarMoeda(L.vale) + " de " + escaparHtml(L.cartaoVale || "benefício"));
+  }
+  if (L.extra > 0) {
+    soma.push("+ " + formatarMoeda(L.extra) +
+              (L.motivoExtra ? " (" + escaparHtml(L.motivoExtra) + ")" : " de ajuste"));
+  }
+
+  const nota = (soma.length ? soma.join(" ") + " · " : "") +
+               "contando o que ainda vai ser lançado";
 
   el.innerHTML = partes.join(" &middot; ") +
-    '<span class="sd-limite-nota">' + nota + '</span>';
+    '<span class="sd-limite-nota">' + nota + '</span>' +
+    '<button type="button" class="sd-limite-ajuste" onclick="abrirAjusteDoLimite()">' +
+      (L.extra > 0 ? "mudar o ajuste deste mês" : "ajustar só este mês") +
+    '</button>';
+}
+
+/**
+ * O ajuste do mês que está na tela.
+ *
+ * Mora aqui, e não em Configurações, porque é um número DE UM MÊS: em
+ * Configurações seria preciso primeiro escolher qual, e a tela onde o
+ * problema aparece já sabe a resposta.
+ */
+async function abrirAjusteDoLimite() {
+  const d = dashboardAtual;
+  if (!d || !d.limite) return;
+
+  const L = d.limite;
+  const atual = L.extra > 0 ? String(L.extra).replace(".", ",") : "";
+
+  const bruto = prompt(
+    "Quanto a mais o teto aceita só em " + (d.mesReferencia || "") + "?\n\n" +
+    "Teto combinado: " + formatarMoeda(L.limiteBase) + "\n" +
+    "Vale deste mês: " + formatarMoeda(L.vale || 0) + "\n\n" +
+    "Em branco remove o ajuste. Vale só para este mês.", atual);
+  if (bruto === null) return;
+
+  const valor = String(bruto).trim();
+  let motivo = "";
+
+  if (valor) {
+    // Sem motivo não grava, e é de propósito: limite que se levanta toda vez
+    // que estoura deixa de ser limite. O texto é o que, daqui a três meses,
+    // explica o número.
+    motivo = prompt("Por quê? (fica escrito no card)", L.motivoExtra || "");
+    if (motivo === null) return;
+    if (!motivo.trim()) { mostrarToast("⚠️ Sem motivo, não gravo."); return; }
+  }
+
+  try {
+    const r = await chamarServidor("salvarLimiteExtra",
+      { mes: d.mes, ano: d.ano, valor: valor, motivo: motivo });
+
+    if (!r || !r.ok) { alert((r && r.mensagem) || "Não deu para gravar."); return; }
+
+    mostrarToast("✅ " + r.mensagem);
+    esquecerDominio("config");
+    esquecerDominio("transacoes");   // o teto é calculado dentro do dashboard
+    await recarregarDados();
+  } catch (e) {
+    alert("Falhou: " + (e.message || "sem conexão"));
+  }
 }
 
 function pintarBarraDosGrupos(d) {

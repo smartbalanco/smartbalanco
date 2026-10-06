@@ -2730,6 +2730,13 @@
       margin-top: 10px; padding-top: 9px; border-top: 1px dashed var(--borda);
     }
     .sd-limite-nota { display: block; font-size: 10px; color: var(--fraco-2); margin-top: 2px; }
+    /* Discreto de propósito: levantar o teto é exceção, e um botão com peso
+       de ação principal convidaria a usá-lo sempre que o mês apertasse. */
+    .sd-limite-ajuste {
+      display: inline-block; margin-top: 6px; padding: 0; border: none;
+      background: none; font-family: inherit; font-size: 10.5px;
+      color: var(--fraco); text-decoration: underline; cursor: pointer;
+    }
 
     .fix-fatura {
       height: 44px; display: flex; align-items: center; padding: 0 13px;
@@ -6793,7 +6800,7 @@
        Pages manda Cache-Control: max-age=600, então sem isso o celular pode
        ficar até 10 min com o index novo e o app.js velho — botão novo na tela
        chamando função que ainda não existe. Suba este número a cada deploy. -->
-  <script src="app.js?v=126"></script>
+  <script src="app.js?v=127"></script>
   <datalist id="lista-descricoes"></datalist>
 </body>
 </html>
