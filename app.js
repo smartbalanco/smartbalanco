@@ -11415,12 +11415,14 @@ function pintarLinhaDoLimite(d) {
   // O teto BASE vem sempre primeiro e nunca é substituído: é ele que você
   // combinou consigo, e o resto é anotação em cima dele.
   const soma = [];
-  if (L.vale > 0 || L.extra > 0) soma.push(formatarMoeda(L.limiteBase));
+  if (L.vale > 0 || L.extra) soma.push(formatarMoeda(L.limiteBase));
   if (L.vale > 0) {
     soma.push("+ " + formatarMoeda(L.vale) + " de " + escaparHtml(L.cartaoVale || "benefício"));
   }
-  if (L.extra > 0) {
-    soma.push("+ " + formatarMoeda(L.extra) +
+  if (L.extra) {
+    // Negativo entra com o sinal de menos e o valor absoluto: "+ −R$ 500,00"
+    // obriga a ler duas vezes para saber de que lado a conta vai.
+    soma.push((L.extra < 0 ? "− " : "+ ") + formatarMoeda(Math.abs(L.extra)) +
               (L.motivoExtra ? " (" + escaparHtml(L.motivoExtra) + ")" : " de ajuste"));
   }
 
@@ -11430,7 +11432,7 @@ function pintarLinhaDoLimite(d) {
   el.innerHTML = partes.join(" &middot; ") +
     '<span class="sd-limite-nota">' + nota + '</span>' +
     '<button type="button" class="sd-limite-ajuste" onclick="abrirAjusteDoLimite()">' +
-      (L.extra > 0 ? "mudar o ajuste deste mês" : "ajustar só este mês") +
+      (L.extra ? "mudar o ajuste deste mês" : "ajustar só este mês") +
     '</button>';
 }
 
@@ -11446,10 +11448,11 @@ async function abrirAjusteDoLimite() {
   if (!d || !d.limite) return;
 
   const L = d.limite;
-  const atual = L.extra > 0 ? String(L.extra).replace(".", ",") : "";
+  const atual = L.extra ? String(L.extra).replace(".", ",") : "";
 
   const bruto = prompt(
-    "Quanto a mais o teto aceita só em " + (d.mesReferencia || "") + "?\n\n" +
+    "Quanto o teto muda só em " + (d.mesReferencia || "") + "?\n\n" +
+    "Negativo aperta: -500 baixa o teto em R$ 500 neste mês.\n\n" +
     "Teto combinado: " + formatarMoeda(L.limiteBase) + "\n" +
     "Vale deste mês: " + formatarMoeda(L.vale || 0) + "\n\n" +
     "Em branco remove o ajuste. Vale só para este mês.", atual);
